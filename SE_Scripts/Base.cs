@@ -3,6 +3,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using VRage;
+using VRage.Game.ModAPI.Ingame;
 using VRageMath;
 
 namespace Base
@@ -13,6 +15,8 @@ namespace Base
         const string baseId = "BaseBETA1";
         const string baseConnector = "Delivery Connector";
         const string baseCamera = "Camera";
+        const string baseWarehouses = "Warehouse";
+        const string baseExchanges = "Exchange";
         const string baseParking = "-50554.19:-86466.82:-43745.25";
         const string baseDataLCDs = "[DELIVERY_DATA]";
         const int NumWaypoints = 5;
@@ -28,6 +32,7 @@ namespace Base
             public string To;
             public Vector3D ToParking;
             public Dictionary<string, int> Items = new Dictionary<string, int>();
+            public string AssignedShip;
 
             public Order()
             {
@@ -59,6 +64,8 @@ namespace Base
         #endregion
 
         IMyCameraBlock camera;
+        List<IMyCargoContainer> cargos = new List<IMyCargoContainer>();
+        List<IMyCargoContainer> exchanges = new List<IMyCargoContainer>();
         IMyBroadcastListener bl;
         Dictionary<string, IMyShipConnector> upperConnectors = new Dictionary<string, IMyShipConnector>();
         Dictionary<string, IMyShipConnector> lowerConnectors = new Dictionary<string, IMyShipConnector>();
@@ -71,6 +78,13 @@ namespace Base
         bool showShips = true;
         StringBuilder sbData = new StringBuilder();
 
+        T GetBlockWithName<T>(string name) where T : class, IMyTerminalBlock
+        {
+            List<T> blocks = new List<T>();
+            GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid);
+
+            return blocks.FirstOrDefault(b => b.CustomName.Contains(name));
+        }
         static string ReadArgument(string[] lines, string command)
         {
             string cmdToken = $"{command}=";
@@ -98,7 +112,7 @@ namespace Base
         void WriteLCDs(string wildcard, string text)
         {
             List<IMyTextPanel> lcds = new List<IMyTextPanel>();
-            GridTerminalSystem.GetBlocksOfType(lcds, lcd => lcd.CustomName.Contains(wildcard));
+            GridTerminalSystem.GetBlocksOfType(lcds, lcd => lcd.CubeGrid == Me.CubeGrid && lcd.CustomName.Contains(wildcard));
             foreach (var lcd in lcds)
             {
                 lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
@@ -122,14 +136,17 @@ namespace Base
         {
             InitializeConnectors();
 
-            camera = GridTerminalSystem.GetBlockWithName(baseCamera) as IMyCameraBlock;
+            camera = GetBlockWithName<IMyCameraBlock>(baseCamera);
             if (camera == null)
             {
                 Echo("Cámara no encontrada.");
                 return;
             }
 
-            GridTerminalSystem.GetBlocksOfType(dataLcds, lcd => lcd.CustomName.Contains(baseDataLCDs));
+            GridTerminalSystem.GetBlocksOfType(cargos, cargo => cargo.CubeGrid == Me.CubeGrid && cargo.CustomName.Contains(baseWarehouses));
+            GridTerminalSystem.GetBlocksOfType(exchanges, cargo => cargo.CubeGrid == Me.CubeGrid && cargo.CustomName.Contains(baseExchanges));
+
+            GridTerminalSystem.GetBlocksOfType(dataLcds, lcd => lcd.CubeGrid == Me.CubeGrid && lcd.CustomName.Contains(baseDataLCDs));
 
             WriteLCDs("[baseId]", baseId);
 
@@ -222,12 +239,16 @@ namespace Base
                 var ship = freeShips[i];
                 var connector = freeConnectors[i];
 
+                order.AssignedShip = ship.Name;
+
                 //[Command=LOAD_ORDER|To=Ship|From=Me|For=Customer|ForParking=CustomerParking|Order=ID_PEDIDO|Forward=x:y:z|Up=x:y:z|WayPoints=x:y:z;]
                 string forward = VectorToStr(camera.WorldMatrix.Forward);
                 string up = VectorToStr(camera.WorldMatrix.Up);
                 string waypoints = string.Join(";", CalculateRouteToConnector(connector).Select(VectorToStr));
                 string message = $"Command=LOAD_ORDER|To={ship.Name}|From={baseId}|For={order.To}|ForParking={VectorToStr(order.ToParking)}|Order={order.Id}|Forward={forward}|Up={up}|WayPoints={waypoints}";
                 SendIGCMessage(message);
+
+                MoveCargo(connector, order);
             }
         }
         void CmdTryUnload()
@@ -443,6 +464,63 @@ namespace Base
 
             return waypoints;
         }
+        IMyCargoContainer GetClossetCargoContainer(IMyShipConnector con1)
+        {
+            IMyCargoContainer closest = null;
+            double closestDistance = double.MaxValue;
+
+            foreach (var container in exchanges)
+            {
+                // Verifica que esté conectado por conveyor
+                if (container.GetInventory().IsConnectedTo(con1.GetInventory()))
+                {
+                    double distance = Vector3D.Distance(con1.GetPosition(), container.GetPosition());
+                    if (distance < closestDistance)
+                    {
+                        closestDistance = distance;
+                        closest = container;
+                    }
+                }
+            }
+
+            return closest;
+        }
+        void MoveCargo(IMyShipConnector con1, Order order)
+        {
+            //Localiza el cargo más cercano al conector
+            IMyCargoContainer closest = GetClossetCargoContainer(con1);
+            if (closest != null)
+            {
+                //Mueve la carga desde los warehouses a los exchanges
+                var shipInv = closest.GetInventory();
+
+                foreach (var item in order.Items)
+                {
+                    var amountRemaining = item.Value;
+
+                    // Buscar ítem en los contenedores de la base
+                    foreach (var cargo in cargos)
+                    {
+                        var inv = cargo.GetInventory();
+                        var items = new List<MyInventoryItem>();
+                        inv.GetItems(items);
+
+                        for (int o = items.Count - 1; o >= 0 && amountRemaining > 0; o--)
+                        {
+                            if (items[o].Type.SubtypeId == item.Key)
+                            {
+                                var transferAmount = MyFixedPoint.Min(amountRemaining, items[o].Amount).ToIntSafe();
+                                if (inv.TransferItemTo(shipInv, o, null, true, transferAmount))
+                                {
+                                    amountRemaining -= transferAmount;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         void PrintShipStatus()
         {
@@ -482,7 +560,7 @@ namespace Base
 
             foreach (var order in orders)
             {
-                sbData.AppendLine($"OrderId: {order.Id}, From: {order.From}, To: {order.To}");
+                sbData.AppendLine($"Id[{order.Id}]. {order.AssignedShip} shipping from {order.From} to {order.To}");
             }
         }
     }

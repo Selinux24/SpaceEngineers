@@ -2,6 +2,7 @@
 using SpaceEngineers.Game.ModAPI.Ingame;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using VRageMath;
 
 namespace NaveAlign
@@ -29,6 +30,13 @@ namespace NaveAlign
         Vector3D targetUp = new Vector3D(0, 1, 0);
         bool hasTarget = false;
 
+        T GetBlockWithName<T>(string name) where T : class, IMyTerminalBlock
+        {
+            List<T> blocks = new List<T>();
+            GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid);
+
+            return blocks.FirstOrDefault(b => b.CustomName.Contains(name));
+        }
         static Vector3D StrToVector(string input)
         {
             var trimmed = input.Split(':');
@@ -57,28 +65,28 @@ namespace NaveAlign
 
         public Program()
         {
-            remoteLocking = GridTerminalSystem.GetBlockWithName(shipRemoteControlLocking) as IMyRemoteControl;
+            remoteLocking = GetBlockWithName<IMyRemoteControl>(shipRemoteControlLocking);
             if (remoteLocking == null)
             {
                 Echo($"Control remoto de atraque '{shipRemoteControlLocking}' no locallizado.");
                 return;
             }
 
-            timerLocking = GridTerminalSystem.GetBlockWithName(shipTimerLocking) as IMyTimerBlock;
+            timerLocking = GetBlockWithName<IMyTimerBlock>(shipTimerLocking);
             if (timerLocking == null)
             {
                 Echo($"Timer '{shipTimerLocking}' no locallizado.");
                 return;
             }
 
-            connectorA = GridTerminalSystem.GetBlockWithName(shipConnectorA) as IMyShipConnector;
+            connectorA = GetBlockWithName<IMyShipConnector>(shipConnectorA);
             if (connectorA == null)
             {
                 Echo($"Connector de atraque A '{shipConnectorA}' no locallizado.");
                 return;
             }
 
-            GridTerminalSystem.GetBlocksOfType(gyros, g => g.IsSameConstructAs(remoteLocking));
+            GridTerminalSystem.GetBlocksOfType(gyros, g => g.CubeGrid == Me.CubeGrid);
             GridTerminalSystem.GetBlocksOfType(thrusters, t => t.CubeGrid == Me.CubeGrid);
 
             Runtime.UpdateFrequency = UpdateFrequency.None;

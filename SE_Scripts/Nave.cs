@@ -12,8 +12,8 @@ namespace Nave
         const string shipId = "NaveBETA1";
         const string shipRemoteControlPilot = "Remote Control Pilot";
         const string shipTimerPilot = "Automaton Timer Block Pilot";
-        const string shipPBArrival = "Automaton Programmable Block Arrival";
-        const string shipPBAlign = "Automaton Programmable Block Align";
+        const string shipArrivalPB = "Automaton Programmable Block Arrival";
+        const string shipAlignPB = "Automaton Programmable Block Align";
         const string shipTimerLoad = "Automaton Timer Block Load";
         const string shipTimerUnload = "Automaton Timer Block Unload";
 
@@ -27,7 +27,7 @@ namespace Nave
         IMyBroadcastListener bl;
         IMyRemoteControl remotePilot;
         IMyTimerBlock timerPilot;
-        IMyProgrammableBlock targetPB;
+        IMyProgrammableBlock arrivalPB;
         IMyProgrammableBlock alignPB;
         IMyTimerBlock timerLoad;
         IMyTimerBlock timerUnload;
@@ -39,6 +39,13 @@ namespace Nave
         int orderId;
         ShipStatus status = ShipStatus.Idle;
 
+        T GetBlockWithName<T>(string name) where T : class, IMyTerminalBlock
+        {
+            List<T> blocks = new List<T>();
+            GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid);
+
+            return blocks.FirstOrDefault(b => b.CustomName.Contains(name));
+        }
         static string ReadArgument(string[] lines, string command)
         {
             string cmdToken = $"{command}=";
@@ -60,7 +67,7 @@ namespace Nave
         void WriteLCDs(string wildcard, string text)
         {
             List<IMyTextPanel> lcds = new List<IMyTextPanel>();
-            GridTerminalSystem.GetBlocksOfType(lcds, lcd => lcd.CustomName.Contains(wildcard));
+            GridTerminalSystem.GetBlocksOfType(lcds, lcd => lcd.CubeGrid == Me.CubeGrid && lcd.CustomName.Contains(wildcard));
             foreach (var lcd in lcds)
             {
                 lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
@@ -74,42 +81,42 @@ namespace Nave
 
         public Program()
         {
-            timerPilot = GridTerminalSystem.GetBlockWithName(shipTimerPilot) as IMyTimerBlock;
+            timerPilot = GetBlockWithName<IMyTimerBlock>(shipTimerPilot);
             if (timerPilot == null)
             {
                 Echo($"Timer '{shipTimerPilot}' no locallizado.");
                 return;
             }
 
-            targetPB = GridTerminalSystem.GetBlockWithName(shipPBArrival) as IMyProgrammableBlock;
-            if (targetPB == null)
+            arrivalPB = GetBlockWithName<IMyProgrammableBlock>(shipArrivalPB);
+            if (arrivalPB == null)
             {
-                Echo($"Programmable Block '{shipPBArrival}' no localizado.");
+                Echo($"Programmable Block '{shipArrivalPB}' no localizado.");
                 return;
             }
 
-            alignPB = GridTerminalSystem.GetBlockWithName(shipPBAlign) as IMyProgrammableBlock;
+            alignPB = GetBlockWithName<IMyProgrammableBlock>(shipAlignPB);
             if (alignPB == null)
             {
-                Echo($"Programmable Block '{shipPBAlign}' no localizado.");
+                Echo($"Programmable Block '{shipAlignPB}' no localizado.");
                 return;
             }
 
-            remotePilot = GridTerminalSystem.GetBlockWithName(shipRemoteControlPilot) as IMyRemoteControl;
+            remotePilot = GetBlockWithName<IMyRemoteControl>(shipRemoteControlPilot);
             if (remotePilot == null)
             {
                 Echo($"Control remoto de pilotaje '{shipRemoteControlPilot}' no locallizado.");
                 return;
             }
 
-            timerLoad = GridTerminalSystem.GetBlockWithName(shipTimerLoad) as IMyTimerBlock;
+            timerLoad = GetBlockWithName<IMyTimerBlock>(shipTimerLoad);
             if (timerLoad == null)
             {
                 Echo($"Timer de carga '{shipTimerLoad}' no locallizado.");
                 return;
             }
 
-            timerUnload = GridTerminalSystem.GetBlockWithName(shipTimerUnload) as IMyTimerBlock;
+            timerUnload = GetBlockWithName<IMyTimerBlock>(shipTimerUnload);
             if (timerUnload == null)
             {
                 Echo($"Timer de descarga '{shipTimerUnload}' no locallizado.");
@@ -168,7 +175,7 @@ namespace Nave
             timerPilot.ApplyAction("Start");
 
             //Lanza el script de control de proximidad
-            targetPB.TryRun($"PROXIMITY={VectorToStr(orderCustomerParking)}|Command=UNLOAD|To={orderCustomer}|From={shipId}|Order={orderId}");
+            arrivalPB.TryRun($"Position={VectorToStr(orderCustomerParking)}||Command=UNLOAD|To={orderCustomer}|From={shipId}|Order={orderId}");
         }
         void CmdReturn()
         {
@@ -184,7 +191,7 @@ namespace Nave
             timerPilot.ApplyAction("Start");
 
             //Lanza el script de control de proximidad
-            targetPB.TryRun($"PROXIMITY={VectorToStr(orderCustomerParking)}|Command=WAITING|To={shipId}");
+            arrivalPB.TryRun($"Position={VectorToStr(orderCustomerParking)}||Command=WAITING|To={shipId}");
         }
 
         void ParseMessage(string signal)
