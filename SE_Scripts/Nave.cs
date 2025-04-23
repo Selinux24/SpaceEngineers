@@ -39,6 +39,39 @@ namespace Nave
         int orderId;
         ShipStatus status = ShipStatus.Idle;
 
+        static string ReadArgument(string[] lines, string command)
+        {
+            string cmdToken = $"{command}=";
+            return lines.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";
+        }
+        static string VectorToStr(Vector3D v)
+        {
+            return $"{v.X}:{v.Y}:{v.Z}";
+        }
+        static Vector3D StrToVector(string str)
+        {
+            string[] coords = str.Split(':');
+            if (coords.Length == 3)
+            {
+                return new Vector3D(double.Parse(coords[0]), double.Parse(coords[1]), double.Parse(coords[2]));
+            }
+            return new Vector3D();
+        }
+        void WriteLCDs(string wildcard, string text)
+        {
+            List<IMyTextPanel> lcds = new List<IMyTextPanel>();
+            GridTerminalSystem.GetBlocksOfType(lcds, lcd => lcd.CustomName.Contains(wildcard));
+            foreach (var lcd in lcds)
+            {
+                lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                lcd.WriteText(text, false);
+            }
+        }
+        void SendIGCMessage(string message)
+        {
+            IGC.SendBroadcastMessage(channel, message);
+        }
+
         public Program()
         {
             timerPilot = GridTerminalSystem.GetBlockWithName(shipTimerPilot) as IMyTimerBlock;
@@ -83,36 +116,11 @@ namespace Nave
                 return;
             }
 
-            List<IMyTextPanel> lcds = new List<IMyTextPanel>();
-            GridTerminalSystem.GetBlocksOfType(lcds, lcd => lcd.CustomName.Contains("[shipId]"));
-            foreach (var lcd in lcds)
-            {
-                lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-                lcd.WriteText(shipId, false);
-            }
+            WriteLCDs("[shipId]", shipId);
 
             bl = IGC.RegisterBroadcastListener(channel);
             Runtime.UpdateFrequency = UpdateFrequency.Update100; // Ejecuta cada ~1.6s
             Echo($"Listening in channel {channel}");
-        }
-
-        static string ReadArgument(string[] lines, string command)
-        {
-            string cmdToken = $"{command}=";
-            return lines.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";
-        }
-        static string VectorToStr(Vector3D v)
-        {
-            return $"{v.X}:{v.Y}:{v.Z}";
-        }
-        static Vector3D StrToVector(string str)
-        {
-            string[] coords = str.Split(':');
-            if (coords.Length == 3)
-            {
-                return new Vector3D(double.Parse(coords[0]), double.Parse(coords[1]), double.Parse(coords[2]));
-            }
-            return new Vector3D();
         }
 
         public void Main(string argument, UpdateType updateSource)
@@ -204,11 +212,11 @@ namespace Nave
         }
         void CmdRequestStatus(string[] lines)
         {
-            //[Command=STATUS|To=Sender|From=Me|Status=Status|Origin=Base|Destination=Base|Position=x:y:z]
+            //[Command=STATUS|To=Sender|From=Me|Status=Status|Origin=Base|OriginPosition=Position|Destination=Base|DestinationPosition=Position|Position=x:y:z]
             string from = ReadArgument(lines, "From");
             Vector3D position = remotePilot.GetPosition();
-            string message = $"Command=STATUS|To={from}|From={shipId}|Status={status}|Origin={orderFrom}|Destination={orderCustomer}|Position={VectorToStr(position)}";
-            IGC.SendBroadcastMessage(channel, message);
+            string message = $"Command=STATUS|To={from}|From={shipId}|Status={status}|Origin={orderFrom}|OriginPosition={VectorToStr(orderFromParking)}|Destination={orderCustomer}|DestinationPosition={VectorToStr(orderCustomerParking)}|Position={VectorToStr(position)}";
+            SendIGCMessage(message);
         }
         void CmdLoadOrder(string[] lines)
         {

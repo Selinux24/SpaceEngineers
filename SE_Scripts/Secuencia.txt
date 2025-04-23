@@ -1,0 +1,19 @@
+﻿1 - BASEX revisa el inventario y pide a WH [PEDIDO|de=BASEX|a=WH|ITEMS]
+2 - WH registra el pedido (lista de pedidos)
+
+1 - En bucle en WH: para cada pedido, busca una nave libre en el parking y le da la orden de carga (WH a NAVEX conectores, Parking_BASEX) [ORDENCARGA|de=WH|a=NAVEX|para=BASEX|ID_PEDIDO|WAYPOINTS]
+2 - NAVEX carga en los conectores de WH los items de ID_PEDIDO
+3*- WH carga los elementos del pedido en la nave y lanza [CARGADO] - MARCAR PEDIDO COMO EN RUTA
+4 - NAVEX viaja a Parking_BASEX y al llegar lanza [DESCARGA|de=NAVEX|a=BASEX|ID_PEDIDO]
+5 - BASEX registra petición de descarga (lista de descargas)
+
+1 - En bucle en BASEX: para cada petición de descarga, busca connectores libres da la orden de descarga [ORDENDESCARGA|de=BASEX|a=NAVEX|para=WH|ID_PEDIDO|WAYPOINTS]
+2 - NAVEX descarga en los conectores de BASEX los items de ID_PEDIDO
+3*- NAVEX descarga todo - ENVIAR A WH PEDIDO RECIBIDO
+4 - NAVEX viaja a Parking_WH y al llegar lanza [EN_ESPERA|de=NAVEX|a=WH]
+
+1*- BASEX informa a WH de que el pedido ID_PEDIDO ha sido recibido
+2*- WH elimina el pedido de la lista de pedidos
+
+1*- NAVE pide Posicion Parking a BASE [PARKING]
+2*- BASE devuelve Posicion Parking a NAVE

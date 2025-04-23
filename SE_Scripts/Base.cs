@@ -1,4 +1,5 @@
 ﻿using Sandbox.ModAPI.Ingame;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -12,10 +13,11 @@ namespace Base
         const string baseId = "BaseBETA1";
         const string baseConnector = "Delivery Connector";
         const string baseCamera = "Camera";
-        const string baseParking = "-52394.26:-83868.35:-44561.14";
+        const string baseParking = "-50554.19:-86466.82:-43745.25";
         const string baseDataLCDs = "[DELIVERY_DATA]";
         const int NumWaypoints = 5;
 
+        #region Helper classes
         class Order
         {
             static int lastId = 0;
@@ -42,15 +44,19 @@ namespace Base
         {
             public string Name;
             public ShipStatus ShipStatus;
-            public string Origin;
-            public string Destination;
             public Vector3D Position;
+            public string Origin;
+            public Vector3D OriginPosition;
+            public string Destination;
+            public Vector3D DestinationPosition;
+            public DateTime UpdateTime;
         }
         class UnloadRequest
         {
             public string From;
             public int OrderId;
         }
+        #endregion
 
         IMyCameraBlock camera;
         IMyBroadcastListener bl;
@@ -61,8 +67,9 @@ namespace Base
         List<Order> orders = new List<Order>();
         List<Ship> ships = new List<Ship>();
         List<UnloadRequest> unloadRequests = new List<UnloadRequest>();
-        bool showOrders = false;
-        bool showShips = false;
+        bool showOrders = true;
+        bool showShips = true;
+        StringBuilder sbData = new StringBuilder();
 
         static string ReadArgument(string[] lines, string command)
         {
@@ -87,6 +94,28 @@ namespace Base
             if (str == "Idle") return ShipStatus.Idle;
             if (str == "Busy") return ShipStatus.Busy;
             return ShipStatus.Idle;
+        }
+        void WriteLCDs(string wildcard, string text)
+        {
+            List<IMyTextPanel> lcds = new List<IMyTextPanel>();
+            GridTerminalSystem.GetBlocksOfType(lcds, lcd => lcd.CustomName.Contains(wildcard));
+            foreach (var lcd in lcds)
+            {
+                lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                lcd.WriteText(text, false);
+            }
+        }
+        void WriteDataLCDs(string text, bool append)
+        {
+            foreach (var lcd in dataLcds)
+            {
+                lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                lcd.WriteText(text, append);
+            }
+        }
+        void SendIGCMessage(string message)
+        {
+            IGC.SendBroadcastMessage(channel, message);
         }
 
         public Program()
@@ -115,45 +144,6 @@ namespace Base
 
             WriteDataLCDs($"Listening in channel: {channel}", false);
         }
-        void InitializeConnectors()
-        {
-            List<IMyShipConnector> connectors = new List<IMyShipConnector>();
-            GridTerminalSystem.GetBlocksOfType(connectors, c => c.CustomName.Contains(baseConnector));
-            if (connectors.Count == 0)
-            {
-                Echo("Conectores no encontrados.");
-                return;
-            }
-
-            foreach (var connector in connectors)
-            {
-                if (!connector.CustomName.Contains("1") && !connector.CustomName.Contains("2")) continue;
-
-                string baseName = connector.CustomName.Substring(0, connector.CustomName.Length - 1);
-                string suffix = connector.CustomName.Substring(connector.CustomName.Length - 1);
-
-                if (suffix == "1") upperConnectors[baseName] = connector;
-                if (suffix == "2") lowerConnectors[baseName] = connector;
-            }
-        }
-        void WriteLCDs(string wildcard, string text)
-        {
-            List<IMyTextPanel> lcds = new List<IMyTextPanel>();
-            GridTerminalSystem.GetBlocksOfType(lcds, lcd => lcd.CustomName.Contains(wildcard));
-            foreach (var lcd in lcds)
-            {
-                lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-                lcd.WriteText(text, false);
-            }
-        }
-        void WriteDataLCDs(string text, bool append)
-        {
-            foreach (var lcd in dataLcds)
-            {
-                lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-                lcd.WriteText(text, append);
-            }
-        }
 
         public void Main(string argument, UpdateType updateSource)
         {
@@ -166,6 +156,14 @@ namespace Base
             {
                 var message = bl.AcceptMessage();
                 ParseMessage(message.Data.ToString());
+            }
+
+            if (showShips || showOrders)
+            {
+                sbData.Clear();
+                PrintShipStatus();
+                PrintOrders();
+                WriteDataLCDs(sbData.ToString(), false);
             }
         }
 
@@ -185,12 +183,10 @@ namespace Base
             }
             else if (argument == "LIST_SHIPS")
             {
-                showShips = true;
                 CmdListShips();
             }
             else if (argument == "LIST_ORDERS")
             {
-                showOrders = true;
                 CmdListOrders();
             }
             else if (argument == "FAKE_ORDER")
@@ -201,7 +197,6 @@ namespace Base
         void CmdRequestStatus()
         {
             //[Command=REQUEST_STATUS|From=SENDER]
-            ships.Clear();
             string message = $"Command=REQUEST_STATUS|From={baseId}";
             SendIGCMessage(message);
         }
@@ -264,37 +259,11 @@ namespace Base
         }
         void CmdListShips()
         {
-            if (!showShips) return;
-
-            if (ships.Count == 0)
-            {
-                WriteDataLCDs("No ships available.", false);
-                return;
-            }
-
-            StringBuilder sb = new StringBuilder();
-            foreach (var ship in ships)
-            {
-                sb.AppendLine($"Name: {ship.Name}, Status: {ship.ShipStatus}, Origin: {ship.Origin}, Destination: {ship.Destination}, Position: {ship.Position}");
-            }
-            WriteDataLCDs(sb.ToString(), false);
+            showShips = !showShips;
         }
         void CmdListOrders()
         {
-            if (!showOrders) return;
-
-            if (orders.Count == 0)
-            {
-                WriteDataLCDs("No orders available.", false);
-                return;
-            }
-
-            StringBuilder sb = new StringBuilder();
-            foreach (var order in orders)
-            {
-                sb.AppendLine($"OrderId: {order.Id}, From: {order.From}, To: {order.To}, Items: {string.Join(", ", order.Items.Select(i => $"{i.Key}: {i.Value}"))}");
-            }
-            WriteDataLCDs(sb.ToString(), false);
+            showOrders = !showOrders;
         }
         void CmdFakeOrder()
         {
@@ -356,12 +325,10 @@ namespace Base
             }
 
             orders.Add(order);
-
-            CmdListOrders();
         }
         void CmdStatus(string[] lines)
         {
-            //[Command=STATUS|To=Me|From=Sender|Status=Status|Origin=Base|Destination=Base|Position=x:y:z]
+            //[Command=STATUS|To=Me|From=Sender|Status=Status|Origin=Base|OriginPosition=Position|Destination=Base|DestinationPosition=Position|Position=x:y:z]
             string to = ReadArgument(lines, "To");
             if (to != baseId)
             {
@@ -371,19 +338,36 @@ namespace Base
             string from = ReadArgument(lines, "From");
             ShipStatus status = StrToShipStatus(ReadArgument(lines, "Status"));
             string origin = ReadArgument(lines, "Origin");
+            Vector3D originPosition = StrToVector(ReadArgument(lines, "OriginPosition"));
             string destination = ReadArgument(lines, "Destination");
+            Vector3D destinationPosition = StrToVector(ReadArgument(lines, "DestinationPosition"));
             Vector3D position = StrToVector(ReadArgument(lines, "Position"));
 
-            ships.Add(new Ship
+            var ship = ships.Find(s => s.Name == from);
+            if (ship != null)
             {
-                Name = from,
-                ShipStatus = status,
-                Origin = origin,
-                Destination = destination,
-                Position = position
-            });
-
-            CmdListShips();
+                ship.ShipStatus = status;
+                ship.Position = originPosition;
+                ship.Origin = origin;
+                ship.OriginPosition = originPosition;
+                ship.Destination = destination;
+                ship.DestinationPosition = destinationPosition;
+                ship.UpdateTime = DateTime.Now;
+            }
+            else
+            {
+                ships.Add(new Ship
+                {
+                    Name = from,
+                    ShipStatus = status,
+                    Position = position,
+                    Origin = origin,
+                    OriginPosition = originPosition,
+                    Destination = destination,
+                    DestinationPosition = destinationPosition,
+                    UpdateTime = DateTime.Now
+                });
+            }
         }
         void CmdUnload(string[] lines)
         {
@@ -404,6 +388,27 @@ namespace Base
             });
         }
 
+        void InitializeConnectors()
+        {
+            List<IMyShipConnector> connectors = new List<IMyShipConnector>();
+            GridTerminalSystem.GetBlocksOfType(connectors, c => c.CustomName.Contains(baseConnector));
+            if (connectors.Count == 0)
+            {
+                Echo("Conectores no encontrados.");
+                return;
+            }
+
+            foreach (var connector in connectors)
+            {
+                if (!connector.CustomName.Contains("1") && !connector.CustomName.Contains("2")) continue;
+
+                string baseName = connector.CustomName.Substring(0, connector.CustomName.Length - 1);
+                string suffix = connector.CustomName.Substring(connector.CustomName.Length - 1);
+
+                if (suffix == "1") upperConnectors[baseName] = connector;
+                if (suffix == "2") lowerConnectors[baseName] = connector;
+            }
+        }
         List<IMyShipConnector> GetFreeConnectors()
         {
             List<IMyShipConnector> freeConnectors = new List<IMyShipConnector>();
@@ -439,9 +444,46 @@ namespace Base
             return waypoints;
         }
 
-        void SendIGCMessage(string message)
+        void PrintShipStatus()
         {
-            IGC.SendBroadcastMessage(channel, message);
+            if (!showShips) return;
+
+            sbData.AppendLine("SHIPS STATUS");
+
+            if (ships.Count == 0)
+            {
+                sbData.AppendLine("No ships available.");
+                return;
+            }
+
+            foreach (var ship in ships)
+            {
+                sbData.AppendLine($"{ship.Name} Status: {ship.ShipStatus}. Last update: {(DateTime.Now - ship.UpdateTime).TotalSeconds:F0} seconds");
+                if (string.IsNullOrEmpty(ship.Origin)) continue;
+
+                double distanceToOrigin = Vector3D.Distance(ship.Position, ship.OriginPosition);
+                double distanceToDestination = Vector3D.Distance(ship.Position, ship.DestinationPosition);
+                sbData.AppendLine($"On route from [{ship.Origin}] to [{ship.Destination}]");
+                sbData.AppendLine($"Distance from origin: {distanceToOrigin:F0}m.");
+                sbData.AppendLine($"Distance to destination: {distanceToDestination:F0}m.");
+            }
+        }
+        void PrintOrders()
+        {
+            if (!showOrders) return;
+
+            sbData.AppendLine("ORDERS STATUS");
+
+            if (orders.Count == 0)
+            {
+                sbData.AppendLine("No orders available.");
+                return;
+            }
+
+            foreach (var order in orders)
+            {
+                sbData.AppendLine($"OrderId: {order.Id}, From: {order.From}, To: {order.To}");
+            }
         }
     }
 }
