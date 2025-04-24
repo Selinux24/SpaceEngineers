@@ -9,20 +9,20 @@ namespace NaveAlign
 {
     partial class Program : MyGridProgram
     {
-        const string shipRemoteControlLocking = "Remote Control Locking";
-        const string shipTimerLocking = "Automaton Timer Block Locking";
-        const string shipConnectorA = "Connector A";
+        const string shipRemoteControlLocking = "HT Remote Control Locking";
+        const string shipTimerLocking = "HT Automaton Timer Block Locking";
+        const string shipConnectorA = "HT Connector A";
         const float thr = 2f;
         const double angleThr = 0.001;
         const double ArrivalDistance = 0.5;    // Precisión: 0.5 metros.
         const double MaxApproachSpeed = 5.0;   // Velocidad máxima.
         const double SlowdownDistance = 50.0;  // Distancia de frenada.
 
-        IMyRemoteControl remoteLocking;
-        IMyTimerBlock timerLocking;
-        IMyShipConnector connectorA;
-        List<IMyThrust> thrusters = new List<IMyThrust>();
-        List<IMyGyro> gyros = new List<IMyGyro>();
+        readonly IMyRemoteControl remoteLocking;
+        readonly IMyTimerBlock timerLocking;
+        readonly IMyShipConnector connectorA;
+        readonly List<IMyThrust> thrusters = new List<IMyThrust>();
+        readonly List<IMyGyro> gyros = new List<IMyGyro>();
 
         List<Vector3D> waypoints = new List<Vector3D>();
         int currentTarget = 0;

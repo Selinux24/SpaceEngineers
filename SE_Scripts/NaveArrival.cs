@@ -9,14 +9,15 @@ namespace NaveArrival
     partial class Program : MyGridProgram
     {
         const string channel = "SHIPS_DELIVERY";
-        const string shipRemoteControlPilot = "Remote Control Pilot";
+        const string shipRemoteControlPilot = "HT Remote Control Pilot";
         const double arrivalThreshold = 200.0;
 
-        IMyRemoteControl remote;
+        readonly IMyRemoteControl remote;
 
         bool hasPosition = false;
         Vector3D targetPosition = Vector3D.Zero;
         string arrivalMessage = null;
+        string arrivalTimer = null;
 
         T GetBlockWithName<T>(string name) where T : class, IMyTerminalBlock
         {
@@ -33,24 +34,6 @@ namespace NaveArrival
                 return new Vector3D(double.Parse(coords[0]), double.Parse(coords[1]), double.Parse(coords[2]));
             }
             return new Vector3D();
-        }
-        void ParseMessage(string message)
-        {
-            hasPosition = false;
-            targetPosition = Vector3D.Zero;
-            arrivalMessage = null;
-
-            var parts = message.Split("||".ToCharArray());
-            if (parts.Length != 2)
-            {
-                return;
-            }
-
-            //Parsear la posición objetivo
-            targetPosition = StrToVector(parts[0]);
-            hasPosition = true;
-
-            arrivalMessage = parts[1]?.Trim() ?? "";
         }
         void SendIGCMessage(string message)
         {
@@ -74,7 +57,7 @@ namespace NaveArrival
         {
             if (!string.IsNullOrWhiteSpace(argument))
             {
-                ParseMessage(argument);
+                ParseTerminalMessage(argument);
                 return;
             }
 
@@ -82,6 +65,33 @@ namespace NaveArrival
             {
                 DoArrival();
             }
+        }
+
+        void ParseTerminalMessage(string message)
+        {
+            hasPosition = false;
+            targetPosition = Vector3D.Zero;
+            arrivalMessage = null;
+            arrivalTimer = null;
+
+            var parts = message.Split("||".ToCharArray());
+            if (parts.Length < 2)
+            {
+                return;
+            }
+
+            //Parsear la posición objetivo
+            targetPosition = StrToVector(parts[0]);
+            hasPosition = true;
+
+            arrivalMessage = parts[1]?.Trim() ?? "";
+
+            if (parts.Length < 3)
+            {
+                return;
+            }
+
+            arrivalTimer = parts[2]?.Trim() ?? "";
         }
 
         void DoArrival()
@@ -92,22 +102,27 @@ namespace NaveArrival
                 return;
             }
 
-            Vector3D currentPos = remote.GetPosition();
-            double distance = Vector3D.Distance(currentPos, targetPosition);
-
+            double distance = Vector3D.Distance(remote.GetPosition(), targetPosition);
             Echo($"Distancia a destino: {distance:F2}m.");
 
             if (distance <= arrivalThreshold)
             {
                 Echo("Llegada detectada!.");
-                if (arrivalMessage != null)
+
+                if (!string.IsNullOrWhiteSpace(arrivalMessage))
                 {
                     SendIGCMessage(arrivalMessage);
                 }
+                if (!string.IsNullOrWhiteSpace(arrivalTimer))
+                {
+                    GetBlockWithName<IMyTimerBlock>(arrivalTimer)?.ApplyAction("Start");
+                }
+
                 Runtime.UpdateFrequency = UpdateFrequency.None;  // Detener comprobaciones
                 hasPosition = false;
                 targetPosition = Vector3D.Zero;
                 arrivalMessage = null;
+                arrivalTimer = null;
             }
         }
     }

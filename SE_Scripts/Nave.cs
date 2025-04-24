@@ -10,12 +10,14 @@ namespace Nave
     {
         const string channel = "SHIPS_DELIVERY";
         const string shipId = "NaveBETA1";
-        const string shipRemoteControlPilot = "Remote Control Pilot";
-        const string shipTimerPilot = "Automaton Timer Block Pilot";
-        const string shipArrivalPB = "Automaton Programmable Block Arrival";
-        const string shipAlignPB = "Automaton Programmable Block Align";
-        const string shipTimerLoad = "Automaton Timer Block Load";
-        const string shipTimerUnload = "Automaton Timer Block Unload";
+        const string shipRemoteControlPilot = "HT Remote Control Pilot";
+        const string shipArrivalPB = "HT Automaton Programmable Block Arrival";
+        const string shipAlignPB = "HT Automaton Programmable Block Align";
+        const string shipTimerPilot = "HT Automaton Timer Block Pilot";
+        const string shipTimerLock = "HT Automaton Timer Block Locking";
+        const string shipTimerLoad = "HT Automaton Timer Block Load";
+        const string shipTimerUnload = "HT Automaton Timer Block Unload";
+        const string shipTimerWaiting = "HT Automaton Timer Block Waiting";
 
         enum ShipStatus
         {
@@ -24,13 +26,13 @@ namespace Nave
             Busy,
         }
 
-        IMyBroadcastListener bl;
-        IMyRemoteControl remotePilot;
-        IMyTimerBlock timerPilot;
-        IMyProgrammableBlock arrivalPB;
-        IMyProgrammableBlock alignPB;
-        IMyTimerBlock timerLoad;
-        IMyTimerBlock timerUnload;
+        readonly IMyBroadcastListener bl;
+        readonly IMyRemoteControl remotePilot;
+        readonly IMyTimerBlock timerPilot;
+        readonly IMyProgrammableBlock arrivalPB;
+        readonly IMyProgrammableBlock alignPB;
+        readonly IMyTimerBlock timerLoad;
+        readonly IMyTimerBlock timerUnload;
 
         string orderFrom;
         Vector3D orderFromParking;
@@ -175,7 +177,7 @@ namespace Nave
             timerPilot.ApplyAction("Start");
 
             //Lanza el script de control de proximidad
-            arrivalPB.TryRun($"Position={VectorToStr(orderCustomerParking)}||Command=UNLOAD|To={orderCustomer}|From={shipId}|Order={orderId}");
+            arrivalPB.TryRun($"{VectorToStr(orderCustomerParking)}||Command=UNLOAD|To={orderCustomer}|From={shipId}|Order={orderId}||{shipTimerLock}");
         }
         void CmdReturn()
         {
@@ -191,7 +193,7 @@ namespace Nave
             timerPilot.ApplyAction("Start");
 
             //Lanza el script de control de proximidad
-            arrivalPB.TryRun($"Position={VectorToStr(orderCustomerParking)}||Command=WAITING|To={shipId}");
+            arrivalPB.TryRun($"{VectorToStr(orderCustomerParking)}||Command=WAITING|To={shipId}||{shipTimerWaiting}");
         }
 
         void ParseMessage(string signal)

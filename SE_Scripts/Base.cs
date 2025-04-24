@@ -63,20 +63,21 @@ namespace Base
         }
         #endregion
 
-        IMyCameraBlock camera;
-        List<IMyCargoContainer> cargos = new List<IMyCargoContainer>();
-        List<IMyCargoContainer> exchanges = new List<IMyCargoContainer>();
-        IMyBroadcastListener bl;
-        Dictionary<string, IMyShipConnector> upperConnectors = new Dictionary<string, IMyShipConnector>();
-        Dictionary<string, IMyShipConnector> lowerConnectors = new Dictionary<string, IMyShipConnector>();
-        List<IMyTextPanel> dataLcds = new List<IMyTextPanel>();
+        readonly IMyCameraBlock camera;
+        readonly List<IMyCargoContainer> cargos = new List<IMyCargoContainer>();
+        readonly List<IMyCargoContainer> exchanges = new List<IMyCargoContainer>();
+        readonly IMyBroadcastListener bl;
+        readonly Dictionary<string, IMyShipConnector> upperConnectors = new Dictionary<string, IMyShipConnector>();
+        readonly Dictionary<string, IMyShipConnector> lowerConnectors = new Dictionary<string, IMyShipConnector>();
+        readonly List<IMyTextPanel> dataLcds = new List<IMyTextPanel>();
 
-        List<Order> orders = new List<Order>();
-        List<Ship> ships = new List<Ship>();
-        List<UnloadRequest> unloadRequests = new List<UnloadRequest>();
+        readonly List<Order> orders = new List<Order>();
+        readonly List<Ship> ships = new List<Ship>();
+        readonly List<UnloadRequest> unloadRequests = new List<UnloadRequest>();
+        readonly StringBuilder sbData = new StringBuilder();
+
         bool showOrders = true;
         bool showShips = true;
-        StringBuilder sbData = new StringBuilder();
 
         T GetBlockWithName<T>(string name) where T : class, IMyTerminalBlock
         {
@@ -368,11 +369,11 @@ namespace Base
             if (ship != null)
             {
                 ship.ShipStatus = status;
-                ship.Position = originPosition;
                 ship.Origin = origin;
                 ship.OriginPosition = originPosition;
                 ship.Destination = destination;
                 ship.DestinationPosition = destinationPosition;
+                ship.Position = position;
                 ship.UpdateTime = DateTime.Now;
             }
             else
