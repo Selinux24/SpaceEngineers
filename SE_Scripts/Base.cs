@@ -218,38 +218,19 @@ namespace Base
         {
             WriteLogLCDs($"ParseTerminalMessage: {argument}");
 
-            if (argument == "REQUEST_STATUS")
-            {
-                CmdRequestStatus();
-            }
-            else if (argument == "TRY_DELIVERY")
-            {
-                CmdTryDelivery();
-            }
-            else if (argument == "TRY_UNLOAD")
-            {
-                CmdTryUnload();
-            }
-            else if (argument == "LIST_SHIPS")
-            {
-                CmdListShips();
-            }
-            else if (argument == "LIST_ORDERS")
-            {
-                CmdListOrders();
-            }
-            else if (argument == "FAKE_ORDER")
-            {
-                CmdFakeOrder();
-            }
+            if (argument == "REQUEST_STATUS") RequestStatus();
+            else if (argument == "REQUEST_DELIVERY") RequestDelivery();
+            else if (argument == "REQUEST_RECEPTION") RequestReception();
+            else if (argument == "LIST_SHIPS") ListShips();
+            else if (argument == "LIST_ORDERS") ListOrders();
+            else if (argument == "FAKE_ORDER") FakeOrder();
         }
-        void CmdRequestStatus()
+        void RequestStatus()
         {
-            //[Command=REQUEST_STATUS|From=SENDER]
             string message = $"Command=REQUEST_STATUS|From={baseId}";
             SendIGCMessage(message);
         }
-        void CmdTryDelivery()
+        void RequestDelivery()
         {
             var pendantOrders = orders.ToList();
             if (pendantOrders.Count == 0)
@@ -259,7 +240,7 @@ namespace Base
             var freeShips = ships.Where(s => s.ShipStatus == ShipStatus.Idle).ToList();
             if (freeShips.Count == 0)
             {
-                CmdRequestStatus();
+                RequestStatus();
                 return;
             }
             var freeConnectors = GetFreeConnectors();
@@ -273,7 +254,6 @@ namespace Base
 
                 order.AssignedShip = ship.Name;
 
-                //[Command=LOAD_ORDER|To=Ship|From=Me|For=Customer|ForParking=CustomerParking|Order=ID_PEDIDO|Forward=x:y:z|Up=x:y:z|WayPoints=x:y:z;]
                 string forward = VectorToStr(camera.WorldMatrix.Forward);
                 string up = VectorToStr(camera.WorldMatrix.Up);
                 string waypoints = string.Join(";", CalculateRouteToConnector(connector).Select(VectorToStr));
@@ -283,7 +263,7 @@ namespace Base
                 MoveCargo(connector, order);
             }
         }
-        void CmdTryUnload()
+        void RequestReception()
         {
             var freeConnectors = GetFreeConnectors();
             if (freeConnectors.Count == 0)
@@ -302,25 +282,24 @@ namespace Base
                 var request = unloadRequests[i];
                 var connector = freeConnectors[i];
 
-                //[Command=UNLOAD|To=Ship|From=Me|For=Customer|ForParking=CustomerParking|Order=ID_PEDIDO|Forward=x:y:z|Up=x:y:z|WayPoints=x:y:z;]
                 string forward = VectorToStr(camera.WorldMatrix.Forward);
                 string up = VectorToStr(camera.WorldMatrix.Up);
                 string waypoints = string.Join(";", CalculateRouteToConnector(connector).Select(VectorToStr));
-                string message = $"Command=UNLOAD_ORDER|To={request.From}|Forward={forward}|Up={up}|WayPoints={waypoints}";
+                string message = $"Command=UNLOAD_ORDER|To={request.From}|From={baseId}|Forward={forward}|Up={up}|WayPoints={waypoints}";
                 SendIGCMessage(message);
             }
         }
-        void CmdListShips()
+        void ListShips()
         {
             showShips = !showShips;
         }
-        void CmdListOrders()
+        void ListOrders()
         {
             showOrders = !showOrders;
         }
-        void CmdFakeOrder()
+        void FakeOrder()
         {
-            ParseMessage($"Command=ORDER|To={baseId}|From=NOBODY|Parking=0:0:0|Items=SteelPlate:10;");
+            ParseMessage($"Command=REQUEST_ORDER|To={baseId}|From=NOBODY|Parking=0:0:0|Items=SteelPlate:10;");
         }
 
         void ParseMessage(string signal)
@@ -328,62 +307,20 @@ namespace Base
             WriteLogLCDs($"ParseMessage: {signal}");
 
             string[] lines = signal.Split('|');
-
             string command = ReadArgument(lines, "Command");
-            if (command == "ORDER")
-            {
-                CmdOrder(lines);
-            }
-            else if (command == "STATUS")
-            {
-                CmdStatus(lines);
-            }
-            else if (command == "UNLOAD")
-            {
-                CmdUnload(lines);
-            }
+
+            if (command == "RESPONSE_STATUS") CmdResponseStatus(lines);
+            else if (command == "REQUEST_ORDER") CmdRequestOrder(lines);
+            else if (command == "LOADING") CmdLoading(lines);
+            else if (command == "REQUEST_UNLOAD") CmdRequestUnload(lines);
+            else if (command == "UNLOADING") CmdUnloading(lines);
+            else if (command == "UNLOADED") CmdUnloaded(lines);
+            else if (command == "ORDER_RECEIVED") CmdOrderReceived(lines);
+            else if (command == "WAITING") CmdWaiting(lines);
         }
-        void CmdOrder(string[] lines)
+        void CmdResponseStatus(string[] lines)
         {
-            //[Command=ORDER|To=Me|From=Sender|Parking=SenderParking|Items=ITEMS:AMOUNT;]
-            string to = ReadArgument(lines, "To");
-            if (to != baseId)
-            {
-                return;
-            }
-
-            string from = ReadArgument(lines, "From");
-            Vector3D fromParking = StrToVector(ReadArgument(lines, "Parking"));
-            string items = ReadArgument(lines, "Items");
-
-            Order order = new Order();
-            order.From = from;
-            order.FromParking = fromParking;
-            order.To = to;
-            order.ToParking = StrToVector(baseParking);
-            foreach (var item in items.Split(';'))
-            {
-                var parts = item.Split(':');
-                if (parts.Length != 2) continue;
-                string itemName = parts[0];
-                int itemAmount;
-                if (!int.TryParse(parts[1], out itemAmount)) continue;
-
-                if (order.Items.ContainsKey(itemName))
-                {
-                    order.Items[itemName]++;
-                }
-                else
-                {
-                    order.Items[itemName] = itemAmount;
-                }
-            }
-
-            orders.Add(order);
-        }
-        void CmdStatus(string[] lines)
-        {
-            //[Command=STATUS|To=Me|From=Sender|Status=Status|Origin=Base|OriginPosition=Position|Destination=Base|DestinationPosition=Position|Position=x:y:z]
+            //[Command=RESPONSE_STATUS|To=Me|From=Sender|Status=Status|Origin=Base|OriginPosition=Position|Destination=Base|DestinationPosition=Position|Position=x:y:z]
             string to = ReadArgument(lines, "To");
             if (to != baseId)
             {
@@ -424,9 +361,61 @@ namespace Base
                 });
             }
         }
-        void CmdUnload(string[] lines)
+        void CmdRequestOrder(string[] lines)
         {
-            //[Command=UNLOAD|To=Me|From=Sender|Order=OrderId]
+            string to = ReadArgument(lines, "To");
+            if (to != baseId)
+            {
+                return;
+            }
+
+            string from = ReadArgument(lines, "From");
+            Vector3D fromParking = StrToVector(ReadArgument(lines, "Parking"));
+            string items = ReadArgument(lines, "Items");
+
+            Order order = new Order();
+            order.From = from;
+            order.FromParking = fromParking;
+            order.To = to;
+            order.ToParking = StrToVector(baseParking);
+            foreach (var item in items.Split(';'))
+            {
+                var parts = item.Split(':');
+                if (parts.Length != 2) continue;
+                string itemName = parts[0];
+                int itemAmount;
+                if (!int.TryParse(parts[1], out itemAmount)) continue;
+
+                if (order.Items.ContainsKey(itemName))
+                {
+                    order.Items[itemName]++;
+                }
+                else
+                {
+                    order.Items[itemName] = itemAmount;
+                }
+            }
+
+            orders.Add(order);
+        }
+        void CmdLoading(string[] lines)
+        {
+            string to = ReadArgument(lines, "To");
+            if (to != baseId)
+            {
+                return;
+            }
+
+            string from = ReadArgument(lines, "From");
+            int orderId = int.Parse(ReadArgument(lines, "Order"));
+
+            //TODO: Carga de items
+
+            string message = $"Command=LOADED|To={from}|From={baseId}";
+            SendIGCMessage(message);
+        }
+        void CmdRequestUnload(string[] lines)
+        {
             string to = ReadArgument(lines, "To");
             if (to != baseId)
             {
@@ -441,6 +430,62 @@ namespace Base
                 From = from,
                 OrderId = orderId
             });
+        }
+        void CmdUnloading(string[] lines)
+        {
+            string to = ReadArgument(lines, "To");
+            if (to != baseId)
+            {
+                return;
+            }
+
+            //TODO: detectar cuando se ha terminado la descarga, para lanzar el comando UNLOADED
+        }
+        void CmdUnloaded(string[] lines)
+        {
+            string to = ReadArgument(lines, "To");
+            if (to != baseId)
+            {
+                return;
+            }
+
+            int orderId = int.Parse(ReadArgument(lines, "Order"));
+            //Eliminar la orden de descarga del pedido
+            var order = orders.FirstOrDefault(o => o.Id == orderId);
+            if (order != null)
+            {
+                orders.Remove(order);
+            }
+
+            //Enviar al WH el mensaje de que se ha recibido el pedido
+            string message = $"Command=ORDER_RECEIVED|To={order.From}|From={baseId}|Order={orderId}";
+            SendIGCMessage(message);
+        }
+        void CmdOrderReceived(string[] lines)
+        {
+            string to = ReadArgument(lines, "To");
+            if (to != baseId)
+            {
+                return;
+            }
+
+            //Eliminar el pedido de la lista
+            int orderId = int.Parse(ReadArgument(lines, "Order"));
+            var order = orders.FirstOrDefault(o => o.Id == orderId);
+            if (order != null)
+            {
+                orders.Remove(order);
+            }
+        }
+        void CmdWaiting(string[] lines)
+        {
+            string to = ReadArgument(lines, "To");
+            if (to != baseId)
+            {
+                return;
+            }
+
+            //TODO: Nada que hacer...
         }
 
         void InitializeConnectors()

@@ -184,14 +184,9 @@ namespace Nave
         {
             WriteLogLCDs($"ParseTerminalMessage: {argument}");
 
-            if (argument == "DELIVER")
-            {
-                CmdDeliver();
-            }
-            else if (argument == "RETURN")
-            {
-                CmdReturn();
-            }
+            if (argument == "DELIVER") CmdDeliver();
+            else if (argument == "RETURN") CmdReturn();
+            else if (argument == "UNLOADED") SendUnloaded();
         }
         void CmdDeliver()
         {
@@ -230,6 +225,23 @@ namespace Nave
             //Lanza el script de control de proximidad
             arrivalPB.TryRun($"{VectorToStr(orderCustomerParking)}||Command=WAITING|To={shipId}||{shipTimerWaiting}");
         }
+        void SendUnloaded()
+        {
+            string message = $"Command=UNLOADED|To={orderFrom}|From={shipId}|Order={orderId}";
+            SendIGCMessage(message);
+
+            //TODO comenzar viaje de regreso a Parking WH
+
+            arrivalPB.TryRun($"{VectorToStr(orderFromParking)}||Command=WAITING|To={shipId}||{shipTimerWaiting}");
+
+            //Limpiar datos del pedido
+            orderFrom = "";
+            orderFromParking = new Vector3D();
+            orderCustomer = "";
+            orderCustomerParking = new Vector3D();
+            orderId = -1;
+            status = ShipStatus.Idle;
+        }
 
         void ParseMessage(string signal)
         {
@@ -239,34 +251,20 @@ namespace Nave
             string[] lines = signal.Split('|');
 
             string command = ReadArgument(lines, "Command");
-            if (command == "REQUEST_STATUS")
-            {
-                CmdRequestStatus(lines);
-            }
-            else if (command == "LOAD_ORDER")
-            {
-                CmdLoadOrder(lines);
-            }
-            else if (command == "UNLOAD_ORDER")
-            {
-                CmdUnloadOrder(lines);
-            }
-            else if (command == "WAITING")
-            {
-                CmdWaiting(lines);
-            }
+            if (command == "REQUEST_STATUS") CmdRequestStatus(lines);
+            else if (command == "LOAD_ORDER") CmdLoadOrder(lines);
+            else if (command == "LOADED") CmdLoaded(lines);
+            else if (command == "UNLOAD_ORDER") CmdUnloadOrder(lines);
         }
         void CmdRequestStatus(string[] lines)
         {
-            //[Command=STATUS|To=Sender|From=Me|Status=Status|Origin=Base|OriginPosition=Position|Destination=Base|DestinationPosition=Position|Position=x:y:z]
             string from = ReadArgument(lines, "From");
             Vector3D position = remotePilot.GetPosition();
-            string message = $"Command=STATUS|To={from}|From={shipId}|Status={status}|Origin={orderFrom}|OriginPosition={VectorToStr(orderFromParking)}|Destination={orderCustomer}|DestinationPosition={VectorToStr(orderCustomerParking)}|Position={VectorToStr(position)}";
+            string message = $"Command=RESPONSE_STATUS|To={from}|From={shipId}|Status={status}|Origin={orderFrom}|OriginPosition={VectorToStr(orderFromParking)}|Destination={orderCustomer}|DestinationPosition={VectorToStr(orderCustomerParking)}|Position={VectorToStr(position)}";
             SendIGCMessage(message);
         }
         void CmdLoadOrder(string[] lines)
         {
-            //[Command=LOAD_ORDER|To=Me|From=Sender|For=Customer|ForParking=CustomerParking|Order=ID_PEDIDO|Forward=x:y:z|Up=x:y:z|WayPoints=x:y:z;]
             string to = ReadArgument(lines, "To");
             if (to != shipId)
             {
@@ -283,13 +281,26 @@ namespace Nave
             string up = ReadArgument(lines, "Up");
             string wayPoints = ReadArgument(lines, "WayPoints");
 
-            alignPB.TryRun($"ALIGN|{forward}|{up}|{wayPoints}");
+            string message = $"Command=LOADING|To={orderFrom}|From={shipId}|Order={orderId}";
+            alignPB.TryRun($"ALIGN|{forward}|{up}|{wayPoints}||{message}");
+
+            //Activar modo carga
             timerLoad.ApplyAction("Start");
-            Echo("A cargar!!");
+        }
+        void CmdLoaded(string[] lines)
+        {
+            string to = ReadArgument(lines, "To");
+            if (to != shipId)
+            {
+                return;
+            }
+
+            //TODO: Comenzar el viaje a la entrega
+
+            arrivalPB.TryRun($"{VectorToStr(orderCustomerParking)}||Command=REQUEST_UNLOAD|To={orderCustomer}|From={shipId}|Order={orderId}||{shipTimerLock}");
         }
         void CmdUnloadOrder(string[] lines)
         {
-            //[Command=UNLOAD_ORDER|To=Me|Forward=x:y:z|Up=x:y:z|WayPoints=x:y:z;]
             string to = ReadArgument(lines, "To");
             if (to != shipId)
             {
@@ -300,20 +311,11 @@ namespace Nave
             string up = ReadArgument(lines, "Up");
             string wayPoints = ReadArgument(lines, "WayPoints");
 
-            alignPB.TryRun($"ALIGN|{forward}|{up}|{wayPoints}");
-            timerUnload.ApplyAction("Start");
-            Echo("A descargar!!");
-        }
-        void CmdWaiting(string[] lines)
-        {
-            //[Command=WAITING|To=Me]
-            string to = ReadArgument(lines, "To");
-            if (to != shipId)
-            {
-                return;
-            }
+            string message = $"Command=LOADING|To={orderFrom}|From={shipId}|Order={orderId}";
+            alignPB.TryRun($"ALIGN|{forward}|{up}|{wayPoints}||{message}");
 
-            status = ShipStatus.Idle;
+            //Activar modo descarga
+            timerUnload.ApplyAction("Start");
         }
     }
 }
