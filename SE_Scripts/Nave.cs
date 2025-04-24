@@ -1,7 +1,9 @@
 ﻿using Sandbox.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using VRageMath;
 
 namespace Nave
@@ -18,6 +20,7 @@ namespace Nave
         const string shipTimerLoad = "HT Automaton Timer Block Load";
         const string shipTimerUnload = "HT Automaton Timer Block Unload";
         const string shipTimerWaiting = "HT Automaton Timer Block Waiting";
+        const string shipLogLCDs = "[DELIVERY_LOG]";
 
         enum ShipStatus
         {
@@ -33,6 +36,8 @@ namespace Nave
         readonly IMyProgrammableBlock alignPB;
         readonly IMyTimerBlock timerLoad;
         readonly IMyTimerBlock timerUnload;
+        readonly List<IMyTextPanel> logLCDs = new List<IMyTextPanel>();
+        readonly StringBuilder sbLog = new StringBuilder();
 
         string orderFrom;
         Vector3D orderFromParking;
@@ -76,8 +81,34 @@ namespace Nave
                 lcd.WriteText(text, false);
             }
         }
+        void WriteLogLCDs(string text)
+        {
+            sbLog.Insert(0, text + Environment.NewLine);
+
+            var log = sbLog.ToString();
+            string[] logLines = log.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (var lcd in logLCDs)
+            {
+                lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+
+                string customData = lcd.CustomData;
+                var blackList = customData.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+                if (blackList.Length > 0)
+                {
+                    string[] lines = logLines.Where(l => !blackList.Any(b => l.Contains(b))).ToArray();
+                    lcd.WriteText(string.Join(Environment.NewLine, lines));
+                }
+                else
+                {
+                    lcd.WriteText(log, false);
+                }
+            }
+        }
         void SendIGCMessage(string message)
         {
+            WriteLogLCDs($"SendIGCMessage: {message}");
+
             IGC.SendBroadcastMessage(channel, message);
         }
 
@@ -125,6 +156,8 @@ namespace Nave
                 return;
             }
 
+            GridTerminalSystem.GetBlocksOfType(logLCDs, lcd => lcd.CubeGrid == Me.CubeGrid && lcd.CustomName.Contains(shipLogLCDs));
+
             WriteLCDs("[shipId]", shipId);
 
             bl = IGC.RegisterBroadcastListener(channel);
@@ -149,6 +182,8 @@ namespace Nave
 
         void ParseTerminalMessage(string argument)
         {
+            WriteLogLCDs($"ParseTerminalMessage: {argument}");
+
             if (argument == "DELIVER")
             {
                 CmdDeliver();
@@ -198,6 +233,8 @@ namespace Nave
 
         void ParseMessage(string signal)
         {
+            WriteLogLCDs($"ParseMessage: {signal}");
+
             Echo($"Mensaje recibido: {signal}");
             string[] lines = signal.Split('|');
 

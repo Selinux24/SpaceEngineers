@@ -19,6 +19,7 @@ namespace Base
         const string baseExchanges = "Exchange";
         const string baseParking = "-50554.19:-86466.82:-43745.25";
         const string baseDataLCDs = "[DELIVERY_DATA]";
+        const string baseLogLCDs = "[DELIVERY_LOG]";
         const int NumWaypoints = 5;
 
         #region Helper classes
@@ -69,12 +70,14 @@ namespace Base
         readonly IMyBroadcastListener bl;
         readonly Dictionary<string, IMyShipConnector> upperConnectors = new Dictionary<string, IMyShipConnector>();
         readonly Dictionary<string, IMyShipConnector> lowerConnectors = new Dictionary<string, IMyShipConnector>();
-        readonly List<IMyTextPanel> dataLcds = new List<IMyTextPanel>();
+        readonly List<IMyTextPanel> dataLCDs = new List<IMyTextPanel>();
+        readonly StringBuilder sbData = new StringBuilder();
+        readonly List<IMyTextPanel> logLCDs = new List<IMyTextPanel>();
+        readonly StringBuilder sbLog = new StringBuilder();
 
         readonly List<Order> orders = new List<Order>();
         readonly List<Ship> ships = new List<Ship>();
         readonly List<UnloadRequest> unloadRequests = new List<UnloadRequest>();
-        readonly StringBuilder sbData = new StringBuilder();
 
         bool showOrders = true;
         bool showShips = true;
@@ -122,14 +125,40 @@ namespace Base
         }
         void WriteDataLCDs(string text, bool append)
         {
-            foreach (var lcd in dataLcds)
+            foreach (var lcd in dataLCDs)
             {
                 lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
                 lcd.WriteText(text, append);
             }
         }
+        void WriteLogLCDs(string text)
+        {
+            sbLog.Insert(0, text + Environment.NewLine);
+
+            var log = sbLog.ToString();
+            string[] logLines = log.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (var lcd in logLCDs)
+            {
+                lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+
+                string customData = lcd.CustomData;
+                var blackList = customData.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+                if (blackList.Length > 0)
+                {
+                    string[] lines = logLines.Where(l => !blackList.Any(b => l.Contains(b))).ToArray();
+                    lcd.WriteText(string.Join(Environment.NewLine, lines));
+                }
+                else
+                {
+                    lcd.WriteText(log, false);
+                }
+            }
+        }
         void SendIGCMessage(string message)
         {
+            WriteLogLCDs($"SendIGCMessage: {message}");
+
             IGC.SendBroadcastMessage(channel, message);
         }
 
@@ -146,8 +175,8 @@ namespace Base
 
             GridTerminalSystem.GetBlocksOfType(cargos, cargo => cargo.CubeGrid == Me.CubeGrid && cargo.CustomName.Contains(baseWarehouses));
             GridTerminalSystem.GetBlocksOfType(exchanges, cargo => cargo.CubeGrid == Me.CubeGrid && cargo.CustomName.Contains(baseExchanges));
-
-            GridTerminalSystem.GetBlocksOfType(dataLcds, lcd => lcd.CubeGrid == Me.CubeGrid && lcd.CustomName.Contains(baseDataLCDs));
+            GridTerminalSystem.GetBlocksOfType(dataLCDs, lcd => lcd.CubeGrid == Me.CubeGrid && lcd.CustomName.Contains(baseDataLCDs));
+            GridTerminalSystem.GetBlocksOfType(logLCDs, lcd => lcd.CubeGrid == Me.CubeGrid && lcd.CustomName.Contains(baseLogLCDs));
 
             WriteLCDs("[baseId]", baseId);
 
@@ -187,6 +216,8 @@ namespace Base
 
         void ParseTerminalMessage(string argument)
         {
+            WriteLogLCDs($"ParseTerminalMessage: {argument}");
+
             if (argument == "REQUEST_STATUS")
             {
                 CmdRequestStatus();
@@ -294,6 +325,8 @@ namespace Base
 
         void ParseMessage(string signal)
         {
+            WriteLogLCDs($"ParseMessage: {signal}");
+
             string[] lines = signal.Split('|');
 
             string command = ReadArgument(lines, "Command");
