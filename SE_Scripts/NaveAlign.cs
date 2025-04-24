@@ -15,7 +15,9 @@ namespace NaveAlign
         const float thr = 2f;
         const double angleThr = 0.001;
         const double ArrivalDistance = 0.5;    // Precisión: 0.5 metros.
-        const double MaxApproachSpeed = 5.0;   // Velocidad máxima.
+        const double MaxApproachSpeed = 25.0;   // Velocidad máxima de llegada.
+        const double MaxApproachSpeedAprox = 15.0;   // Velocidad máxima de aproximación.
+        const double MaxApproachSpeedLocking = 5.0;   // Velocidad máxima en el último waypoint.
         const double SlowdownDistance = 50.0;  // Distancia de frenada.
 
         readonly IMyRemoteControl remoteLocking;
@@ -196,11 +198,28 @@ namespace NaveAlign
 
             Vector3D currentVelocity = remoteLocking.GetShipVelocities().LinearVelocity;
 
-            // Calcula velocidad deseada basada en distancia.
-            double desiredSpeed = MaxApproachSpeed;
-            if (distance < SlowdownDistance)
+            // Calcula velocidad deseada basada en distancia, cuando estemos avanzando hacia el último waypoint.
+            double approachSpeed;
+            if (currentTarget == 0)
             {
-                desiredSpeed = Math.Max(distance / SlowdownDistance * MaxApproachSpeed, 0.5);
+                // Velocidad hasta el primer punto de aproximación.
+                approachSpeed = MaxApproachSpeed;
+            }
+            else if (currentTarget == waypoints.Count - 1)
+            {
+                // Velocidad desde el úlimo punto de aproximación.
+                approachSpeed = MaxApproachSpeedLocking;
+            }
+            else
+            {
+                //Velocidad entre puntos de aproximación.
+                approachSpeed = MaxApproachSpeedAprox;
+            }
+
+            double desiredSpeed = approachSpeed;
+            if (distance < SlowdownDistance && (currentTarget == 0 || currentTarget == waypoints.Count - 1))
+            {
+                desiredSpeed = Math.Max(distance / SlowdownDistance * approachSpeed, 0.5);
             }
 
             Vector3D desiredVelocity = desiredDirection * desiredSpeed;
