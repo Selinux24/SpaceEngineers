@@ -9,8 +9,8 @@ namespace NaveAlign
 {
     partial class Program : MyGridProgram
     {
+        const string channel = "SHIPS_DELIVERY";
         const string shipRemoteControlLocking = "HT Remote Control Locking";
-        const string shipTimerLocking = "HT Automaton Timer Block Locking";
         const string shipConnectorA = "HT Connector A";
         const float thr = 2f;
         const double angleThr = 0.001;
@@ -21,7 +21,6 @@ namespace NaveAlign
         const double SlowdownDistance = 50.0;  // Distancia de frenada.
 
         readonly IMyRemoteControl remoteLocking;
-        readonly IMyTimerBlock timerLocking;
         readonly IMyShipConnector connectorA;
         readonly List<IMyThrust> thrusters = new List<IMyThrust>();
         readonly List<IMyGyro> gyros = new List<IMyGyro>();
@@ -31,6 +30,8 @@ namespace NaveAlign
         Vector3D targetForward = new Vector3D(1, 0, 0);
         Vector3D targetUp = new Vector3D(0, 1, 0);
         bool hasTarget = false;
+        string reachCommand = null;
+        string reachTimer = null;
 
         T GetBlockWithName<T>(string name) where T : class, IMyTerminalBlock
         {
@@ -64,6 +65,10 @@ namespace NaveAlign
         {
             Echo($"GPS:{name}:{v.X:F2}:{v.Y:F2}:{v.Z:F2}:{color}:");
         }
+        void SendIGCMessage(string message)
+        {
+            IGC.SendBroadcastMessage(channel, message);
+        }
 
         public Program()
         {
@@ -71,13 +76,6 @@ namespace NaveAlign
             if (remoteLocking == null)
             {
                 Echo($"Control remoto de atraque '{shipRemoteControlLocking}' no locallizado.");
-                return;
-            }
-
-            timerLocking = GetBlockWithName<IMyTimerBlock>(shipTimerLocking);
-            if (timerLocking == null)
-            {
-                Echo($"Timer '{shipTimerLocking}' no locallizado.");
                 return;
             }
 
@@ -99,17 +97,15 @@ namespace NaveAlign
         {
             if (!string.IsNullOrEmpty(argument))
             {
-                if (argument.StartsWith("ALIGN"))
-                {
-                    InitAlignShip(argument);
-                    Runtime.UpdateFrequency = UpdateFrequency.Update1;
-                    return;
-                }
                 if (argument.StartsWith("STOP"))
                 {
                     DoStopShip();
                     return;
                 }
+
+                InitAlignShip(argument);
+                Runtime.UpdateFrequency = UpdateFrequency.Update1;
+                return;
             }
 
             if ((updateSource & UpdateType.Update1) != 0)
@@ -123,14 +119,20 @@ namespace NaveAlign
             currentTarget = 0;
             waypoints.Clear();
             hasTarget = false;
-            var parts = data.Split('|');
-            if (parts.Length == 4)
-            {
-                targetForward = -Vector3D.Normalize(StrToVector(parts[1]));
-                targetUp = Vector3D.Normalize(StrToVector(parts[2]));
-                waypoints = ParseWaypoints(parts[3]);
-                hasTarget = true;
-            }
+
+            var parts = data.Split('¬');
+            if (parts.Length == 0) return;
+
+            var coords = parts[0].Split('|');
+            if (coords.Length != 3) return;
+            targetForward = -Vector3D.Normalize(StrToVector(coords[0]));
+            targetUp = Vector3D.Normalize(StrToVector(coords[1]));
+            waypoints = ParseWaypoints(coords[2]);
+            hasTarget = true;
+
+            if (parts.Length >= 2) ParseAction(parts[1]);
+
+            if (parts.Length >= 3) ParseAction(parts[2]);
         }
         List<Vector3D> ParseWaypoints(string data)
         {
@@ -143,6 +145,17 @@ namespace NaveAlign
                 wp.Add(waypoint);
             }
             return wp;
+        }
+        void ParseAction(string action)
+        {
+            if (action.StartsWith("Command="))
+            {
+                reachCommand = action;
+            }
+            else
+            {
+                reachTimer = action;
+            }
         }
 
         void DoAlignShip()
@@ -164,6 +177,8 @@ namespace NaveAlign
             currentTarget = 0;
             waypoints.Clear();
             hasTarget = false;
+            reachCommand = null;
+            reachTimer = null;
             ResetGyros();
             ResetThrust();
         }
@@ -172,8 +187,9 @@ namespace NaveAlign
         {
             if (currentTarget >= waypoints.Count)
             {
-                timerLocking.ApplyAction("Start");
                 Runtime.UpdateFrequency = UpdateFrequency.None;
+                DoStopShip();
+                DoReachActions();
                 return;
             }
             Vector3D currentPos = connectorA.GetPosition();
@@ -310,6 +326,20 @@ namespace NaveAlign
                 gyro.Pitch = 0;
                 gyro.Yaw = 0;
                 gyro.Roll = 0;
+            }
+        }
+
+        void DoReachActions()
+        {
+            if (!string.IsNullOrWhiteSpace(reachTimer))
+            {
+                var timer = GetBlockWithName<IMyTimerBlock>(reachTimer);
+                timer?.ApplyAction("Start");
+            }
+
+            if (!string.IsNullOrWhiteSpace(reachCommand))
+            {
+                SendIGCMessage(reachCommand);
             }
         }
     }

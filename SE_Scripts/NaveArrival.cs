@@ -74,7 +74,7 @@ namespace NaveArrival
             arrivalMessage = null;
             arrivalTimer = null;
 
-            var parts = message.Split("||".ToCharArray());
+            var parts = message.Split('¬');
             if (parts.Length < 2)
             {
                 return;

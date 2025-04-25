@@ -1,4 +1,5 @@
 ﻿using Sandbox.ModAPI.Ingame;
+using SpaceEngineers.Game.ModAPI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,16 +14,105 @@ namespace Base
     {
         const string channel = "SHIPS_DELIVERY";
         const string baseId = "BaseBETA1";
-        const string baseConnector = "Delivery Connector";
         const string baseCamera = "Camera";
         const string baseWarehouses = "Warehouse";
-        const string baseExchanges = "Exchange";
         const string baseParking = "-50554.19:-86466.82:-43745.25";
         const string baseDataLCDs = "[DELIVERY_DATA]";
         const string baseLogLCDs = "[DELIVERY_LOG]";
         const int NumWaypoints = 5;
 
+        const string exchangeGroupName = @"GR_\w+";
+        const string exchangeUpperConnector = "Input";
+        const string exchangeLowerConnector = "Ouput";
+        const string exchangeSorterInput = "Input";
+        const string exchangeSorterOutput = "Output";
+        const string exchangeTimerPrepare = "Prepare";
+        const string exchangeTimerUnload = "Unload";
+        const string exchangeTimerLoad = "Load";
+
         #region Helper classes
+        class ExchangeGroup
+        {
+            public string Name;
+            public IMyShipConnector UpperConnector;
+            public IMyShipConnector LowerConnector;
+            public IMyCargoContainer Cargo;
+            public IMyConveyorSorter SorterInput;
+            public IMyConveyorSorter SorterOutput;
+            public IMyTimerBlock TimerPrepare;
+            public IMyTimerBlock TimerUnload;
+            public IMyTimerBlock TimerLoad;
+
+            public bool IsValid()
+            {
+                return
+                    UpperConnector != null &&
+                    Cargo != null &&
+                    SorterInput != null &&
+                    SorterOutput != null;
+            }
+            public bool IsFree()
+            {
+                return
+                    UpperConnector.Status == MyShipConnectorStatus.Unconnected &&
+                    (LowerConnector?.Status ?? MyShipConnectorStatus.Unconnected) == MyShipConnectorStatus.Unconnected;
+            }
+            public List<Vector3D> CalculateRouteToConnector()
+            {
+                List<Vector3D> waypoints = new List<Vector3D>();
+
+                Vector3D targetDock = UpperConnector.GetPosition();   // Punto final
+                Vector3D forward = UpperConnector.WorldMatrix.Forward;
+                Vector3D approachStart = targetDock + forward * 150;  // Punto de aproximación inicial
+
+                for (int i = 0; i <= NumWaypoints; i++)
+                {
+                    double t = i / (double)NumWaypoints;
+                    Vector3D point = Vector3D.Lerp(approachStart, targetDock, t) + (forward * 2.3);
+                    waypoints.Add(point);
+                }
+
+                return waypoints;
+            }
+            public List<Vector3D> CalculateRouteFromConnector()
+            {
+                var wp = CalculateRouteToConnector();
+                wp.Reverse();
+                return wp;
+            }
+            public void MoveCargo(Order order, List<IMyCargoContainer> cargos)
+            {
+                //Localiza el cargo más cercano al conector
+                //Mueve la carga desde los warehouses a los exchanges
+                var shipInv = Cargo.GetInventory();
+
+                foreach (var item in order.Items)
+                {
+                    var amountRemaining = item.Value;
+
+                    // Buscar ítem en los contenedores de la base
+                    foreach (var cargo in cargos)
+                    {
+                        var inv = cargo.GetInventory();
+                        var items = new List<MyInventoryItem>();
+                        inv.GetItems(items);
+
+                        for (int o = items.Count - 1; o >= 0 && amountRemaining > 0; o--)
+                        {
+                            if (items[o].Type.SubtypeId == item.Key)
+                            {
+                                var transferAmount = MyFixedPoint.Min(amountRemaining, items[o].Amount).ToIntSafe();
+                                if (inv.TransferItemTo(shipInv, o, null, true, transferAmount))
+                                {
+                                    amountRemaining -= transferAmount;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         class Order
         {
             static int lastId = 0;
@@ -66,15 +156,14 @@ namespace Base
 
         readonly IMyCameraBlock camera;
         readonly List<IMyCargoContainer> cargos = new List<IMyCargoContainer>();
-        readonly List<IMyCargoContainer> exchanges = new List<IMyCargoContainer>();
         readonly IMyBroadcastListener bl;
-        readonly Dictionary<string, IMyShipConnector> upperConnectors = new Dictionary<string, IMyShipConnector>();
-        readonly Dictionary<string, IMyShipConnector> lowerConnectors = new Dictionary<string, IMyShipConnector>();
         readonly List<IMyTextPanel> dataLCDs = new List<IMyTextPanel>();
         readonly StringBuilder sbData = new StringBuilder();
         readonly List<IMyTextPanel> logLCDs = new List<IMyTextPanel>();
         readonly StringBuilder sbLog = new StringBuilder();
 
+        readonly System.Text.RegularExpressions.Regex exchangesRegex = new System.Text.RegularExpressions.Regex(exchangeGroupName);
+        readonly List<ExchangeGroup> exchanges = new List<ExchangeGroup>();
         readonly List<Order> orders = new List<Order>();
         readonly List<Ship> ships = new List<Ship>();
         readonly List<UnloadRequest> unloadRequests = new List<UnloadRequest>();
@@ -82,6 +171,16 @@ namespace Base
         bool showOrders = true;
         bool showShips = true;
 
+        string ExtractGroupName(string input)
+        {
+            var match = exchangesRegex.Match(input);
+            if (match.Success)
+            {
+                return match.Value;
+            }
+
+            return string.Empty;
+        }
         T GetBlockWithName<T>(string name) where T : class, IMyTerminalBlock
         {
             List<T> blocks = new List<T>();
@@ -164,7 +263,7 @@ namespace Base
 
         public Program()
         {
-            InitializeConnectors();
+            InitializeExchangeGroups();
 
             camera = GetBlockWithName<IMyCameraBlock>(baseCamera);
             if (camera == null)
@@ -174,7 +273,6 @@ namespace Base
             }
 
             GridTerminalSystem.GetBlocksOfType(cargos, cargo => cargo.CubeGrid == Me.CubeGrid && cargo.CustomName.Contains(baseWarehouses));
-            GridTerminalSystem.GetBlocksOfType(exchanges, cargo => cargo.CubeGrid == Me.CubeGrid && cargo.CustomName.Contains(baseExchanges));
             GridTerminalSystem.GetBlocksOfType(dataLCDs, lcd => lcd.CubeGrid == Me.CubeGrid && lcd.CustomName.Contains(baseDataLCDs));
             GridTerminalSystem.GetBlocksOfType(logLCDs, lcd => lcd.CubeGrid == Me.CubeGrid && lcd.CustomName.Contains(baseLogLCDs));
 
@@ -243,30 +341,31 @@ namespace Base
                 RequestStatus();
                 return;
             }
-            var freeConnectors = GetFreeConnectors();
+            var freeExchanges = GetFreeExchanges();
+            WriteLogLCDs($"Orders: {pendantOrders.Count}; Free ships: {freeShips.Count}; Free exchanges: {freeExchanges.Count}");
 
-            int deliveryCount = System.Math.Min(freeConnectors.Count, System.Math.Min(freeShips.Count, pendantOrders.Count));
+            int deliveryCount = Math.Min(freeExchanges.Count, Math.Min(freeShips.Count, pendantOrders.Count));
             for (int i = 0; i < deliveryCount; i++)
             {
                 var order = pendantOrders[i];
                 var ship = freeShips[i];
-                var connector = freeConnectors[i];
+                var exchange = freeExchanges[i];
 
                 order.AssignedShip = ship.Name;
 
                 string forward = VectorToStr(camera.WorldMatrix.Forward);
                 string up = VectorToStr(camera.WorldMatrix.Up);
-                string waypoints = string.Join(";", CalculateRouteToConnector(connector).Select(VectorToStr));
-                string message = $"Command=LOAD_ORDER|To={ship.Name}|From={baseId}|For={order.To}|ForParking={VectorToStr(order.ToParking)}|Order={order.Id}|Forward={forward}|Up={up}|WayPoints={waypoints}";
+                string waypoints = string.Join(";", exchange.CalculateRouteToConnector().Select(VectorToStr));
+                string message = $"Command=LOAD_ORDER|To={ship.Name}|From={baseId}|For={order.To}|ForParking={VectorToStr(order.ToParking)}|Order={order.Id}|Forward={forward}|Up={up}|WayPoints={waypoints}|Exchange={exchange.Name}";
                 SendIGCMessage(message);
 
-                MoveCargo(connector, order);
+                exchange.MoveCargo(order, cargos);
             }
         }
         void RequestReception()
         {
-            var freeConnectors = GetFreeConnectors();
-            if (freeConnectors.Count == 0)
+            var freeExchanges = GetFreeExchanges();
+            if (freeExchanges.Count == 0)
             {
                 return;
             }
@@ -276,16 +375,16 @@ namespace Base
                 return;
             }
 
-            int unloadCount = System.Math.Min(freeConnectors.Count, unloadRequests.Count);
+            int unloadCount = Math.Min(freeExchanges.Count, unloadRequests.Count);
             for (int i = 0; i < unloadCount; i++)
             {
                 var request = unloadRequests[i];
-                var connector = freeConnectors[i];
+                var exchange = freeExchanges[i];
 
                 string forward = VectorToStr(camera.WorldMatrix.Forward);
                 string up = VectorToStr(camera.WorldMatrix.Up);
-                string waypoints = string.Join(";", CalculateRouteToConnector(connector).Select(VectorToStr));
-                string message = $"Command=UNLOAD_ORDER|To={request.From}|From={baseId}|Forward={forward}|Up={up}|WayPoints={waypoints}";
+                string waypoints = string.Join(";", exchange.CalculateRouteToConnector().Select(VectorToStr));
+                string message = $"Command=UNLOAD_ORDER|To={request.From}|From={baseId}|Forward={forward}|Up={up}|WayPoints={waypoints}|Exchange={exchange.Name}";
                 SendIGCMessage(message);
             }
         }
@@ -299,7 +398,7 @@ namespace Base
         }
         void FakeOrder()
         {
-            ParseMessage($"Command=REQUEST_ORDER|To={baseId}|From=NOBODY|Parking=0:0:0|Items=SteelPlate:10;");
+            ParseMessage($"Command=REQUEST_ORDER|To={baseId}|From=Base1|Parking=-52394.26:-83868.35:-44561.14|Items=SteelPlate:10;");
         }
 
         void ParseMessage(string signal)
@@ -320,7 +419,6 @@ namespace Base
         }
         void CmdResponseStatus(string[] lines)
         {
-            //[Command=RESPONSE_STATUS|To=Me|From=Sender|Status=Status|Origin=Base|OriginPosition=Position|Destination=Base|DestinationPosition=Position|Position=x:y:z]
             string to = ReadArgument(lines, "To");
             if (to != baseId)
             {
@@ -336,30 +434,19 @@ namespace Base
             Vector3D position = StrToVector(ReadArgument(lines, "Position"));
 
             var ship = ships.Find(s => s.Name == from);
-            if (ship != null)
+            if (ship == null)
             {
-                ship.ShipStatus = status;
-                ship.Origin = origin;
-                ship.OriginPosition = originPosition;
-                ship.Destination = destination;
-                ship.DestinationPosition = destinationPosition;
-                ship.Position = position;
-                ship.UpdateTime = DateTime.Now;
+                ship = new Ship() { Name = from };
+                ships.Add(ship);
             }
-            else
-            {
-                ships.Add(new Ship
-                {
-                    Name = from,
-                    ShipStatus = status,
-                    Position = position,
-                    Origin = origin,
-                    OriginPosition = originPosition,
-                    Destination = destination,
-                    DestinationPosition = destinationPosition,
-                    UpdateTime = DateTime.Now
-                });
-            }
+
+            ship.ShipStatus = status;
+            ship.Origin = origin;
+            ship.OriginPosition = originPosition;
+            ship.Destination = destination;
+            ship.DestinationPosition = destinationPosition;
+            ship.Position = position;
+            ship.UpdateTime = DateTime.Now;
         }
         void CmdRequestOrder(string[] lines)
         {
@@ -373,11 +460,14 @@ namespace Base
             Vector3D fromParking = StrToVector(ReadArgument(lines, "Parking"));
             string items = ReadArgument(lines, "Items");
 
-            Order order = new Order();
-            order.From = from;
-            order.FromParking = fromParking;
-            order.To = to;
-            order.ToParking = StrToVector(baseParking);
+            Order order = new Order
+            {
+                From = to,
+                FromParking = StrToVector(baseParking),
+                To = from,
+                ToParking = fromParking
+            };
+
             foreach (var item in items.Split(';'))
             {
                 var parts = item.Split(':');
@@ -408,10 +498,15 @@ namespace Base
 
             string from = ReadArgument(lines, "From");
             int orderId = int.Parse(ReadArgument(lines, "Order"));
+            string exchangeName = ReadArgument(lines, "Exchange");
 
-            //TODO: Carga de items
+            var exchange = exchanges.Find(e => e.Name == exchangeName);
+            exchange?.TimerLoad?.ApplyAction("Start");
 
-            string message = $"Command=LOADED|To={from}|From={baseId}";
+            string forward = VectorToStr(camera.WorldMatrix.Forward);
+            string up = VectorToStr(camera.WorldMatrix.Up);
+            string waypoints = string.Join(";", exchange.CalculateRouteFromConnector().Select(VectorToStr));
+            string message = $"Command=LOADED|To={from}|From={baseId}|Forward={forward}|Up={up}|WayPoints={waypoints}";
             SendIGCMessage(message);
         }
         void CmdRequestUnload(string[] lines)
@@ -439,7 +534,9 @@ namespace Base
                 return;
             }
 
-            //TODO: detectar cuando se ha terminado la descarga, para lanzar el comando UNLOADED
+            string exchangeName = ReadArgument(lines, "Exchange");
+            var exchange = exchanges.Find(e => e.Name == exchangeName);
+            exchange?.TimerUnload?.ApplyAction("Start");
         }
         void CmdUnloaded(string[] lines)
         {
@@ -449,8 +546,8 @@ namespace Base
                 return;
             }
 
-            int orderId = int.Parse(ReadArgument(lines, "Order"));
             //Eliminar la orden de descarga del pedido
+            int orderId = int.Parse(ReadArgument(lines, "Order"));
             var order = orders.FirstOrDefault(o => o.Id == orderId);
             if (order != null)
             {
@@ -488,117 +585,72 @@ namespace Base
             //TODO: Nada que hacer...
         }
 
-        void InitializeConnectors()
+        void InitializeExchangeGroups()
         {
-            List<IMyShipConnector> connectors = new List<IMyShipConnector>();
-            GridTerminalSystem.GetBlocksOfType(connectors, c => c.CustomName.Contains(baseConnector));
-            if (connectors.Count == 0)
+            //Busca todos los bloques que tengan en el nombre la regex de exchanges
+            List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
+            GridTerminalSystem.GetBlocksOfType(blocks, i => i.CubeGrid == Me.CubeGrid && exchangesRegex.IsMatch(i.CustomName));
+
+            //Group them by the group name
+            var groups = blocks.GroupBy(b => ExtractGroupName(b.CustomName)).ToList();
+
+            //Por cada grupo, inicializa los bloques de la clase ExchangeGroup
+            foreach (var group in groups)
             {
-                Echo("Conectores no encontrados.");
-                return;
-            }
-
-            foreach (var connector in connectors)
-            {
-                if (!connector.CustomName.Contains("1") && !connector.CustomName.Contains("2")) continue;
-
-                string baseName = connector.CustomName.Substring(0, connector.CustomName.Length - 1);
-                string suffix = connector.CustomName.Substring(connector.CustomName.Length - 1);
-
-                if (suffix == "1") upperConnectors[baseName] = connector;
-                if (suffix == "2") lowerConnectors[baseName] = connector;
-            }
-        }
-        List<IMyShipConnector> GetFreeConnectors()
-        {
-            List<IMyShipConnector> freeConnectors = new List<IMyShipConnector>();
-            foreach (var pair in upperConnectors.Keys)
-            {
-                if (!lowerConnectors.ContainsKey(pair)) continue;
-
-                IMyShipConnector con1 = upperConnectors[pair];
-                IMyShipConnector con2 = lowerConnectors[pair];
-                if (con1.Status == MyShipConnectorStatus.Unconnected && con2.Status == MyShipConnectorStatus.Unconnected)
+                var exchangeGroup = new ExchangeGroup()
                 {
-                    freeConnectors.Add(con1);
-                }
-            }
-            return freeConnectors;
-        }
-        List<Vector3D> CalculateRouteToConnector(IMyShipConnector con1)
-        {
-            List<Vector3D> waypoints = new List<Vector3D>();
+                    Name = group.Key,
+                };
 
-            Vector3D targetDock = con1.GetPosition();   // Punto final
-            Vector3D forward = con1.WorldMatrix.Forward;
-            Vector3D approachStart = targetDock + forward * 150;  // Punto de aproximación inicial
-
-            for (int i = 0; i <= NumWaypoints; i++)
-            {
-                double t = i / (double)NumWaypoints;
-                Vector3D point = Vector3D.Lerp(approachStart, targetDock, t) + (forward * 2.3);
-                Echo($"GPS:wp_{i}:{point.X:F2}:{point.Y:F2}:{point.Z:F2}:#FFFF00FF");
-                waypoints.Add(point);
-            }
-
-            return waypoints;
-        }
-        IMyCargoContainer GetClossetCargoContainer(IMyShipConnector con1)
-        {
-            IMyCargoContainer closest = null;
-            double closestDistance = double.MaxValue;
-
-            foreach (var container in exchanges)
-            {
-                // Verifica que esté conectado por conveyor
-                if (container.GetInventory().IsConnectedTo(con1.GetInventory()))
+                foreach (var block in group)
                 {
-                    double distance = Vector3D.Distance(con1.GetPosition(), container.GetPosition());
-                    if (distance < closestDistance)
+                    IMyShipConnector connector = block as IMyShipConnector;
+                    if (connector != null)
                     {
-                        closestDistance = distance;
-                        closest = container;
+                        if (connector.CustomName.Contains(exchangeUpperConnector)) exchangeGroup.UpperConnector = connector;
+                        else if (connector.CustomName.Contains(exchangeLowerConnector)) exchangeGroup.LowerConnector = connector;
+
+                        continue;
+                    }
+
+                    IMyCargoContainer cargo = block as IMyCargoContainer;
+                    if (cargo != null)
+                    {
+                        exchangeGroup.Cargo = cargo;
+                        continue;
+                    }
+
+                    IMyConveyorSorter sorter = block as IMyConveyorSorter;
+                    if (sorter != null)
+                    {
+                        if (sorter.CustomName.Contains(exchangeSorterInput)) exchangeGroup.SorterInput = sorter;
+                        else if (sorter.CustomName.Contains(exchangeSorterOutput)) exchangeGroup.SorterOutput = sorter;
+                        continue;
+                    }
+
+                    IMyTimerBlock timer = block as IMyTimerBlock;
+                    if (timer != null)
+                    {
+                        if (timer.CustomName.Contains(exchangeTimerPrepare)) exchangeGroup.TimerPrepare = timer;
+                        else if (timer.CustomName.Contains(exchangeTimerUnload)) exchangeGroup.TimerUnload = timer;
+                        else if (timer.CustomName.Contains(exchangeTimerLoad)) exchangeGroup.TimerLoad = timer;
                     }
                 }
-            }
 
-            return closest;
-        }
-        void MoveCargo(IMyShipConnector con1, Order order)
-        {
-            //Localiza el cargo más cercano al conector
-            IMyCargoContainer closest = GetClossetCargoContainer(con1);
-            if (closest != null)
-            {
-                //Mueve la carga desde los warehouses a los exchanges
-                var shipInv = closest.GetInventory();
-
-                foreach (var item in order.Items)
+                if (exchangeGroup.IsValid())
                 {
-                    var amountRemaining = item.Value;
-
-                    // Buscar ítem en los contenedores de la base
-                    foreach (var cargo in cargos)
-                    {
-                        var inv = cargo.GetInventory();
-                        var items = new List<MyInventoryItem>();
-                        inv.GetItems(items);
-
-                        for (int o = items.Count - 1; o >= 0 && amountRemaining > 0; o--)
-                        {
-                            if (items[o].Type.SubtypeId == item.Key)
-                            {
-                                var transferAmount = MyFixedPoint.Min(amountRemaining, items[o].Amount).ToIntSafe();
-                                if (inv.TransferItemTo(shipInv, o, null, true, transferAmount))
-                                {
-                                    amountRemaining -= transferAmount;
-                                    break;
-                                }
-                            }
-                        }
-                    }
+                    WriteLogLCDs($"ExchangeGroup {exchangeGroup.Name} initialized.");
+                    exchanges.Add(exchangeGroup);
+                }
+                else
+                {
+                    WriteLogLCDs($"ExchangeGroup {exchangeGroup.Name} is invalid.");
                 }
             }
+        }
+        List<ExchangeGroup> GetFreeExchanges()
+        {
+            return exchanges.Where(e => e.IsFree()).ToList();
         }
 
         void PrintShipStatus()
