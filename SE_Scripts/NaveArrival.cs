@@ -61,7 +61,7 @@ namespace NaveArrival
                 return;
             }
 
-            if ((updateSource & UpdateType.Update10) != 0)
+            if ((updateSource & UpdateType.Update100) != 0)
             {
                 DoArrival();
             }
@@ -86,6 +86,8 @@ namespace NaveArrival
             arrivalMessage = parts[1]?.Trim() ?? "";
 
             if (parts.Length > 2) arrivalTimer = parts[2]?.Trim() ?? "";
+
+            Runtime.UpdateFrequency = UpdateFrequency.Update100;  // Comenzar a comprobar la llegada
         }
 
         void DoArrival()
