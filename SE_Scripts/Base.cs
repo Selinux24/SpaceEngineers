@@ -30,7 +30,8 @@ namespace Base
         const string exchangeTimerUnload = "Unload";
         const string exchangeTimerLoad = "Load";
 
-        string fakeOrder = $"Command=REQUEST_ORDER|To=BaseWH1|Customer={baseId}|CustomerParking={baseParking}|Items=SteelPlate:10;";
+        const string warehouseId = "BaseWH1";
+        string fakeOrder = $"Command=REQUEST_ORDER|To={warehouseId}|Customer={baseId}|CustomerParking={baseParking}|Items=SteelPlate:10;";
 
         #region Helper classes
         class ExchangeGroup
@@ -153,6 +154,7 @@ namespace Base
         {
             public string From;
             public int OrderId;
+            public bool Idle;
         }
         #endregion
 
@@ -374,7 +376,7 @@ namespace Base
             {
                 return;
             }
-            var unloads = unloadRequests.ToList();
+            var unloads = unloadRequests.Where(r => r.Idle).ToList();
             if (unloads.Count == 0)
             {
                 return;
@@ -386,6 +388,8 @@ namespace Base
             {
                 var request = unloads[i];
                 var exchange = freeExchanges[i];
+
+                request.Idle = false;
 
                 string forward = VectorToStr(camera.WorldMatrix.Forward);
                 string up = VectorToStr(camera.WorldMatrix.Up);
@@ -533,7 +537,8 @@ namespace Base
             unloadRequests.Add(new UnloadRequest
             {
                 From = from,
-                OrderId = orderId
+                OrderId = orderId,
+                Idle = true,
             });
         }
         void CmdUnloading(string[] lines)
@@ -558,14 +563,14 @@ namespace Base
 
             //Eliminar la orden de descarga del pedido
             int orderId = int.Parse(ReadArgument(lines, "Order"));
-            var order = orders.FirstOrDefault(o => o.Id == orderId);
-            if (order != null)
+            var req = unloadRequests.FirstOrDefault(o => o.OrderId == orderId);
+            if (req != null)
             {
-                orders.Remove(order);
+                unloadRequests.Remove(req);
             }
 
             //Enviar al WH el mensaje de que se ha recibido el pedido
-            string message = $"Command=ORDER_RECEIVED|To={order.Customer}|From={baseId}|Order={orderId}";
+            string message = $"Command=ORDER_RECEIVED|To={warehouseId}|From={baseId}|Order={orderId}";
             SendIGCMessage(message);
         }
         void CmdOrderReceived(string[] lines)
@@ -718,7 +723,8 @@ namespace Base
 
             foreach (var unload in unloadRequests)
             {
-                sbData.AppendLine($"Order {unload.OrderId} from {unload.From}.");
+                string unloadStatus = unload.Idle ? "Pending" : "On route";
+                sbData.AppendLine($"Order {unload.OrderId} from {unload.From}. {unloadStatus}");
             }
         }
     }
