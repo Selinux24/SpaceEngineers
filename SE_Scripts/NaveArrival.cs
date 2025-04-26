@@ -81,17 +81,11 @@ namespace NaveArrival
             }
 
             //Parsear la posición objetivo
-            targetPosition = StrToVector(parts[0]);
             hasPosition = true;
-
+            targetPosition = StrToVector(parts[0]);
             arrivalMessage = parts[1]?.Trim() ?? "";
 
-            if (parts.Length < 3)
-            {
-                return;
-            }
-
-            arrivalTimer = parts[2]?.Trim() ?? "";
+            if (parts.Length > 2) arrivalTimer = parts[2]?.Trim() ?? "";
         }
 
         void DoArrival()
@@ -111,10 +105,12 @@ namespace NaveArrival
 
                 if (!string.IsNullOrWhiteSpace(arrivalMessage))
                 {
+                    Echo(arrivalMessage);
                     SendIGCMessage(arrivalMessage);
                 }
                 if (!string.IsNullOrWhiteSpace(arrivalTimer))
                 {
+                    Echo(arrivalTimer);
                     GetBlockWithName<IMyTimerBlock>(arrivalTimer)?.ApplyAction("Start");
                 }
 

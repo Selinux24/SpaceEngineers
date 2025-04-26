@@ -13,7 +13,7 @@ namespace Base
     partial class Program : MyGridProgram
     {
         const string channel = "SHIPS_DELIVERY";
-        const string baseId = "BaseBETA1";
+        const string baseId = "BaseWH1";
         const string baseCamera = "Camera";
         const string baseWarehouses = "Warehouse";
         const string baseParking = "-50554.19:-86466.82:-43745.25";
@@ -29,6 +29,8 @@ namespace Base
         const string exchangeTimerPrepare = "Prepare";
         const string exchangeTimerUnload = "Unload";
         const string exchangeTimerLoad = "Load";
+
+        string fakeOrder = $"Command=REQUEST_ORDER|To=BaseWH1|Customer={baseId}|CustomerParking={baseParking}|Items=SteelPlate:10;";
 
         #region Helper classes
         class ExchangeGroup
@@ -118,10 +120,10 @@ namespace Base
             static int lastId = 0;
 
             public readonly int Id;
-            public string From;
-            public Vector3D FromParking;
-            public string To;
-            public Vector3D ToParking;
+            public string Customer;
+            public Vector3D CustomerParking;
+            public string Warehouse;
+            public Vector3D WarehouseParking;
             public Dictionary<string, int> Items = new Dictionary<string, int>();
             public string AssignedShip;
 
@@ -168,8 +170,9 @@ namespace Base
         readonly List<Ship> ships = new List<Ship>();
         readonly List<UnloadRequest> unloadRequests = new List<UnloadRequest>();
 
-        bool showOrders = true;
         bool showShips = true;
+        bool showOrders = true;
+        bool showReceptions = true;
 
         string ExtractGroupName(string input)
         {
@@ -308,6 +311,7 @@ namespace Base
                 sbData.Clear();
                 PrintShipStatus();
                 PrintOrders();
+                PrintReceptions();
                 WriteDataLCDs(sbData.ToString(), false);
             }
         }
@@ -321,6 +325,7 @@ namespace Base
             else if (argument == "REQUEST_RECEPTION") RequestReception();
             else if (argument == "LIST_SHIPS") ListShips();
             else if (argument == "LIST_ORDERS") ListOrders();
+            else if (argument == "LIST_RECEPTIONS") ListReceptions();
             else if (argument == "FAKE_ORDER") FakeOrder();
         }
         void RequestStatus()
@@ -342,7 +347,7 @@ namespace Base
                 return;
             }
             var freeExchanges = GetFreeExchanges();
-            WriteLogLCDs($"Orders: {pendantOrders.Count}; Free ships: {freeShips.Count}; Free exchanges: {freeExchanges.Count}");
+            WriteLogLCDs($"Deliveries: {pendantOrders.Count}; Free ships: {freeShips.Count}; Free exchanges: {freeExchanges.Count}");
 
             int deliveryCount = Math.Min(freeExchanges.Count, Math.Min(freeShips.Count, pendantOrders.Count));
             for (int i = 0; i < deliveryCount; i++)
@@ -356,7 +361,7 @@ namespace Base
                 string forward = VectorToStr(camera.WorldMatrix.Forward);
                 string up = VectorToStr(camera.WorldMatrix.Up);
                 string waypoints = string.Join(";", exchange.CalculateRouteToConnector().Select(VectorToStr));
-                string message = $"Command=LOAD_ORDER|To={ship.Name}|From={baseId}|For={order.To}|ForParking={VectorToStr(order.ToParking)}|Order={order.Id}|Forward={forward}|Up={up}|WayPoints={waypoints}|Exchange={exchange.Name}";
+                string message = $"Command=LOAD_ORDER|To={ship.Name}|Warehouse={baseId}|WarehouseParking={baseParking}|Customer={order.Customer}|CustomerParking={VectorToStr(order.CustomerParking)}|Order={order.Id}|Forward={forward}|Up={up}|WayPoints={waypoints}|Exchange={exchange.Name}";
                 SendIGCMessage(message);
 
                 exchange.MoveCargo(order, cargos);
@@ -369,16 +374,17 @@ namespace Base
             {
                 return;
             }
-            var unloadRequests = this.unloadRequests.ToList();
-            if (unloadRequests.Count == 0)
+            var unloads = unloadRequests.ToList();
+            if (unloads.Count == 0)
             {
                 return;
             }
+            WriteLogLCDs($"Receptions: {unloads.Count}; Free exchanges: {freeExchanges.Count}");
 
-            int unloadCount = Math.Min(freeExchanges.Count, unloadRequests.Count);
+            int unloadCount = Math.Min(freeExchanges.Count, unloads.Count);
             for (int i = 0; i < unloadCount; i++)
             {
-                var request = unloadRequests[i];
+                var request = unloads[i];
                 var exchange = freeExchanges[i];
 
                 string forward = VectorToStr(camera.WorldMatrix.Forward);
@@ -396,9 +402,13 @@ namespace Base
         {
             showOrders = !showOrders;
         }
+        void ListReceptions()
+        {
+            showReceptions = !showReceptions;
+        }
         void FakeOrder()
         {
-            ParseMessage($"Command=REQUEST_ORDER|To={baseId}|From=Base1|Parking=-52394.26:-83868.35:-44561.14|Items=SteelPlate:10;");
+            SendIGCMessage(fakeOrder);
         }
 
         void ParseMessage(string signal)
@@ -456,16 +466,16 @@ namespace Base
                 return;
             }
 
-            string from = ReadArgument(lines, "From");
-            Vector3D fromParking = StrToVector(ReadArgument(lines, "Parking"));
+            string customer = ReadArgument(lines, "Customer");
+            Vector3D customerParking = StrToVector(ReadArgument(lines, "CustomerParking"));
             string items = ReadArgument(lines, "Items");
 
             Order order = new Order
             {
-                From = to,
-                FromParking = StrToVector(baseParking),
-                To = from,
-                ToParking = fromParking
+                Warehouse = baseId,
+                WarehouseParking = StrToVector(baseParking),
+                Customer = customer,
+                CustomerParking = customerParking,
             };
 
             foreach (var item in items.Split(';'))
@@ -555,7 +565,7 @@ namespace Base
             }
 
             //Enviar al WH el mensaje de que se ha recibido el pedido
-            string message = $"Command=ORDER_RECEIVED|To={order.From}|From={baseId}|Order={orderId}";
+            string message = $"Command=ORDER_RECEIVED|To={order.Customer}|From={baseId}|Order={orderId}";
             SendIGCMessage(message);
         }
         void CmdOrderReceived(string[] lines)
@@ -691,7 +701,24 @@ namespace Base
 
             foreach (var order in orders)
             {
-                sbData.AppendLine($"Id[{order.Id}]. {order.AssignedShip} shipping from {order.From} to {order.To}");
+                sbData.AppendLine($"Id[{order.Id}]. {order.AssignedShip} shipping from {order.Customer} to {order.Warehouse}");
+            }
+        }
+        void PrintReceptions()
+        {
+            if (!showReceptions) return;
+
+            sbData.AppendLine("RECEPTIONS STATUS");
+
+            if (unloadRequests.Count == 0)
+            {
+                sbData.AppendLine("No reception requests available.");
+                return;
+            }
+
+            foreach (var unload in unloadRequests)
+            {
+                sbData.AppendLine($"Order {unload.OrderId} from {unload.From}.");
             }
         }
     }

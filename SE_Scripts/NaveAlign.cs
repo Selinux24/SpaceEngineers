@@ -61,10 +61,6 @@ namespace NaveAlign
             dot = MathHelper.Clamp(dot, -1.0, 1.0);
             return Math.Acos(dot);
         }
-        void PrintGPS(string name, Vector3D v, string color)
-        {
-            Echo($"GPS:{name}:{v.X:F2}:{v.Y:F2}:{v.Z:F2}:{color}:");
-        }
         void SendIGCMessage(string message)
         {
             IGC.SendBroadcastMessage(channel, message);
@@ -130,20 +126,20 @@ namespace NaveAlign
             waypoints = ParseWaypoints(coords[2]);
             hasTarget = true;
 
-            if (parts.Length >= 2) ParseAction(parts[1]);
+            if (parts.Length > 1) ParseAction(parts[1]);
 
-            if (parts.Length >= 3) ParseAction(parts[2]);
+            if (parts.Length > 2) ParseAction(parts[2]);
         }
-        List<Vector3D> ParseWaypoints(string data)
+        static List<Vector3D> ParseWaypoints(string data)
         {
-            string[] points = data.Split(';');
             List<Vector3D> wp = new List<Vector3D>();
+
+            string[] points = data.Split(';');
             for (int i = 0; i < points.Length; i++)
             {
-                Vector3D waypoint = StrToVector(points[i]);
-                PrintGPS($"WP_{i}", waypoint, "#FF00FFFF");
-                wp.Add(waypoint);
+                wp.Add(StrToVector(points[i]));
             }
+
             return wp;
         }
         void ParseAction(string action)
@@ -162,12 +158,9 @@ namespace NaveAlign
         {
             if (!hasTarget)
             {
-                Echo("Esperando vectores...");
+                Echo("Esperando instrucciones...");
                 return;
             }
-
-            Echo($"{currentTarget}");
-            Echo($"{waypoints.Count}");
 
             AlignToVectors(targetForward, targetUp);
             NavigateWaypoints();
@@ -187,50 +180,39 @@ namespace NaveAlign
         {
             if (currentTarget >= waypoints.Count)
             {
+                Echo("Última posición alcanzada.");
                 Runtime.UpdateFrequency = UpdateFrequency.None;
-                DoStopShip();
                 DoReachActions();
+                DoStopShip();
                 return;
             }
-            Vector3D currentPos = connectorA.GetPosition();
-            Vector3D targetPos = waypoints[currentTarget];
-            Vector3D toTarget = targetPos - currentPos;
+            var currentPos = connectorA.GetPosition();
+            var targetPos = waypoints[currentTarget];
+            var toTarget = targetPos - currentPos;
             double distance = toTarget.Length();
 
-            Echo($"Destino: {currentTarget + 1}/{waypoints.Count}\nDistancia: {distance:F2} m");
-            Echo($"Current={VectorToStr(currentPos)}");
-            Echo($"Target={VectorToStr(targetPos)}");
+            Echo($"Progreso: {currentTarget + 1}/{waypoints.Count}\nDistancia: {distance:F2} m");
+            Echo($"Actual={VectorToStr(currentPos)}");
+            Echo($"Destino={VectorToStr(targetPos)}");
+            Echo($"Timer en Destino? {!string.IsNullOrWhiteSpace(reachTimer)}");
+            Echo($"Command en Destino? {!string.IsNullOrWhiteSpace(reachCommand)}");
 
             if (distance < ArrivalDistance)
             {
                 currentTarget++;
                 ResetThrust();
-                Echo("Llegó al punto, pasando al siguiente.");
+                Echo("Punto alcanzado, pasando al siguiente.");
                 return;
             }
 
-            Vector3D desiredDirection = toTarget;
-            desiredDirection.Normalize();
+            var desiredDirection = Vector3D.Normalize(toTarget);
+            var currentVelocity = remoteLocking.GetShipVelocities().LinearVelocity;
 
-            Vector3D currentVelocity = remoteLocking.GetShipVelocities().LinearVelocity;
-
-            // Calcula velocidad deseada basada en distancia, cuando estemos avanzando hacia el último waypoint.
+            //Calcula velocidad deseada basada en distancia, cuando estemos avanzando hacia el último waypoint.
             double approachSpeed;
-            if (currentTarget == 0)
-            {
-                // Velocidad hasta el primer punto de aproximación.
-                approachSpeed = MaxApproachSpeed;
-            }
-            else if (currentTarget == waypoints.Count - 1)
-            {
-                // Velocidad desde el úlimo punto de aproximación.
-                approachSpeed = MaxApproachSpeedLocking;
-            }
-            else
-            {
-                //Velocidad entre puntos de aproximación.
-                approachSpeed = MaxApproachSpeedAprox;
-            }
+            if (currentTarget == 0) approachSpeed = MaxApproachSpeed; //Velocidad hasta el primer punto de aproximación.
+            else if (currentTarget == waypoints.Count - 1) approachSpeed = MaxApproachSpeedLocking; //Velocidad desde el úlimo punto de aproximación.
+            else approachSpeed = MaxApproachSpeedAprox; //Velocidad entre puntos de aproximación.
 
             double desiredSpeed = approachSpeed;
             if (distance < SlowdownDistance && (currentTarget == 0 || currentTarget == waypoints.Count - 1))
@@ -238,11 +220,11 @@ namespace NaveAlign
                 desiredSpeed = Math.Max(distance / SlowdownDistance * approachSpeed, 0.5);
             }
 
-            Vector3D desiredVelocity = desiredDirection * desiredSpeed;
-            Vector3D velocityError = desiredVelocity - currentVelocity;
+            var desiredVelocity = desiredDirection * desiredSpeed;
+            var velocityError = desiredVelocity - currentVelocity;
 
             double mass = remoteLocking.CalculateShipMass().PhysicalMass;
-            Vector3D neededForce = velocityError * mass * 0.5;  // Ganancia ajustable.
+            var neededForce = velocityError * mass * 0.5;  // Ganancia ajustable.
 
             ApplyThrust(neededForce);
         }
@@ -250,7 +232,7 @@ namespace NaveAlign
         {
             foreach (var thruster in thrusters)
             {
-                Vector3D thrustDir = thruster.WorldMatrix.Backward;
+                var thrustDir = thruster.WorldMatrix.Backward;
                 double alignment = thrustDir.Dot(force);
 
                 thruster.ThrustOverridePercentage = alignment > 0 ? (float)Math.Min(alignment / thruster.MaxEffectiveThrust, 1f) : 0f;
@@ -266,9 +248,9 @@ namespace NaveAlign
 
         void AlignToVectors(Vector3D targetForward, Vector3D targetUp)
         {
-            MatrixD shipMatrix = remoteLocking.WorldMatrix;
-            Vector3D shipForward = shipMatrix.Forward;
-            Vector3D shipUp = shipMatrix.Up;
+            var shipMatrix = remoteLocking.WorldMatrix;
+            var shipForward = shipMatrix.Forward;
+            var shipUp = shipMatrix.Up;
 
             double angleFW = AngleBetweenVectors(shipForward, targetForward);
             Echo($"TargetFWD {VectorToStr(targetForward)}");
@@ -289,7 +271,7 @@ namespace NaveAlign
 
             if (angleFW > angleThr)
             {
-                Vector3D rotationAxisFW = Vector3D.Cross(shipForward, targetForward);
+                var rotationAxisFW = Vector3D.Cross(shipForward, targetForward);
                 Echo($"RotAxix {VectorToStr(rotationAxisFW)} {rotationAxisFW.Length()}");
                 if (rotationAxisFW.Length() <= 0.001) rotationAxisFW = new Vector3D(0, 1, 0);
                 ApplyGyroOverride(rotationAxisFW);
@@ -298,14 +280,12 @@ namespace NaveAlign
 
             if (angleUP > angleThr)
             {
-                Vector3D rotationAxisUP = Vector3D.Cross(shipUp, targetUp);
+                var rotationAxisUP = Vector3D.Cross(shipUp, targetUp);
                 Echo($"RotAxix {VectorToStr(rotationAxisUP)} {rotationAxisUP.Length()}");
                 if (rotationAxisUP.Length() <= 0.001) rotationAxisUP = new Vector3D(1, 0, 0);
                 ApplyGyroOverride(rotationAxisUP);
                 Echo("Applyed UP");
             }
-
-            Echo(DateTime.Now.ToString());
         }
         void ApplyGyroOverride(Vector3D axis)
         {
@@ -331,15 +311,17 @@ namespace NaveAlign
 
         void DoReachActions()
         {
-            if (!string.IsNullOrWhiteSpace(reachTimer))
-            {
-                var timer = GetBlockWithName<IMyTimerBlock>(reachTimer);
-                timer?.ApplyAction("Start");
-            }
-
             if (!string.IsNullOrWhiteSpace(reachCommand))
             {
+                Echo(reachCommand);
                 SendIGCMessage(reachCommand);
+            }
+
+            if (!string.IsNullOrWhiteSpace(reachTimer))
+            {
+                Echo($"Timer: {reachTimer}");
+                var timer = GetBlockWithName<IMyTimerBlock>(reachTimer);
+                timer?.ApplyAction("Start");
             }
         }
     }

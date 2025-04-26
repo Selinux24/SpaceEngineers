@@ -39,17 +39,18 @@ namespace Nave
         readonly List<IMyTextPanel> logLCDs = new List<IMyTextPanel>();
         readonly StringBuilder sbLog = new StringBuilder();
 
+        ShipStatus status = ShipStatus.Idle;
+
+        int orderId;
+        string orderWarehouse;
+        Vector3D orderWarehouseParking;
+        string orderCustomer;
+        Vector3D orderCustomerParking;
+
         string exitForward;
         string exitUp;
         string exitWaypoints;
         string exitExchangeName;
-
-        string orderFrom;
-        Vector3D orderFromParking;
-        string orderCustomer;
-        Vector3D orderCustomerParking;
-        int orderId;
-        ShipStatus status = ShipStatus.Idle;
 
         T GetBlockWithName<T>(string name) where T : class, IMyTerminalBlock
         {
@@ -75,16 +76,6 @@ namespace Nave
                 return new Vector3D(double.Parse(coords[0]), double.Parse(coords[1]), double.Parse(coords[2]));
             }
             return new Vector3D();
-        }
-        static Vector3D[] StrToVectorList(string str)
-        {
-            string[] coords = str.Split(';');
-            Vector3D[] vectors = new Vector3D[coords.Length];
-            for (int i = 0; i < coords.Length; i++)
-            {
-                vectors[i] = StrToVector(coords[i]);
-            }
-            return vectors;
         }
         void WriteLCDs(string wildcard, string text)
         {
@@ -194,6 +185,14 @@ namespace Nave
 
         public void Main(string argument, UpdateType updateSource)
         {
+            Echo($"Estado: {status}");
+            if (orderId > 0)
+            {
+                Echo($"Pedido: {orderId}");
+                Echo($"Carga: {orderWarehouse} -> {VectorToStr(orderWarehouseParking)}");
+                Echo($"Descarga: {orderCustomer} -> {VectorToStr(orderCustomerParking)}");
+            }
+
             if (!string.IsNullOrEmpty(argument) && (updateSource & UpdateType.Terminal) != 0)
             {
                 ParseTerminalMessage(argument);
@@ -222,69 +221,56 @@ namespace Nave
                 return;
             }
 
-            //Carga las coordenadas de entrega en el remote control de pilotaje
             remotePilot.ClearWaypoints();
-            remotePilot.AddWaypoint(orderCustomerParking, "Customer");
-
-            //Activa el modo de pilotaje para evitar colisiones
+            remotePilot.AddWaypoint(orderCustomerParking, orderCustomer);
             remotePilot.SetCollisionAvoidance(true);
             remotePilot.FlightMode = FlightMode.OneWay;
 
-            //Inicia el timer de pilotaje
             timerPilot.ApplyAction("Start");
 
-            //Lanza el script de control de proximidad
             string command = $"Command=UNLOAD|To={orderCustomer}|From={shipId}|Order={orderId}";
             Arrival(orderCustomerParking, command, shipTimerLock);
         }
         void CmdReturn()
         {
-            //Carga las coordenadas de entrega en el remote control de pilotaje
             remotePilot.ClearWaypoints();
-            remotePilot.AddWaypoint(orderFromParking, "Origin");
-
-            //Activa el modo de pilotaje para evitar colisiones
+            remotePilot.AddWaypoint(orderWarehouseParking, orderWarehouse);
             remotePilot.SetCollisionAvoidance(true);
             remotePilot.FlightMode = FlightMode.OneWay;
 
-            //Inicia el timer de pilotaje
             timerPilot.ApplyAction("Start");
 
-            //Lanza el script de control de proximidad
             string command = $"Command=WAITING|To={shipId}";
-            Arrival(orderCustomerParking, command, shipTimerWaiting);
+            Arrival(orderWarehouseParking, command, shipTimerWaiting);
         }
         void SendUnloaded()
         {
-            string message = $"Command=UNLOADED|To={orderFrom}|From={shipId}|Order={orderId}";
+            string message = $"Command=UNLOADED|To={orderCustomer}|From={shipId}|Order={orderId}";
             SendIGCMessage(message);
 
-            //Comenzar viaje de regreso a Parking WH
-            var wpList = StrToVectorList(exitWaypoints);
             remotePilot.ClearWaypoints();
-            remotePilot.AddWaypoint(wpList.Last(), orderFrom);
-            remotePilot.AddWaypoint(orderCustomerParking, "Customer");
+            remotePilot.AddWaypoint(orderCustomerParking, orderCustomer);
             remotePilot.SetCollisionAvoidance(true);
             remotePilot.FlightMode = FlightMode.OneWay;
 
-            Align(exitForward, exitUp, exitWaypoints, null, shipTimerWaiting);
-
             string command = $"Command=WAITING|To={shipId}";
-            Arrival(orderFromParking, command, shipTimerWaiting);
+            Arrival(orderCustomerParking, command, shipTimerWaiting);
+
+            //Limpiar datos del pedido
+            orderId = -1;
+            orderWarehouse = "";
+            orderWarehouseParking = new Vector3D();
+            orderCustomer = "";
+            orderCustomerParking = new Vector3D();
+            status = ShipStatus.Idle;
+
+            Align(exitForward, exitUp, exitWaypoints, null, shipTimerWaiting);
 
             //Limpiar los datos del exchange
             exitForward = "";
             exitUp = "";
             exitWaypoints = "";
             exitExchangeName = "";
-
-            //Limpiar datos del pedido
-            orderFrom = "";
-            orderFromParking = new Vector3D();
-            orderCustomer = "";
-            orderCustomerParking = new Vector3D();
-            orderId = -1;
-            status = ShipStatus.Idle;
         }
 
         void ParseMessage(string signal)
@@ -304,7 +290,7 @@ namespace Nave
         {
             string from = ReadArgument(lines, "From");
             Vector3D position = remotePilot.GetPosition();
-            string message = $"Command=RESPONSE_STATUS|To={from}|From={shipId}|Status={status}|Origin={orderFrom}|OriginPosition={VectorToStr(orderFromParking)}|Destination={orderCustomer}|DestinationPosition={VectorToStr(orderCustomerParking)}|Position={VectorToStr(position)}";
+            string message = $"Command=RESPONSE_STATUS|To={from}|From={shipId}|Status={status}|Origin={orderWarehouse}|OriginPosition={VectorToStr(orderWarehouseParking)}|Destination={orderCustomer}|DestinationPosition={VectorToStr(orderCustomerParking)}|Position={VectorToStr(position)}";
             SendIGCMessage(message);
         }
         void CmdLoadOrder(string[] lines)
@@ -314,19 +300,20 @@ namespace Nave
             {
                 return;
             }
-            orderFrom = ReadArgument(lines, "From");
-            orderFromParking = StrToVector(ReadArgument(lines, "FromParking"));
-            orderCustomer = ReadArgument(lines, "For");
-            orderCustomerParking = StrToVector(ReadArgument(lines, "ForParking"));
-            orderId = int.Parse(ReadArgument(lines, "Order"));
+
             status = ShipStatus.Busy;
+            orderId = int.Parse(ReadArgument(lines, "Order"));
+            orderWarehouse = ReadArgument(lines, "Warehouse");
+            orderWarehouseParking = StrToVector(ReadArgument(lines, "WarehouseParking"));
+            orderCustomer = ReadArgument(lines, "Customer");
+            orderCustomerParking = StrToVector(ReadArgument(lines, "CustomerParking"));
 
             string forward = ReadArgument(lines, "Forward");
             string up = ReadArgument(lines, "Up");
             string wayPoints = ReadArgument(lines, "WayPoints");
             string exchangeName = ReadArgument(lines, "Exchange");
 
-            string message = $"Command=LOADING|To={orderFrom}|From={shipId}|Order={orderId}|Exchange={exchangeName}";
+            string message = $"Command=LOADING|To={orderWarehouse}|From={shipId}|Order={orderId}|Exchange={exchangeName}";
             Align(forward, up, wayPoints, message, shipTimerLock);
 
             //Activar modo carga
@@ -340,26 +327,19 @@ namespace Nave
                 return;
             }
 
-            exitForward = ReadArgument(lines, "Forward");
-            exitUp = ReadArgument(lines, "Up");
-            exitWaypoints = ReadArgument(lines, "WayPoints");
-
-            var wpList = StrToVectorList(exitWaypoints);
             remotePilot.ClearWaypoints();
-            remotePilot.AddWaypoint(wpList.Last(), orderCustomer);
-            remotePilot.AddWaypoint(orderFromParking, "Warehouse");
+            remotePilot.AddWaypoint(orderCustomerParking, orderCustomer);
             remotePilot.SetCollisionAvoidance(true);
             remotePilot.FlightMode = FlightMode.OneWay;
 
-            Align(exitForward, exitUp, exitWaypoints, null, shipTimerPilot);
-
             string command = $"Command=REQUEST_UNLOAD|To={orderCustomer}|From={shipId}|Order={orderId}";
-            Arrival(orderCustomerParking, command, shipTimerLock);
+            Arrival(orderCustomerParking, command, shipTimerWaiting);
 
-            //Limpiar los datos del exchange
-            exitForward = "";
-            exitUp = "";
-            exitWaypoints = "";
+            var forward = ReadArgument(lines, "Forward");
+            var up = ReadArgument(lines, "Up");
+            var waypoints = ReadArgument(lines, "WayPoints");
+
+            Align(forward, up, waypoints, null, shipTimerPilot);
         }
         void CmdUnloadOrder(string[] lines)
         {
@@ -374,7 +354,7 @@ namespace Nave
             exitWaypoints = ReadArgument(lines, "WayPoints");
             exitExchangeName = ReadArgument(lines, "Exchange");
 
-            string command = $"Command=LOADING|To={orderFrom}|From={shipId}|Order={orderId}|Exchange={exitExchangeName}";
+            string command = $"Command=UNLOADING|To={orderCustomer}|From={shipId}|Order={orderId}|Exchange={exitExchangeName}";
             Align(exitForward, exitUp, exitWaypoints, command, shipTimerLock);
 
             //Activar modo descarga
