@@ -26,7 +26,16 @@ namespace Nave
         {
             Unknown,
             Idle,
-            Busy,
+
+            ApproachingWarehouse,
+            Loading,
+            RouteToCustomer,
+            WaitingForUnload,
+
+            ApproachingCustomer,
+            Unloading,
+            Unloaded,
+            RouteToWarehouse,
         }
 
         readonly IMyBroadcastListener bl;
@@ -248,11 +257,14 @@ namespace Nave
             string message = $"Command=UNLOADED|To={orderCustomer}|From={shipId}|Order={orderId}";
             SendIGCMessage(message);
 
+            status = ShipStatus.Unloaded;
+
             remotePilot.ClearWaypoints();
             remotePilot.AddWaypoint(orderCustomerParking, orderCustomer);
             remotePilot.SetCollisionAvoidance(true);
             remotePilot.FlightMode = FlightMode.OneWay;
 
+            //TODO Idle: Arrival tiene que comunicar a este script que ya ha terminado, y las acciones deben lanzarse desde aquí
             string command = $"Command=WAITING|To={shipId}";
             Arrival(orderCustomerParking, command, shipTimerWaiting);
 
@@ -264,7 +276,8 @@ namespace Nave
             orderCustomerParking = new Vector3D();
             status = ShipStatus.Idle;
 
-            Align(exitForward, exitUp, exitWaypoints, null, shipTimerWaiting);
+            //TODO RouteToWarehouse: Align tiene que comunicar a este script que ya ha terminado, y las acciones deben lanzarse desde aquí
+            Align(exitForward, exitUp, exitWaypoints, null, shipTimerPilot);
 
             //Limpiar los datos del exchange
             exitForward = "";
@@ -301,7 +314,8 @@ namespace Nave
                 return;
             }
 
-            status = ShipStatus.Busy;
+            status = ShipStatus.ApproachingWarehouse;
+
             orderId = int.Parse(ReadArgument(lines, "Order"));
             orderWarehouse = ReadArgument(lines, "Warehouse");
             orderWarehouseParking = StrToVector(ReadArgument(lines, "WarehouseParking"));
@@ -313,6 +327,7 @@ namespace Nave
             string wayPoints = ReadArgument(lines, "WayPoints");
             string exchangeName = ReadArgument(lines, "Exchange");
 
+            //TODO Loading: Align tiene que comunicar a este script que ya ha terminado, y las acciones deben lanzarse desde aquí
             string message = $"Command=LOADING|To={orderWarehouse}|From={shipId}|Order={orderId}|Exchange={exchangeName}";
             Align(forward, up, wayPoints, message, shipTimerLock);
 
@@ -327,11 +342,14 @@ namespace Nave
                 return;
             }
 
+            status = ShipStatus.RouteToCustomer;
+
             remotePilot.ClearWaypoints();
             remotePilot.AddWaypoint(orderCustomerParking, orderCustomer);
             remotePilot.SetCollisionAvoidance(true);
             remotePilot.FlightMode = FlightMode.OneWay;
 
+            //TODO WaitingForUnload: Align tiene que comunicar a este script que ya ha terminado, y las acciones deben lanzarse desde aquí
             string command = $"Command=REQUEST_UNLOAD|To={orderCustomer}|From={shipId}|Order={orderId}";
             Arrival(orderCustomerParking, command, shipTimerWaiting);
 
@@ -349,11 +367,14 @@ namespace Nave
                 return;
             }
 
+            status = ShipStatus.ApproachingCustomer;
+
             exitForward = ReadArgument(lines, "Forward");
             exitUp = ReadArgument(lines, "Up");
             exitWaypoints = ReadArgument(lines, "WayPoints");
             exitExchangeName = ReadArgument(lines, "Exchange");
 
+            //TODO Unloading: Align tiene que comunicar a este script que ya ha terminado, y las acciones deben lanzarse desde aquí
             string command = $"Command=UNLOADING|To={orderCustomer}|From={shipId}|Order={orderId}|Exchange={exitExchangeName}";
             Align(exitForward, exitUp, exitWaypoints, command, shipTimerLock);
 
