@@ -137,7 +137,16 @@ namespace Base
         {
             Unknown,
             Idle,
-            Busy,
+
+            ApproachingWarehouse,
+            Loading,
+            RouteToCustomer,
+            WaitingForUnload,
+
+            ApproachingCustomer,
+            Unloading,
+            Unloaded,
+            RouteToWarehouse,
         }
         class Ship
         {
@@ -214,8 +223,15 @@ namespace Base
         static ShipStatus StrToShipStatus(string str)
         {
             if (str == "Idle") return ShipStatus.Idle;
-            if (str == "Busy") return ShipStatus.Busy;
-            return ShipStatus.Idle;
+            if (str == "ApproachingWarehouse") return ShipStatus.ApproachingWarehouse;
+            if (str == "Loading") return ShipStatus.Loading;
+            if (str == "RouteToCustomer") return ShipStatus.RouteToCustomer;
+            if (str == "WaitingForUnload") return ShipStatus.WaitingForUnload;
+            if (str == "ApproachingCustomer") return ShipStatus.ApproachingCustomer;
+            if (str == "Unloading") return ShipStatus.Unloading;
+            if (str == "Unloaded") return ShipStatus.Unloaded;
+            if (str == "RouteToWarehouse") return ShipStatus.RouteToWarehouse;
+            return ShipStatus.Unknown;
         }
         void WriteLCDs(string wildcard, string text)
         {

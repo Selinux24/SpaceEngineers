@@ -1,5 +1,4 @@
 ﻿using Sandbox.ModAPI.Ingame;
-using SpaceEngineers.Game.ModAPI.Ingame;
 using System.Collections.Generic;
 using System.Linq;
 using VRageMath;
@@ -8,16 +7,16 @@ namespace NaveArrival
 {
     partial class Program : MyGridProgram
     {
-        const string channel = "SHIPS_DELIVERY";
+        const string shipProgrammableBlock = "HT Automaton Programmable Block Ship";
         const string shipRemoteControlPilot = "HT Remote Control Pilot";
         const double arrivalThreshold = 200.0;
 
+        readonly IMyProgrammableBlock pb;
         readonly IMyRemoteControl remote;
 
         bool hasPosition = false;
         Vector3D targetPosition = Vector3D.Zero;
         string arrivalMessage = null;
-        string arrivalTimer = null;
 
         T GetBlockWithName<T>(string name) where T : class, IMyTerminalBlock
         {
@@ -35,17 +34,20 @@ namespace NaveArrival
             }
             return new Vector3D();
         }
-        void SendIGCMessage(string message)
-        {
-            IGC.SendBroadcastMessage(channel, message);
-        }
 
         public Program()
         {
+            pb = GetBlockWithName<IMyProgrammableBlock>(shipProgrammableBlock);
+            if (pb == null)
+            {
+                Echo($"Programmable Block {shipProgrammableBlock} no encontrado.");
+                return;
+            }
+
             remote = GetBlockWithName<IMyRemoteControl>(shipRemoteControlPilot);
             if (remote == null)
             {
-                Echo($"RemoteControl {shipRemoteControlPilot} no encontrado.");
+                Echo($"Remote Control {shipRemoteControlPilot} no encontrado.");
                 return;
             }
 
@@ -72,10 +74,9 @@ namespace NaveArrival
             hasPosition = false;
             targetPosition = Vector3D.Zero;
             arrivalMessage = null;
-            arrivalTimer = null;
 
             var parts = message.Split('¬');
-            if (parts.Length < 2)
+            if (parts.Length != 2)
             {
                 return;
             }
@@ -83,9 +84,7 @@ namespace NaveArrival
             //Parsear la posición objetivo
             hasPosition = true;
             targetPosition = StrToVector(parts[0]);
-            arrivalMessage = parts[1]?.Trim() ?? "";
-
-            if (parts.Length > 2) arrivalTimer = parts[2]?.Trim() ?? "";
+            arrivalMessage = parts[1];
 
             Runtime.UpdateFrequency = UpdateFrequency.Update100;  // Comenzar a comprobar la llegada
         }
@@ -108,19 +107,13 @@ namespace NaveArrival
                 if (!string.IsNullOrWhiteSpace(arrivalMessage))
                 {
                     Echo(arrivalMessage);
-                    SendIGCMessage(arrivalMessage);
-                }
-                if (!string.IsNullOrWhiteSpace(arrivalTimer))
-                {
-                    Echo(arrivalTimer);
-                    GetBlockWithName<IMyTimerBlock>(arrivalTimer)?.ApplyAction("Start");
+                    pb.TryRun(arrivalMessage);
                 }
 
                 Runtime.UpdateFrequency = UpdateFrequency.None;  // Detener comprobaciones
                 hasPosition = false;
                 targetPosition = Vector3D.Zero;
                 arrivalMessage = null;
-                arrivalTimer = null;
             }
         }
     }

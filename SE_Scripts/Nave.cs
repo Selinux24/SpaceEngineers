@@ -43,8 +43,10 @@ namespace Nave
         readonly IMyTimerBlock timerPilot;
         readonly IMyProgrammableBlock arrivalPB;
         readonly IMyProgrammableBlock alignPB;
+        readonly IMyTimerBlock timerLock;
         readonly IMyTimerBlock timerLoad;
         readonly IMyTimerBlock timerUnload;
+        readonly IMyTimerBlock timerWaiting;
         readonly List<IMyTextPanel> logLCDs = new List<IMyTextPanel>();
         readonly StringBuilder sbLog = new StringBuilder();
 
@@ -55,6 +57,7 @@ namespace Nave
         Vector3D orderWarehouseParking;
         string orderCustomer;
         Vector3D orderCustomerParking;
+        string orderExchangeName;
 
         string exitForward;
         string exitUp;
@@ -126,15 +129,15 @@ namespace Nave
 
             IGC.SendBroadcastMessage(channel, message);
         }
-        void Align(string forward, string up, string wayPoints, string command, string timerName)
+        void Align(string forward, string up, string wayPoints, string command)
         {
-            string message = $"{forward}|{up}|{wayPoints}¬{command}¬{timerName}";
+            string message = $"{forward}|{up}|{wayPoints}¬{command}";
             WriteLogLCDs($"Align: {message}");
             alignPB.TryRun(message);
         }
-        void Arrival(Vector3D position, string command, string timerName)
+        void Arrival(Vector3D position, string command)
         {
-            string message = $"{VectorToStr(position)}¬{command}¬{timerName}";
+            string message = $"{VectorToStr(position)}¬{command}";
             WriteLogLCDs($"Arrival: {message}");
             arrivalPB.TryRun(message);
         }
@@ -169,6 +172,13 @@ namespace Nave
                 return;
             }
 
+            timerLock = GetBlockWithName<IMyTimerBlock>(shipTimerLock);
+            if (timerLock == null)
+            {
+                Echo($"Timer de atraque '{shipTimerLock}' no locallizado.");
+                return;
+            }
+
             timerLoad = GetBlockWithName<IMyTimerBlock>(shipTimerLoad);
             if (timerLoad == null)
             {
@@ -180,6 +190,13 @@ namespace Nave
             if (timerUnload == null)
             {
                 Echo($"Timer de descarga '{shipTimerUnload}' no locallizado.");
+                return;
+            }
+
+            timerWaiting = GetBlockWithName<IMyTimerBlock>(shipTimerWaiting);
+            if (timerWaiting == null)
+            {
+                Echo($"Timer de espera '{shipTimerWaiting}' no locallizado.");
                 return;
             }
 
@@ -219,38 +236,14 @@ namespace Nave
         {
             WriteLogLCDs($"ParseTerminalMessage: {argument}");
 
-            if (argument == "DELIVER") CmdDeliver();
-            else if (argument == "RETURN") CmdReturn();
-            else if (argument == "UNLOADED") SendUnloaded();
-        }
-        void CmdDeliver()
-        {
-            if (orderId < 0)
-            {
-                return;
-            }
-
-            remotePilot.ClearWaypoints();
-            remotePilot.AddWaypoint(orderCustomerParking, orderCustomer);
-            remotePilot.SetCollisionAvoidance(true);
-            remotePilot.FlightMode = FlightMode.OneWay;
-
-            timerPilot.ApplyAction("Start");
-
-            string command = $"Command=UNLOAD|To={orderCustomer}|From={shipId}|Order={orderId}";
-            Arrival(orderCustomerParking, command, shipTimerLock);
-        }
-        void CmdReturn()
-        {
-            remotePilot.ClearWaypoints();
-            remotePilot.AddWaypoint(orderWarehouseParking, orderWarehouse);
-            remotePilot.SetCollisionAvoidance(true);
-            remotePilot.FlightMode = FlightMode.OneWay;
-
-            timerPilot.ApplyAction("Start");
-
-            string command = $"Command=WAITING|To={shipId}";
-            Arrival(orderWarehouseParking, command, shipTimerWaiting);
+            if (argument == "UNLOADED") SendUnloaded();
+            else if (argument == "ALIGN_LOADING") AlignLoading();
+            else if (argument == "ALIGN_REQUEST_UNLOAD") AlignRequestUnload();
+            else if (argument == "ALIGN_UNLOADING") AlignUnloading();
+            else if (argument == "ALIGN_UNLOADED") AlignUnloaded();
+            else if (argument == "ARRIVAL_WAITING") ArrivalWainting();
+            else if (argument == "ARRIVAL_UNLOAD") ArrivalUnload();
+            else if (argument == "ARRIVAL_REQUEST_UNLOAD") ArrivalRequestUnload();
         }
         void SendUnloaded()
         {
@@ -264,9 +257,11 @@ namespace Nave
             remotePilot.SetCollisionAvoidance(true);
             remotePilot.FlightMode = FlightMode.OneWay;
 
-            //TODO Idle: Arrival tiene que comunicar a este script que ya ha terminado, y las acciones deben lanzarse desde aquí
-            string command = $"Command=WAITING|To={shipId}";
-            Arrival(orderCustomerParking, command, shipTimerWaiting);
+            //Carga la ruta de salida y al llegar al último waypoint del conector, ejecutará ALIGN_UNLOADED, que activará el pilotaje automático
+            Align(exitForward, exitUp, exitWaypoints, "ALIGN_UNLOADED");
+
+            //Monitorizará el viaje hasta la posición de espera del cliente, y ejecutará ARRIVAL_WAITING, y esperará instrucciones de la base
+            Arrival(orderCustomerParking, "ARRIVAL_WAITING");
 
             //Limpiar datos del pedido
             orderId = -1;
@@ -276,14 +271,71 @@ namespace Nave
             orderCustomerParking = new Vector3D();
             status = ShipStatus.Idle;
 
-            //TODO RouteToWarehouse: Align tiene que comunicar a este script que ya ha terminado, y las acciones deben lanzarse desde aquí
-            Align(exitForward, exitUp, exitWaypoints, null, shipTimerPilot);
-
             //Limpiar los datos del exchange
             exitForward = "";
             exitUp = "";
             exitWaypoints = "";
             exitExchangeName = "";
+        }
+        void AlignLoading()
+        {
+            string message = $"Command=LOADING|To={orderWarehouse}|From={shipId}|Order={orderId}|Exchange={orderExchangeName}";
+            SendIGCMessage(message);
+
+            //Atraque
+            timerLock.ApplyAction("Start");
+
+            //Activar modo carga
+            timerLoad.ApplyAction("Start");
+        }
+        void AlignRequestUnload()
+        {
+            timerPilot.ApplyAction("Start");
+        }
+        void AlignUnloading()
+        {
+            string command = $"Command=UNLOADING|To={orderCustomer}|From={shipId}|Order={orderId}|Exchange={exitExchangeName}";
+            SendIGCMessage(command);
+
+            timerLock.ApplyAction("Start");
+
+            //Activar modo descarga
+            timerUnload.ApplyAction("Start");
+        }
+        void AlignUnloaded()
+        {
+            //Se produce cuando la nave llega al último waypoint de la ruta de salida
+            status = ShipStatus.RouteToWarehouse;
+
+            //Activa el pilotaje automático
+            timerPilot.ApplyAction("Start");
+        }
+        void ArrivalWainting()
+        {
+            //Se produce cuando la nave llega al último waypoint de la ruta de entrega
+            status = ShipStatus.Idle;
+
+            //Pone la nave en espera
+            timerWaiting.ApplyAction("Start");
+        }
+        void ArrivalUnload()
+        {
+            //Se produce cuando la nave llega al punto de espera de la base de descarga
+
+            //Lanza el comando de descarga
+            string command = $"Command=UNLOAD|To={orderCustomer}|From={shipId}|Order={orderId}";
+            SendIGCMessage(command);
+
+            timerLock.ApplyAction("Start");
+        }
+        void ArrivalRequestUnload()
+        {
+            status = ShipStatus.WaitingForUnload;
+
+            string command = $"Command=REQUEST_UNLOAD|To={orderCustomer}|From={shipId}|Order={orderId}";
+            SendIGCMessage(command);
+
+            timerWaiting.ApplyAction("Start");
         }
 
         void ParseMessage(string signal)
@@ -321,18 +373,14 @@ namespace Nave
             orderWarehouseParking = StrToVector(ReadArgument(lines, "WarehouseParking"));
             orderCustomer = ReadArgument(lines, "Customer");
             orderCustomerParking = StrToVector(ReadArgument(lines, "CustomerParking"));
+            orderExchangeName = ReadArgument(lines, "Exchange");
 
             string forward = ReadArgument(lines, "Forward");
             string up = ReadArgument(lines, "Up");
             string wayPoints = ReadArgument(lines, "WayPoints");
-            string exchangeName = ReadArgument(lines, "Exchange");
 
-            //TODO Loading: Align tiene que comunicar a este script que ya ha terminado, y las acciones deben lanzarse desde aquí
-            string message = $"Command=LOADING|To={orderWarehouse}|From={shipId}|Order={orderId}|Exchange={exchangeName}";
-            Align(forward, up, wayPoints, message, shipTimerLock);
-
-            //Activar modo carga
-            timerLoad.ApplyAction("Start");
+            //Se acerca hasta el conector de carga y lanza ALIGN_LOADING
+            Align(forward, up, wayPoints, "ALIGN_LOADING");
         }
         void CmdLoaded(string[] lines)
         {
@@ -349,15 +397,13 @@ namespace Nave
             remotePilot.SetCollisionAvoidance(true);
             remotePilot.FlightMode = FlightMode.OneWay;
 
-            //TODO WaitingForUnload: Align tiene que comunicar a este script que ya ha terminado, y las acciones deben lanzarse desde aquí
-            string command = $"Command=REQUEST_UNLOAD|To={orderCustomer}|From={shipId}|Order={orderId}";
-            Arrival(orderCustomerParking, command, shipTimerWaiting);
+            Arrival(orderCustomerParking, "ARRIVAL_REQUEST_UNLOAD");
 
             var forward = ReadArgument(lines, "Forward");
             var up = ReadArgument(lines, "Up");
             var waypoints = ReadArgument(lines, "WayPoints");
 
-            Align(forward, up, waypoints, null, shipTimerPilot);
+            Align(forward, up, waypoints, "ALIGN_REQUEST_UNLOAD");
         }
         void CmdUnloadOrder(string[] lines)
         {
@@ -374,12 +420,7 @@ namespace Nave
             exitWaypoints = ReadArgument(lines, "WayPoints");
             exitExchangeName = ReadArgument(lines, "Exchange");
 
-            //TODO Unloading: Align tiene que comunicar a este script que ya ha terminado, y las acciones deben lanzarse desde aquí
-            string command = $"Command=UNLOADING|To={orderCustomer}|From={shipId}|Order={orderId}|Exchange={exitExchangeName}";
-            Align(exitForward, exitUp, exitWaypoints, command, shipTimerLock);
-
-            //Activar modo descarga
-            timerUnload.ApplyAction("Start");
+            Align(exitForward, exitUp, exitWaypoints, "ALIGN_UNLOADING");
         }
     }
 }

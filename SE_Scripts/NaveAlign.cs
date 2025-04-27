@@ -1,5 +1,4 @@
 ﻿using Sandbox.ModAPI.Ingame;
-using SpaceEngineers.Game.ModAPI.Ingame;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,7 +8,7 @@ namespace NaveAlign
 {
     partial class Program : MyGridProgram
     {
-        const string channel = "SHIPS_DELIVERY";
+        const string shipProgrammableBlock = "HT Automaton Programmable Block Ship";
         const string shipRemoteControlLocking = "HT Remote Control Locking";
         const string shipConnectorA = "HT Connector A";
 
@@ -22,6 +21,7 @@ namespace NaveAlign
         const double maxApproachSpeedLocking = 5.0; //Velocidad máxima en el último waypoint
         const double slowdownDistance = 50.0; //Distancia de frenada
 
+        readonly IMyProgrammableBlock pb;
         readonly IMyRemoteControl remoteLocking;
         readonly IMyShipConnector connectorA;
         readonly List<IMyThrust> thrusters = new List<IMyThrust>();
@@ -33,7 +33,6 @@ namespace NaveAlign
         Vector3D targetUp = new Vector3D(0, 1, 0);
         bool hasTarget = false;
         string reachCommand = null;
-        string reachTimer = null;
 
         T GetBlockWithName<T>(string name) where T : class, IMyTerminalBlock
         {
@@ -59,13 +58,16 @@ namespace NaveAlign
             dot = MathHelper.Clamp(dot, -1.0, 1.0);
             return Math.Acos(dot);
         }
-        void SendIGCMessage(string message)
-        {
-            IGC.SendBroadcastMessage(channel, message);
-        }
 
         public Program()
         {
+            pb = GetBlockWithName<IMyProgrammableBlock>(shipProgrammableBlock);
+            if (pb == null)
+            {
+                Echo($"Programmable Block {shipProgrammableBlock} no encontrado.");
+                return;
+            }
+
             remoteLocking = GetBlockWithName<IMyRemoteControl>(shipRemoteControlLocking);
             if (remoteLocking == null)
             {
@@ -115,18 +117,17 @@ namespace NaveAlign
             hasTarget = false;
 
             var parts = data.Split('¬');
-            if (parts.Length == 0) return;
+            if (parts.Length != 2) return;
 
             var coords = parts[0].Split('|');
             if (coords.Length != 3) return;
             targetForward = -Vector3D.Normalize(StrToVector(coords[0]));
             targetUp = Vector3D.Normalize(StrToVector(coords[1]));
             waypoints = ParseWaypoints(coords[2]);
+
+            reachCommand = parts[1];
+
             hasTarget = true;
-
-            if (parts.Length > 1) ParseAction(parts[1]);
-
-            if (parts.Length > 2) ParseAction(parts[2]);
         }
         static List<Vector3D> ParseWaypoints(string data)
         {
@@ -139,17 +140,6 @@ namespace NaveAlign
             }
 
             return wp;
-        }
-        void ParseAction(string action)
-        {
-            if (action.StartsWith("Command="))
-            {
-                reachCommand = action;
-            }
-            else
-            {
-                reachTimer = action;
-            }
         }
 
         void DoAlignShip()
@@ -169,7 +159,6 @@ namespace NaveAlign
             waypoints.Clear();
             hasTarget = false;
             reachCommand = null;
-            reachTimer = null;
             ResetGyros();
             ResetThrust();
         }
@@ -180,7 +169,7 @@ namespace NaveAlign
             {
                 Echo("Última posición alcanzada.");
                 Runtime.UpdateFrequency = UpdateFrequency.None;
-                DoReachActions();
+                pb.TryRun(reachCommand);
                 DoStopShip();
                 return;
             }
@@ -191,7 +180,6 @@ namespace NaveAlign
             double distance = toTarget.Length();
 
             Echo($"Progreso: {currentTarget + 1}/{waypoints.Count}. Distancia: {distance:F2}m");
-            Echo($"Timer en Destino? {!string.IsNullOrWhiteSpace(reachTimer)}");
             Echo($"Command en Destino? {!string.IsNullOrWhiteSpace(reachCommand)}");
 
             if (distance < arrivalThr)
@@ -299,22 +287,6 @@ namespace NaveAlign
                 gyro.Pitch = 0;
                 gyro.Yaw = 0;
                 gyro.Roll = 0;
-            }
-        }
-
-        void DoReachActions()
-        {
-            if (!string.IsNullOrWhiteSpace(reachCommand))
-            {
-                Echo(reachCommand);
-                SendIGCMessage(reachCommand);
-            }
-
-            if (!string.IsNullOrWhiteSpace(reachTimer))
-            {
-                Echo($"Timer: {reachTimer}");
-                var timer = GetBlockWithName<IMyTimerBlock>(reachTimer);
-                timer?.ApplyAction("Start");
             }
         }
     }
