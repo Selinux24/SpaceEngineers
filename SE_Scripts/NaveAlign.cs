@@ -12,13 +12,15 @@ namespace NaveAlign
         const string channel = "SHIPS_DELIVERY";
         const string shipRemoteControlLocking = "HT Remote Control Locking";
         const string shipConnectorA = "HT Connector A";
-        const float thr = 2f;
-        const double angleThr = 0.001;
-        const double ArrivalDistance = 0.5;    // Precisión: 0.5 metros.
-        const double MaxApproachSpeed = 25.0;   // Velocidad máxima de llegada.
-        const double MaxApproachSpeedAprox = 15.0;   // Velocidad máxima de aproximación.
-        const double MaxApproachSpeedLocking = 5.0;   // Velocidad máxima en el último waypoint.
-        const double SlowdownDistance = 50.0;  // Distancia de frenada.
+
+        const double gyrosThr = 0.001; //Precisión de alineación
+        const double gyrosSpeed = 2f; //Velocidad de los giroscopios
+
+        const double arrivalThr = 0.5; //Precisión de aproximación 0.5 metros
+        const double maxApproachSpeed = 25.0; //Velocidad máxima de llegada
+        const double maxApproachSpeedAprox = 15.0; //Velocidad máxima de aproximación
+        const double maxApproachSpeedLocking = 5.0; //Velocidad máxima en el último waypoint
+        const double slowdownDistance = 50.0; //Distancia de frenada
 
         readonly IMyRemoteControl remoteLocking;
         readonly IMyShipConnector connectorA;
@@ -48,10 +50,6 @@ namespace NaveAlign
                 double.Parse(trimmed[1]),
                 double.Parse(trimmed[2])
             );
-        }
-        static string VectorToStr(Vector3D vector)
-        {
-            return $"({vector.X:F2}, {vector.Y:F2}, {vector.Z:F2})";
         }
         static double AngleBetweenVectors(Vector3D v1, Vector3D v2)
         {
@@ -186,18 +184,17 @@ namespace NaveAlign
                 DoStopShip();
                 return;
             }
+
             var currentPos = connectorA.GetPosition();
             var targetPos = waypoints[currentTarget];
             var toTarget = targetPos - currentPos;
             double distance = toTarget.Length();
 
-            Echo($"Progreso: {currentTarget + 1}/{waypoints.Count}\nDistancia: {distance:F2} m");
-            Echo($"Actual={VectorToStr(currentPos)}");
-            Echo($"Destino={VectorToStr(targetPos)}");
+            Echo($"Progreso: {currentTarget + 1}/{waypoints.Count}. Distancia: {distance:F2}m");
             Echo($"Timer en Destino? {!string.IsNullOrWhiteSpace(reachTimer)}");
             Echo($"Command en Destino? {!string.IsNullOrWhiteSpace(reachCommand)}");
 
-            if (distance < ArrivalDistance)
+            if (distance < arrivalThr)
             {
                 currentTarget++;
                 ResetThrust();
@@ -205,28 +202,32 @@ namespace NaveAlign
                 return;
             }
 
+            var neededForce = CalculateThrustForce(toTarget, distance);
+
+            ApplyThrust(neededForce);
+        }
+        Vector3D CalculateThrustForce(Vector3D toTarget, double distance)
+        {
             var desiredDirection = Vector3D.Normalize(toTarget);
             var currentVelocity = remoteLocking.GetShipVelocities().LinearVelocity;
 
             //Calcula velocidad deseada basada en distancia, cuando estemos avanzando hacia el último waypoint.
             double approachSpeed;
-            if (currentTarget == 0) approachSpeed = MaxApproachSpeed; //Velocidad hasta el primer punto de aproximación.
-            else if (currentTarget == waypoints.Count - 1) approachSpeed = MaxApproachSpeedLocking; //Velocidad desde el úlimo punto de aproximación.
-            else approachSpeed = MaxApproachSpeedAprox; //Velocidad entre puntos de aproximación.
+            if (currentTarget == 0) approachSpeed = maxApproachSpeed; //Velocidad hasta el primer punto de aproximación.
+            else if (currentTarget == waypoints.Count - 1) approachSpeed = maxApproachSpeedLocking; //Velocidad desde el úlimo punto de aproximación.
+            else approachSpeed = maxApproachSpeedAprox; //Velocidad entre puntos de aproximación.
 
             double desiredSpeed = approachSpeed;
-            if (distance < SlowdownDistance && (currentTarget == 0 || currentTarget == waypoints.Count - 1))
+            if (distance < slowdownDistance && (currentTarget == 0 || currentTarget == waypoints.Count - 1))
             {
-                desiredSpeed = Math.Max(distance / SlowdownDistance * approachSpeed, 0.5);
+                desiredSpeed = Math.Max(distance / slowdownDistance * approachSpeed, 0.5);
             }
 
             var desiredVelocity = desiredDirection * desiredSpeed;
             var velocityError = desiredVelocity - currentVelocity;
 
             double mass = remoteLocking.CalculateShipMass().PhysicalMass;
-            var neededForce = velocityError * mass * 0.5;  // Ganancia ajustable.
-
-            ApplyThrust(neededForce);
+            return velocityError * mass * 0.5;  // Ganancia ajustable.
         }
         void ApplyThrust(Vector3D force)
         {
@@ -253,38 +254,29 @@ namespace NaveAlign
             var shipUp = shipMatrix.Up;
 
             double angleFW = AngleBetweenVectors(shipForward, targetForward);
-            Echo($"TargetFWD {VectorToStr(targetForward)}");
-            Echo($"ShipFWD {VectorToStr(shipForward)}");
-            Echo($"AngleFW {angleFW:F2}");
-
             double angleUP = AngleBetweenVectors(shipUp, targetUp);
-            Echo($"TargetUP {VectorToStr(targetUp)}");
-            Echo($"ShipUP {VectorToStr(shipUp)}");
-            Echo($"AngleUP {angleUP:F2}");
+            Echo($"Alineación: {angleFW:F2} | {angleUP:F2}");
 
-            if (angleFW <= angleThr && angleUP <= angleThr)
+            if (angleFW <= gyrosThr && angleUP <= gyrosThr)
             {
                 ResetGyros();
-                Echo("Alineado con la base.");
+                Echo("Alineado con el objetivo.");
                 return;
             }
+            Echo("Alineando...");
 
-            if (angleFW > angleThr)
+            if (angleFW > gyrosThr)
             {
                 var rotationAxisFW = Vector3D.Cross(shipForward, targetForward);
-                Echo($"RotAxix {VectorToStr(rotationAxisFW)} {rotationAxisFW.Length()}");
                 if (rotationAxisFW.Length() <= 0.001) rotationAxisFW = new Vector3D(0, 1, 0);
                 ApplyGyroOverride(rotationAxisFW);
-                Echo("Applyed FW");
             }
 
-            if (angleUP > angleThr)
+            if (angleUP > gyrosThr)
             {
                 var rotationAxisUP = Vector3D.Cross(shipUp, targetUp);
-                Echo($"RotAxix {VectorToStr(rotationAxisUP)} {rotationAxisUP.Length()}");
                 if (rotationAxisUP.Length() <= 0.001) rotationAxisUP = new Vector3D(1, 0, 0);
                 ApplyGyroOverride(rotationAxisUP);
-                Echo("Applyed UP");
             }
         }
         void ApplyGyroOverride(Vector3D axis)
@@ -292,10 +284,11 @@ namespace NaveAlign
             foreach (var gyro in gyros)
             {
                 var localAxis = Vector3D.TransformNormal(axis, MatrixD.Transpose(gyro.WorldMatrix));
+                var gyroRot = localAxis * -gyrosSpeed;
                 gyro.GyroOverride = true;
-                gyro.Pitch = (float)localAxis.X * -thr;
-                gyro.Yaw = (float)localAxis.Y * -thr;
-                gyro.Roll = (float)localAxis.Z * -thr;
+                gyro.Pitch = (float)gyroRot.X;
+                gyro.Yaw = (float)gyroRot.Y;
+                gyro.Roll = (float)gyroRot.Z;
             }
         }
         void ResetGyros()
