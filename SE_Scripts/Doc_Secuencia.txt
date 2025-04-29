@@ -5,7 +5,7 @@
 	[Command=REQUEST_STATUS|From=Me]
 2 - La nave responde con su estado [RESPONSE_STATUS] a WH
 	[Command=RESPONSE_STATUS|To=Sender|From=Me|Status=Status|Origin=Base|OriginPosition=Position|Destination=Base|DestinationPosition=Position|Position=x:y:z]
-3 - WH actualiza el estado de la nave
+3 - WH actualiza el estado de la nave (lista de naves)
 
 *******************************************************************************************************************************************************************************
 * B - RECEPCION DE PEDIDOS                                                                                                                                                    *
@@ -68,8 +68,9 @@
 	[Command=ORDER_RECEIVED|To=WH|From=Base|Order=OrderId]
 
 
-TODO:
-
+*******************************************************************************************************************************************************************************
+* TODO                                                                                                                                                                        *
+*******************************************************************************************************************************************************************************
 El atraque de carga se hace demasiado rápido? - Align y Arrival tienen que comunicar a este script que ya han terminado, y las acciones deben lanzarse desde aquí
 Arrival, revertir los waypoints y maniobra de salida
 Unloaded no desbloquea los conectores y la nave vuelve a la base de nuevo, en vez de hacer la salida y viajar al parking de WH

@@ -26,7 +26,7 @@ namespace Base
         const string exchangeTimerLoad = "Load";
 
         const string warehouseId = "BaseWH1";
-        string fakeOrder = $"Command=REQUEST_ORDER|To={warehouseId}|Customer={baseId}|CustomerParking={baseParking}|Items=SteelPlate:10;";
+        readonly string fakeOrder = $"Command=REQUEST_ORDER|To={warehouseId}|Customer={baseId}|CustomerParking={baseParking}|Items=SteelPlate:10;";
 
         #region Helper classes
         class ExchangeGroup
