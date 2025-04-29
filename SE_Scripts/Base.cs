@@ -1,12 +1,7 @@
-﻿using Sandbox.ModAPI.Ingame;
-using SpaceEngineers.Game.ModAPI;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using VRage;
-using VRage.Game.ModAPI.Ingame;
-using VRageMath;
 
 namespace Base
 {
@@ -127,6 +122,7 @@ namespace Base
             public Vector3D WarehouseParking;
             public Dictionary<string, int> Items = new Dictionary<string, int>();
             public string AssignedShip;
+            public string ExchangeName;
 
             public Order()
             {
@@ -346,11 +342,19 @@ namespace Base
             else if (argument == "LIST_RECEPTIONS") ListReceptions();
             else if (argument == "FAKE_ORDER") FakeOrder();
         }
+        /// <summary>
+        /// Sec_A_1 - WH pide situación a todas las naves
+        /// Execute:  REQUEST_STATUS
+        /// </summary>
         void RequestStatus()
         {
             string message = $"Command=REQUEST_STATUS|From={baseId}";
             SendIGCMessage(message);
         }
+        /// <summary>
+        /// Sec_C_1 - WH revisa los pedidos. Para cada pedido, busca una nave libre y le da la orden de carga en un conector para NAVEX
+        /// Execute:  LOAD_ORDER
+        /// </summary>
         void RequestDelivery()
         {
             var pendantOrders = orders.ToList();
@@ -385,6 +389,10 @@ namespace Base
                 exchange.MoveCargo(order, cargos);
             }
         }
+        /// <summary>
+        /// Sec_D_1 - BASEX revisa las peticiones de descarga. Busca conectores libres y da la orden de descarga a NAVEX en el conector especificado
+        /// Execute:  UNLOAD_ORDER
+        /// </summary>
         void RequestReception()
         {
             var freeExchanges = GetFreeExchanges();
@@ -426,6 +434,10 @@ namespace Base
         {
             showReceptions = !showReceptions;
         }
+        /// <summary>
+        /// Sec_B_1 - BASEX revisa el inventario y pide a WH
+        /// Execute:  REQUEST_ORDER
+        /// </summary>
         void FakeOrder()
         {
             SendIGCMessage(fakeOrder);
@@ -445,8 +457,11 @@ namespace Base
             else if (command == "UNLOADING") CmdUnloading(lines);
             else if (command == "UNLOADED") CmdUnloaded(lines);
             else if (command == "ORDER_RECEIVED") CmdOrderReceived(lines);
-            else if (command == "WAITING") CmdWaiting(lines);
         }
+        /// <summary>
+        /// Sec_A_3 - WH actualiza el estado de la nave
+        /// Request:  RESPONSE_STATUS
+        /// </summary>
         void CmdResponseStatus(string[] lines)
         {
             string to = ReadArgument(lines, "To");
@@ -478,6 +493,10 @@ namespace Base
             ship.Position = position;
             ship.UpdateTime = DateTime.Now;
         }
+        /// <summary>
+        /// Sec_B_2 - WH registra el pedido (lista de pedidos)
+        /// Request:  REQUEST_ORDER
+        /// </summary>
         void CmdRequestOrder(string[] lines)
         {
             string to = ReadArgument(lines, "To");
@@ -518,6 +537,11 @@ namespace Base
 
             orders.Add(order);
         }
+        /// <summary>
+        /// Sec_C_3 - NAVEX avisa a WH que ha llegado para cargar el ID_PEDIDO en el connector y WH hace la carga
+        /// Request:  LOADING
+        /// Execute:  LOADED
+        /// </summary>
         void CmdLoading(string[] lines)
         {
             string to = ReadArgument(lines, "To");
@@ -533,12 +557,18 @@ namespace Base
             var exchange = exchanges.Find(e => e.Name == exchangeName);
             exchange?.TimerLoad?.ApplyAction("Start");
 
+            //TODO: Esperar a que se mueva la carga del Exchange a la nave
+
             string forward = VectorToStr(camera.WorldMatrix.Forward);
             string up = VectorToStr(camera.WorldMatrix.Up);
             string waypoints = string.Join(";", exchange.CalculateRouteFromConnector().Select(VectorToStr));
             string message = $"Command=LOADED|To={from}|From={baseId}|Forward={forward}|Up={up}|WayPoints={waypoints}";
             SendIGCMessage(message);
         }
+        /// <summary>
+        /// Sec_C_5 - BASEX registra petición de descarga (lista de descargas)
+        /// Request:  REQUEST_UNLOAD
+        /// </summary>
         void CmdRequestUnload(string[] lines)
         {
             string to = ReadArgument(lines, "To");
@@ -557,6 +587,9 @@ namespace Base
                 Idle = true,
             });
         }
+        /// <summary>
+        /// Sec_D_2c - BASEX pone el exchange en modo descargar
+        /// </summary>
         void CmdUnloading(string[] lines)
         {
             string to = ReadArgument(lines, "To");
@@ -568,7 +601,14 @@ namespace Base
             string exchangeName = ReadArgument(lines, "Exchange");
             var exchange = exchanges.Find(e => e.Name == exchangeName);
             exchange?.TimerUnload?.ApplyAction("Start");
+
+            //TODO: Monitorizar el fin de la carga
         }
+        /// <summary>
+        /// Sec_D_3 - BASEX registra que el pedido ID_PEDIDO ha sido descargado y lo elimina de la lista de descargas. Lanza [ORDER_RECEIVED] a WH
+        /// Request:  UNLOADED
+        /// Execute:  ORDER_RECEIVED
+        /// </summary>
         void CmdUnloaded(string[] lines)
         {
             string to = ReadArgument(lines, "To");
@@ -589,6 +629,9 @@ namespace Base
             string message = $"Command=ORDER_RECEIVED|To={warehouseId}|From={baseId}|Order={orderId}";
             SendIGCMessage(message);
         }
+        /// <summary>
+        /// Sec_D_4 - WH registra que el pedido ID_PEDIDO ha sido descargado y lo elimina de la lista de pedidos
+        /// </summary>
         void CmdOrderReceived(string[] lines)
         {
             string to = ReadArgument(lines, "To");
@@ -604,16 +647,6 @@ namespace Base
             {
                 orders.Remove(order);
             }
-        }
-        void CmdWaiting(string[] lines)
-        {
-            string to = ReadArgument(lines, "To");
-            if (to != baseId)
-            {
-                return;
-            }
-
-            //TODO: Nada que hacer...
         }
 
         void InitializeExchangeGroups()

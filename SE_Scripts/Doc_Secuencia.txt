@@ -1,5 +1,14 @@
 ﻿*******************************************************************************************************************************************************************************
-* RECEPCION DE PEDIDOS                                                                                                                                                        *
+* A - PETICION DE STATUS                                                                                                                                                      *
+*******************************************************************************************************************************************************************************
+1 - WH pide situación a todas las naves [REQUEST_STATUS]
+	[Command=REQUEST_STATUS|From=Me]
+2 - La nave responde con su estado [RESPONSE_STATUS] a WH
+	[Command=RESPONSE_STATUS|To=Sender|From=Me|Status=Status|Origin=Base|OriginPosition=Position|Destination=Base|DestinationPosition=Position|Position=x:y:z]
+3 - WH actualiza el estado de la nave
+
+*******************************************************************************************************************************************************************************
+* B - RECEPCION DE PEDIDOS                                                                                                                                                    *
 *******************************************************************************************************************************************************************************
 1 - [REQUEST_ORDER] BASEX revisa el inventario y pide a WH
 	[Command=REQUEST_ORDER|To=WH|From=Base|Parking=BaseParking|Items=ITEMS:AMOUNT;]
@@ -7,7 +16,7 @@
 	[Command=REQUEST_ORDER|To=WH|From=Base|Parking=BaseParking|Items=ITEMS:AMOUNT;]
 
 *******************************************************************************************************************************************************************************
-* CARGA DE PEDIDOS                                                                                                                                                            *
+* C - CARGA DE PEDIDOS                                                                                                                                                        *
 *******************************************************************************************************************************************************************************
 1 - [REQUEST_DELIVERY] WH revisa los pedidos. Para cada pedido, busca una nave libre y le da la orden de carga en un conector [LOAD_ORDER] para NAVEX
     [Command=LOAD_ORDER|To=Ship|From=WH|For=Base|ForParking=BaseParking|Order=OrderId|Forward=x:y:z|Up=x:y:z|WayPoints=x:y:z;]	
@@ -20,17 +29,19 @@
 3 - [LOADING] WH carga los elementos del pedido en la NAVEX y lanza [LOADED] a NAVEX - MARCAR PEDIDO COMO EN RUTA
 	[Command=LOADING|To=WH|From=Ship|Order=OrderId]
 	[Command=LOADED|To=Ship|From=WH]
-4a- [LOADED] NAVEX comienza el viaje a Parking_BASEX
-	[Command=LOADED|To=Ship|From=WH]
+4a- [LOADED] NAVEX carga la ruta hasta Parking_BASEX y comienza la maniobra de salida desde el conector de WH
+	[ALIGN_REQUEST_UNLOAD]
+	[ARRIVAL_REQUEST_UNLOAD]
 	{RouteToCustomer}
-4b- NAVEX llega a Parking_BASEX y lanza [REQUEST_UNLOAD] a BASEX
+4b- [ALIGN_REQUEST_UNLOAD] NAVEX llega al último waypoint de la salida del conector y activa el piloto automático hacia Parking_BASEX
+4c- [ARRIVAL_REQUEST_UNLOAD] NAVEX llega a Parking_BASEX y solicita permiso para descargar
 	[Command=REQUEST_UNLOAD|To=Base|From=Ship|Order=OrderId]
 	{WaitingForUnload}
 5 - [REQUEST_UNLOAD] BASEX registra petición de descarga (lista de descargas)
 	[Command=REQUEST_UNLOAD|To=Base|From=Ship|Order=OrderId]
 
 *******************************************************************************************************************************************************************************
-* DESCARGA DE PEDIDOS                                                                                                                                                         *
+* D - DESCARGA DE PEDIDOS                                                                                                                                                     *
 *******************************************************************************************************************************************************************************
 1 - [REQUEST_RECEPTION] BASEX revisa las peticiones de descarga. Busca conectores libres y da la orden de descarga [UNLOAD_ORDER] a NAVEX en el conector especificado
 	[Command=UNLOAD_ORDER|To=Ship|From=Base|Forward=x:y:z|Up=x:y:z|WayPoints=x:y:z;]
@@ -40,28 +51,21 @@
 2b- NAVEX avisa a BASEX que ha llegado para descargar el ID_PEDIDO en el conector. Lanza [UNLOADING] a BASEX
 	[Command=UNLOADING|To=Base|From=Ship|Order=OrderId]
 	{Unloading}
-2c- NAVEX descarga todo y lanza [UNLOADED] a BASEX
+2c- BASEX pone el exchange en modo descarga
+2d- NAVEX informa del fin de la descarga a BASEX, empieza el camino de vuelta a Parking_WH
 	[Command=UNLOADED|To=Base|From=Ship|Order=OrderId]
+	[ALIGN_UNLOADED]
+	[ARRIVAL_WAITING]
 	{Unloaded}
-2d- NAVEX comienza el viaje a Parking_WH
+2e- NAVEX activa el piloto automático cuando alcanza el último waypoint del conector
 	{RouteToWarehouse}
+2f- NAVEX alcanza Parking_WH y se queda en espera
+	{Idle}
 3 - [UNLOADED] BASEX registra que el pedido ID_PEDIDO ha sido descargado y lo elimina de la lista de descargas. Lanza [ORDER_RECEIVED] a WH
 	[Command=UNLOADED|To=Base|From=Ship|Order=OrderId]
 	[Command=ORDER_RECEIVED|To=WH|From=Base|Order=OrderId]
 4 - [ORDER_RECEIVED] WH registra que el pedido ID_PEDIDO ha sido descargado y lo elimina de la lista de pedidos
 	[Command=ORDER_RECEIVED|To=WH|From=Base|Order=OrderId]
-5 - NAVEX al llegar lanza [WAITING] a WH
-	[Command=WAITING|To=WH|From=Ship]
-	{Idle}
-
-*******************************************************************************************************************************************************************************
-* PETICION DE STATUS                                                                                                                                                          *
-*******************************************************************************************************************************************************************************
-1 - WH pide situación a todas las naves [REQUEST_STATUS]
-	[Command=REQUEST_STATUS|From=Me]
-2 - La nave responde con su estado [RESPONSE_STATUS] a WH
-	[Command=RESPONSE_STATUS|To=Sender|From=Me|Status=Status|Origin=Base|OriginPosition=Position|Destination=Base|DestinationPosition=Position|Position=x:y:z]
-
 
 
 TODO:
@@ -69,5 +73,4 @@ TODO:
 El atraque de carga se hace demasiado rápido? - Align y Arrival tienen que comunicar a este script que ya han terminado, y las acciones deben lanzarse desde aquí
 Arrival, revertir los waypoints y maniobra de salida
 Unloaded no desbloquea los conectores y la nave vuelve a la base de nuevo, en vez de hacer la salida y viajar al parking de WH
-
 Uso de Grand-Cruise para los viajes entre bases. Ahora se usa el Remote Control básico
