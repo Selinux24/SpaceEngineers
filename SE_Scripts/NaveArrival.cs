@@ -98,23 +98,26 @@ namespace NaveArrival
             }
 
             double distance = Vector3D.Distance(remote.GetPosition(), targetPosition);
-            Echo($"Distancia a destino: {distance:F2}m.");
-
             if (distance <= arrivalThreshold)
             {
-                Echo("Llegada detectada!.");
+                Runtime.UpdateFrequency = UpdateFrequency.None;  // Detener comprobaciones
+
+                Echo("Posición alcanzada.");
 
                 if (!string.IsNullOrWhiteSpace(arrivalMessage))
                 {
-                    Echo(arrivalMessage);
                     pb.TryRun(arrivalMessage);
+                    Echo($"Ejecutado {arrivalMessage}");
                 }
 
-                Runtime.UpdateFrequency = UpdateFrequency.None;  // Detener comprobaciones
                 hasPosition = false;
                 targetPosition = Vector3D.Zero;
                 arrivalMessage = null;
+
+                return;
             }
+
+            Echo($"Distancia a destino: {distance:F2}m.");
         }
     }
 }

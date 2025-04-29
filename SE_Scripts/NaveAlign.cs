@@ -167,9 +167,13 @@ namespace NaveAlign
         {
             if (currentTarget >= waypoints.Count)
             {
-                Echo("Última posición alcanzada.");
                 Runtime.UpdateFrequency = UpdateFrequency.None;
-                pb.TryRun(reachCommand);
+                Echo("Última posición alcanzada.");
+                if (!string.IsNullOrWhiteSpace(reachCommand))
+                {
+                    pb.TryRun(reachCommand);
+                    Echo($"Ejecutado {reachCommand}");
+                }
                 DoStopShip();
                 return;
             }

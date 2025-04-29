@@ -56,9 +56,8 @@
 	[Command=UNLOADED|To=Base|From=Ship|Order=OrderId]
 	[ALIGN_UNLOADED]
 	[ARRIVAL_WAITING]
-	{Unloaded}
-2e- NAVEX activa el piloto automático cuando alcanza el último waypoint del conector
 	{RouteToWarehouse}
+2e- NAVEX activa el piloto automático cuando alcanza el último waypoint del conector
 2f- NAVEX alcanza Parking_WH y se queda en espera
 	{Idle}
 3 - [UNLOADED] BASEX registra que el pedido ID_PEDIDO ha sido descargado y lo elimina de la lista de descargas. Lanza [ORDER_RECEIVED] a WH
@@ -71,7 +70,7 @@
 *******************************************************************************************************************************************************************************
 * TODO                                                                                                                                                                        *
 *******************************************************************************************************************************************************************************
-El atraque de carga se hace demasiado rápido? - Align y Arrival tienen que comunicar a este script que ya han terminado, y las acciones deben lanzarse desde aquí
+El atraque de carga se hace demasiado rápido
 Arrival, revertir los waypoints y maniobra de salida
 Unloaded no desbloquea los conectores y la nave vuelve a la base de nuevo, en vez de hacer la salida y viajar al parking de WH
 Uso de Grand-Cruise para los viajes entre bases. Ahora se usa el Remote Control básico

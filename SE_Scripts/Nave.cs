@@ -17,6 +17,7 @@ namespace Nave
         const string shipAlignPB = "HT Automaton Programmable Block Align";
         const string shipTimerPilot = "HT Automaton Timer Block Pilot";
         const string shipTimerLock = "HT Automaton Timer Block Locking";
+        const string shipTimerUnlock = "HT Automaton Timer Block Unlocking";
         const string shipTimerLoad = "HT Automaton Timer Block Load";
         const string shipTimerUnload = "HT Automaton Timer Block Unload";
         const string shipTimerWaiting = "HT Automaton Timer Block Waiting";
@@ -31,11 +32,11 @@ namespace Nave
             ApproachingWarehouse,
             Loading,
             RouteToCustomer,
+
             WaitingForUnload,
 
             ApproachingCustomer,
             Unloading,
-            Unloaded,
             RouteToWarehouse,
         }
         #endregion
@@ -46,6 +47,7 @@ namespace Nave
         readonly IMyProgrammableBlock arrivalPB;
         readonly IMyProgrammableBlock alignPB;
         readonly IMyTimerBlock timerLock;
+        readonly IMyTimerBlock timerUnlock;
         readonly IMyTimerBlock timerLoad;
         readonly IMyTimerBlock timerUnload;
         readonly IMyTimerBlock timerWaiting;
@@ -59,12 +61,12 @@ namespace Nave
         Vector3D orderWarehouseParking;
         string orderCustomer;
         Vector3D orderCustomerParking;
-        string orderExchangeName;
 
-        string exitForward;
-        string exitUp;
-        string exitWaypoints;
-        string exitExchangeName;
+        string exchangeName;
+        string exchangeForward;
+        string exchangeUp;
+        string exchangeApproachingWaypoints;
+        string exchangeDepartingWaypoints;
 
         T GetBlockWithName<T>(string name) where T : class, IMyTerminalBlock
         {
@@ -77,6 +79,12 @@ namespace Nave
         {
             string cmdToken = $"{command}=";
             return lines.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";
+        }
+        static string ReverseString(string str)
+        {
+            string[] parts = str.Split(';');
+            Array.Reverse(parts);
+            return string.Join(";", parts);
         }
         static string VectorToStr(Vector3D v)
         {
@@ -181,6 +189,13 @@ namespace Nave
                 return;
             }
 
+            timerUnlock = GetBlockWithName<IMyTimerBlock>(shipTimerUnlock);
+            if (timerUnlock == null)
+            {
+                Echo($"Timer de separación '{shipTimerUnlock}' no locallizado.");
+                return;
+            }
+
             timerLoad = GetBlockWithName<IMyTimerBlock>(shipTimerLoad);
             if (timerLoad == null)
             {
@@ -221,7 +236,7 @@ namespace Nave
                 Echo($"Descarga: {orderCustomer} -> {VectorToStr(orderCustomerParking)}");
             }
 
-            if (!string.IsNullOrEmpty(argument) && (updateSource & UpdateType.Terminal) != 0)
+            if (!string.IsNullOrEmpty(argument))
             {
                 ParseTerminalMessage(argument);
                 return;
@@ -238,7 +253,7 @@ namespace Nave
         {
             WriteLogLCDs($"ParseTerminalMessage: {argument}");
 
-            if (argument == "UNLOADED") SendUnloaded();
+            if (argument == "UNLOAD_FINISHED") UnloadFinished();
             else if (argument == "ALIGN_LOADING") AlignLoading();
             else if (argument == "ALIGN_REQUEST_UNLOAD") AlignRequestUnload();
             else if (argument == "ALIGN_UNLOADING") AlignUnloading();
@@ -252,23 +267,25 @@ namespace Nave
         /// Execute:  ALIGN_UNLOADED - Comienza la maniobra de salida del conector
         /// Execute:  ARRIVAL_WAITING - Marca como punto destino Parking_WH
         /// </summary>
-        void SendUnloaded()
+        void UnloadFinished()
         {
             string message = $"Command=UNLOADED|To={orderCustomer}|From={shipId}|Order={orderId}";
             SendIGCMessage(message);
 
-            status = ShipStatus.Unloaded;
+            timerUnlock?.ApplyAction("Start");
+
+            status = ShipStatus.RouteToWarehouse;
 
             remotePilot.ClearWaypoints();
-            remotePilot.AddWaypoint(orderCustomerParking, orderCustomer);
+            remotePilot.AddWaypoint(orderWarehouseParking, orderCustomer);
             remotePilot.SetCollisionAvoidance(true);
             remotePilot.FlightMode = FlightMode.OneWay;
 
             //Carga la ruta de salida y al llegar al último waypoint del conector, ejecutará ALIGN_UNLOADED, que activará el pilotaje automático
-            Align(exitForward, exitUp, exitWaypoints, "ALIGN_UNLOADED");
+            Align(exchangeForward, exchangeUp, exchangeDepartingWaypoints, "ALIGN_UNLOADED");
 
-            //Monitorizará el viaje hasta la posición de espera del cliente, y ejecutará ARRIVAL_WAITING, y esperará instrucciones de la base
-            Arrival(orderCustomerParking, "ARRIVAL_WAITING");
+            //Monitorizará el viaje hasta la posición de espera del Warehouse, y ejecutará ARRIVAL_WAITING, y esperará instrucciones de la base
+            Arrival(orderWarehouseParking, "ARRIVAL_WAITING");
 
             //Limpiar datos del pedido
             orderId = -1;
@@ -276,13 +293,13 @@ namespace Nave
             orderWarehouseParking = new Vector3D();
             orderCustomer = "";
             orderCustomerParking = new Vector3D();
-            status = ShipStatus.Idle;
 
-            //Limpiar los datos del exchange
-            exitForward = "";
-            exitUp = "";
-            exitWaypoints = "";
-            exitExchangeName = "";
+            //Limpiar datos del exchange
+            exchangeName = null;
+            exchangeForward = null;
+            exchangeUp = null;
+            exchangeApproachingWaypoints = null;
+            exchangeDepartingWaypoints = null;
         }
         /// <summary>
         /// Sec_C_2b - Cuando la nave llega al conector de carga, informa a la base para comenzar la carga
@@ -291,7 +308,7 @@ namespace Nave
         /// </summary>
         void AlignLoading()
         {
-            string message = $"Command=LOADING|To={orderWarehouse}|From={shipId}|Order={orderId}|Exchange={orderExchangeName}";
+            string message = $"Command=LOADING|To={orderWarehouse}|From={shipId}|Order={orderId}|Exchange={exchangeName}";
             SendIGCMessage(message);
 
             //Atraque
@@ -317,7 +334,7 @@ namespace Nave
         /// </summary>
         void AlignUnloading()
         {
-            string command = $"Command=UNLOADING|To={orderCustomer}|From={shipId}|Order={orderId}|Exchange={exitExchangeName}";
+            string command = $"Command=UNLOADING|To={orderCustomer}|From={shipId}|Order={orderId}|Exchange={exchangeName}";
             SendIGCMessage(command);
 
             timerLock.ApplyAction("Start");
@@ -332,9 +349,6 @@ namespace Nave
         /// </summary>
         void AlignUnloaded()
         {
-            //Se produce cuando la nave llega al último waypoint de la ruta de salida
-            status = ShipStatus.RouteToWarehouse;
-
             //Activa el pilotaje automático
             timerPilot.ApplyAction("Start");
         }
@@ -409,13 +423,14 @@ namespace Nave
             orderWarehouseParking = StrToVector(ReadArgument(lines, "WarehouseParking"));
             orderCustomer = ReadArgument(lines, "Customer");
             orderCustomerParking = StrToVector(ReadArgument(lines, "CustomerParking"));
-            orderExchangeName = ReadArgument(lines, "Exchange");
 
-            string forward = ReadArgument(lines, "Forward");
-            string up = ReadArgument(lines, "Up");
-            string wayPoints = ReadArgument(lines, "WayPoints");
+            exchangeName = ReadArgument(lines, "Exchange");
+            exchangeForward = ReadArgument(lines, "Forward");
+            exchangeUp = ReadArgument(lines, "Up");
+            exchangeApproachingWaypoints = ReadArgument(lines, "WayPoints");
+            exchangeDepartingWaypoints = ReverseString(exchangeApproachingWaypoints);
 
-            Align(forward, up, wayPoints, "ALIGN_LOADING");
+            Align(exchangeForward, exchangeUp, exchangeApproachingWaypoints, "ALIGN_LOADING");
         }
         /// <summary>
         /// Sec_C_4a - NAVEX carga la ruta hasta Parking_BASEX y comienza la maniobra de salida desde el conector de WH
@@ -431,6 +446,8 @@ namespace Nave
                 return;
             }
 
+            timerUnlock?.ApplyAction("Start");
+
             status = ShipStatus.RouteToCustomer;
 
             remotePilot.ClearWaypoints();
@@ -440,11 +457,14 @@ namespace Nave
 
             Arrival(orderCustomerParking, "ARRIVAL_REQUEST_UNLOAD");
 
-            var forward = ReadArgument(lines, "Forward");
-            var up = ReadArgument(lines, "Up");
-            var waypoints = ReadArgument(lines, "WayPoints");
+            Align(exchangeForward, exchangeUp, exchangeDepartingWaypoints, "ALIGN_REQUEST_UNLOAD");
 
-            Align(forward, up, waypoints, "ALIGN_REQUEST_UNLOAD");
+            //Limpiar datos del exchange
+            exchangeName = null;
+            exchangeForward = null;
+            exchangeUp = null;
+            exchangeApproachingWaypoints = null;
+            exchangeDepartingWaypoints = null;
         }
         /// <summary>
         /// Sec_D_2a - NAVEX comienza la navegación al conector especificado y atraca en MODO DESCARGA.
@@ -460,12 +480,13 @@ namespace Nave
 
             status = ShipStatus.ApproachingCustomer;
 
-            exitForward = ReadArgument(lines, "Forward");
-            exitUp = ReadArgument(lines, "Up");
-            exitWaypoints = ReadArgument(lines, "WayPoints");
-            exitExchangeName = ReadArgument(lines, "Exchange");
+            exchangeName = ReadArgument(lines, "Exchange");
+            exchangeForward = ReadArgument(lines, "Forward");
+            exchangeUp = ReadArgument(lines, "Up");
+            exchangeApproachingWaypoints = ReadArgument(lines, "WayPoints");
+            exchangeDepartingWaypoints = ReverseString(exchangeApproachingWaypoints);
 
-            Align(exitForward, exitUp, exitWaypoints, "ALIGN_UNLOADING");
+            Align(exchangeForward, exchangeUp, exchangeApproachingWaypoints, "ALIGN_UNLOADING");
         }
     }
 }

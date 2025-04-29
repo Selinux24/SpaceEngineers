@@ -1,7 +1,12 @@
-﻿using System;
+﻿using Sandbox.ModAPI.Ingame;
+using SpaceEngineers.Game.ModAPI.Ingame;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using VRage;
+using VRage.Game.ModAPI.Ingame;
+using VRageMath;
 
 namespace Base
 {
@@ -32,6 +37,7 @@ namespace Base
         class ExchangeGroup
         {
             public string Name;
+            public string DockedShipName;
             public IMyShipConnector UpperConnector;
             public IMyShipConnector LowerConnector;
             public IMyCargoContainer Cargo;
@@ -52,6 +58,7 @@ namespace Base
             public bool IsFree()
             {
                 return
+                    string.IsNullOrWhiteSpace(DockedShipName) &&
                     UpperConnector.Status == MyShipConnectorStatus.Unconnected &&
                     (LowerConnector?.Status ?? MyShipConnectorStatus.Unconnected) == MyShipConnectorStatus.Unconnected;
             }
@@ -72,11 +79,9 @@ namespace Base
 
                 return waypoints;
             }
-            public List<Vector3D> CalculateRouteFromConnector()
+            public string GetApproachingWaypoints()
             {
-                var wp = CalculateRouteToConnector();
-                wp.Reverse();
-                return wp;
+                return string.Join(";", CalculateRouteToConnector().Select(VectorToStr));
             }
             public void MoveCargo(Order order, List<IMyCargoContainer> cargos)
             {
@@ -122,7 +127,6 @@ namespace Base
             public Vector3D WarehouseParking;
             public Dictionary<string, int> Items = new Dictionary<string, int>();
             public string AssignedShip;
-            public string ExchangeName;
 
             public Order()
             {
@@ -137,11 +141,11 @@ namespace Base
             ApproachingWarehouse,
             Loading,
             RouteToCustomer,
+
             WaitingForUnload,
 
             ApproachingCustomer,
             Unloading,
-            Unloaded,
             RouteToWarehouse,
         }
         class Ship
@@ -160,6 +164,12 @@ namespace Base
             public string From;
             public int OrderId;
             public bool Idle;
+        }
+        class ShipExchangePair
+        {
+            public Ship Ship;
+            public ExchangeGroup Exchange;
+            public double Distance;
         }
         #endregion
 
@@ -225,7 +235,6 @@ namespace Base
             if (str == "WaitingForUnload") return ShipStatus.WaitingForUnload;
             if (str == "ApproachingCustomer") return ShipStatus.ApproachingCustomer;
             if (str == "Unloading") return ShipStatus.Unloading;
-            if (str == "Unloaded") return ShipStatus.Unloaded;
             if (str == "RouteToWarehouse") return ShipStatus.RouteToWarehouse;
             return ShipStatus.Unknown;
         }
@@ -357,8 +366,13 @@ namespace Base
         /// </summary>
         void RequestDelivery()
         {
-            var pendantOrders = orders.ToList();
+            var pendantOrders = orders.Where(o => string.IsNullOrWhiteSpace(o.AssignedShip)).ToList();
             if (pendantOrders.Count == 0)
+            {
+                return;
+            }
+            var freeExchanges = GetFreeExchanges();
+            if (freeExchanges.Count == 0)
             {
                 return;
             }
@@ -368,21 +382,24 @@ namespace Base
                 RequestStatus();
                 return;
             }
-            var freeExchanges = GetFreeExchanges();
-            WriteLogLCDs($"Deliveries: {pendantOrders.Count}; Free ships: {freeShips.Count}; Free exchanges: {freeExchanges.Count}");
+            WriteLogLCDs($"Deliveries: {pendantOrders.Count}; Free exchanges: {freeExchanges.Count}; Free ships: {freeShips.Count}");
 
             int deliveryCount = Math.Min(freeExchanges.Count, Math.Min(freeShips.Count, pendantOrders.Count));
+            deliveryCount = Math.Min(deliveryCount, 1);
+
+            var shipExchangePairs = GetNearestShipsAndFromExchanges(freeShips, freeExchanges, deliveryCount);
             for (int i = 0; i < deliveryCount; i++)
             {
                 var order = pendantOrders[i];
-                var ship = freeShips[i];
-                var exchange = freeExchanges[i];
+                var ship = shipExchangePairs[i].Ship;
+                var exchange = shipExchangePairs[i].Exchange;
 
                 order.AssignedShip = ship.Name;
+                exchange.DockedShipName = ship.Name;
 
                 string forward = VectorToStr(camera.WorldMatrix.Forward);
                 string up = VectorToStr(camera.WorldMatrix.Up);
-                string waypoints = string.Join(";", exchange.CalculateRouteToConnector().Select(VectorToStr));
+                string waypoints = exchange.GetApproachingWaypoints();
                 string message = $"Command=LOAD_ORDER|To={ship.Name}|Warehouse={baseId}|WarehouseParking={baseParking}|Customer={order.Customer}|CustomerParking={VectorToStr(order.CustomerParking)}|Order={order.Id}|Forward={forward}|Up={up}|WayPoints={waypoints}|Exchange={exchange.Name}";
                 SendIGCMessage(message);
 
@@ -414,10 +431,11 @@ namespace Base
                 var exchange = freeExchanges[i];
 
                 request.Idle = false;
+                exchange.DockedShipName = request.From;
 
                 string forward = VectorToStr(camera.WorldMatrix.Forward);
                 string up = VectorToStr(camera.WorldMatrix.Up);
-                string waypoints = string.Join(";", exchange.CalculateRouteToConnector().Select(VectorToStr));
+                string waypoints = exchange.GetApproachingWaypoints();
                 string message = $"Command=UNLOAD_ORDER|To={request.From}|From={baseId}|Forward={forward}|Up={up}|WayPoints={waypoints}|Exchange={exchange.Name}";
                 SendIGCMessage(message);
             }
@@ -559,10 +577,9 @@ namespace Base
 
             //TODO: Esperar a que se mueva la carga del Exchange a la nave
 
-            string forward = VectorToStr(camera.WorldMatrix.Forward);
-            string up = VectorToStr(camera.WorldMatrix.Up);
-            string waypoints = string.Join(";", exchange.CalculateRouteFromConnector().Select(VectorToStr));
-            string message = $"Command=LOADED|To={from}|From={baseId}|Forward={forward}|Up={up}|WayPoints={waypoints}";
+            exchange.DockedShipName = null;
+
+            string message = $"Command=LOADED|To={from}|From={baseId}";
             SendIGCMessage(message);
         }
         /// <summary>
@@ -623,6 +640,13 @@ namespace Base
             if (req != null)
             {
                 unloadRequests.Remove(req);
+            }
+
+            //Libera el exchange
+            var exchange = exchanges.Find(e => e.DockedShipName == req.From);
+            if (exchange != null)
+            {
+                exchange.DockedShipName = string.Empty;
             }
 
             //Enviar al WH el mensaje de que se ha recibido el pedido
@@ -716,6 +740,29 @@ namespace Base
         {
             return exchanges.Where(e => e.IsFree()).ToList();
         }
+        static List<ShipExchangePair> GetNearestShipsAndFromExchanges(List<Ship> freeShips, List<ExchangeGroup> freeExchanges, int deliveryCount)
+        {
+            var shipExchangePairs = new List<ShipExchangePair>();
+            foreach (var ship in freeShips)
+            {
+                foreach (var exchange in freeExchanges)
+                {
+                    double distance = Vector3D.Distance(ship.Position, exchange.UpperConnector.GetPosition());
+                    shipExchangePairs.Add(new ShipExchangePair
+                    {
+                        Ship = ship,
+                        Exchange = exchange,
+                        Distance = distance
+                    });
+                }
+            }
+
+            // Ordenar las parejas por distancia ascendente
+            shipExchangePairs = shipExchangePairs.OrderBy(pair => pair.Distance).ToList();
+
+            // Seleccionar las naves y exchanges más cercanos
+            return shipExchangePairs.Take(deliveryCount).ToList();
+        }
 
         void PrintShipStatus()
         {
@@ -731,7 +778,7 @@ namespace Base
 
             foreach (var ship in ships)
             {
-                sbData.AppendLine($"{ship.Name} Status: {ship.ShipStatus}. Last update: {(DateTime.Now - ship.UpdateTime).TotalSeconds:F0} seconds");
+                sbData.AppendLine($"{ship.Name} Status: {ship.ShipStatus} Position: {VectorToStr(ship.Position)}. Last update: {(DateTime.Now - ship.UpdateTime).TotalSeconds:F0} seconds");
                 if (string.IsNullOrEmpty(ship.Origin)) continue;
 
                 double distanceToOrigin = Vector3D.Distance(ship.Position, ship.OriginPosition);
