@@ -72,7 +72,6 @@
 *******************************************************************************************************************************************************************************
 * TODO                                                                                                                                                                        *
 *******************************************************************************************************************************************************************************
-El atraque de carga se hace demasiado rápido
 Arrival, revertir los waypoints y maniobra de salida
-Unloaded no desbloquea los conectores y la nave vuelve a la base de nuevo, en vez de hacer la salida y viajar al parking de WH
 Uso de Grand-Cruise para los viajes entre bases. Ahora se usa el Remote Control básico
+Permitir configurar delivery desde el custom data
