@@ -296,6 +296,9 @@ namespace Nave
         {
             status = ShipStatus.WaitingForUnload;
 
+            remotePilot.SetAutoPilotEnabled(false);
+            remotePilot.ClearWaypoints();
+
             string command = $"Command=REQUEST_UNLOAD|To={orderCustomer}|From={shipId}|Order={orderId}";
             SendIGCMessage(command);
 
@@ -334,8 +337,9 @@ namespace Nave
             status = ShipStatus.RouteToWarehouse;
 
             remotePilot.ClearWaypoints();
-            remotePilot.AddWaypoint(orderWarehouseParking, orderCustomer);
+            remotePilot.AddWaypoint(orderWarehouseParking, orderWarehouse);
             remotePilot.SetCollisionAvoidance(true);
+            remotePilot.WaitForFreeWay = false;
             remotePilot.FlightMode = FlightMode.OneWay;
 
             //Carga la ruta de salida y al llegar al último waypoint del conector, ejecutará ALIGN_UNLOADED, que activará el pilotaje automático
@@ -373,6 +377,9 @@ namespace Nave
         {
             //Se produce cuando la nave llega al último waypoint de la ruta de entrega
             status = ShipStatus.Idle;
+
+            remotePilot.SetAutoPilotEnabled(false);
+            remotePilot.ClearWaypoints();
 
             //Pone la nave en espera
             timerWaiting.ApplyAction("Start");
@@ -453,6 +460,7 @@ namespace Nave
             remotePilot.ClearWaypoints();
             remotePilot.AddWaypoint(orderCustomerParking, orderCustomer);
             remotePilot.SetCollisionAvoidance(true);
+            remotePilot.WaitForFreeWay = false;
             remotePilot.FlightMode = FlightMode.OneWay;
 
             Arrival(orderCustomerParking, "ARRIVAL_REQUEST_UNLOAD");
