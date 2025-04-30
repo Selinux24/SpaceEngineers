@@ -26,8 +26,10 @@
 2b- NAVEX avisa a WH que ha llegado para cargar el ID_PEDIDO en el connector. Lanza [LOADING] a WH
 	[Command=LOADING|To=WH|From=Ship|Order=OrderId]
 	{Loading}
-3 - [LOADING] WH carga los elementos del pedido en la NAVEX y lanza [LOADED] a NAVEX - MARCAR PEDIDO COMO EN RUTA
+3a- [LOADING] NAVEX avisa a WH que ha llegado para cargar el ID_PEDIDO en el connector y WH hace la carga
 	[Command=LOADING|To=WH|From=Ship|Order=OrderId]
+3b- [SHIP_LOADED] WH termina la carga y avisa a NAVEX
+	[Command=SHIP_LOADED|Exchange=Exchange]
 	[Command=LOADED|To=Ship|From=WH]
 4a- [LOADED] NAVEX carga la ruta hasta Parking_BASEX y comienza la maniobra de salida desde el conector de WH
 	[ALIGN_REQUEST_UNLOAD]

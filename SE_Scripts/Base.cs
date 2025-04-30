@@ -28,7 +28,6 @@ namespace Base
         const string exchangeSorterOutput = "Output";
         const string exchangeTimerPrepare = "Prepare";
         const string exchangeTimerUnload = "Unload";
-        const string exchangeTimerLoad = "Load";
 
         const string warehouseId = "BaseWH1";
         readonly string fakeOrder = $"Command=REQUEST_ORDER|To={warehouseId}|Customer={baseId}|CustomerParking={baseParking}|Items=SteelPlate:10;";
@@ -45,7 +44,6 @@ namespace Base
             public IMyConveyorSorter SorterOutput;
             public IMyTimerBlock TimerPrepare;
             public IMyTimerBlock TimerUnload;
-            public IMyTimerBlock TimerLoad;
 
             public bool IsValid()
             {
@@ -83,37 +81,62 @@ namespace Base
             {
                 return string.Join(";", CalculateRouteToConnector().Select(VectorToStr));
             }
-            public void MoveCargo(Order order, List<IMyCargoContainer> cargos)
+            public string MoveCargo(Order order, List<IMyCargoContainer> sourceCargos)
             {
-                //Localiza el cargo más cercano al conector
-                //Mueve la carga desde los warehouses a los exchanges
-                var shipInv = Cargo.GetInventory();
+                StringBuilder sb = new StringBuilder();
+                sb.AppendLine($"## Exchange: {Name}. MoveCargo {order.Id}");
 
-                foreach (var item in order.Items)
+                sb.AppendLine($"## Destination Cargo: {Cargo.CustomName}. Warehouse cargos: {sourceCargos.Count}");
+
+                //Cargo del exchange a donde tienen que ir los items del pedido
+                var dstInv = Cargo.GetInventory();
+
+                foreach (var orderItem in order.Items)
                 {
-                    var amountRemaining = item.Value;
+                    var amountRemaining = orderItem.Value;
+                    sb.AppendLine($"## Item {orderItem.Key}: {orderItem.Value}.");
 
                     // Buscar ítem en los contenedores de la base
-                    foreach (var cargo in cargos)
+                    foreach (var srcCargo in sourceCargos)
                     {
-                        var inv = cargo.GetInventory();
-                        var items = new List<MyInventoryItem>();
-                        inv.GetItems(items);
+                        var srcInv = srcCargo.GetInventory();
+                        var srcItems = new List<MyInventoryItem>();
+                        srcInv.GetItems(srcItems);
 
-                        for (int o = items.Count - 1; o >= 0 && amountRemaining > 0; o--)
+                        if (!srcInv.IsConnectedTo(dstInv))
                         {
-                            if (items[o].Type.SubtypeId == item.Key)
+                            sb.AppendLine($"## Los cargos {srcCargo.CustomName} y {Cargo.CustomName} no están conectados.");
+                            break;
+                        }
+
+                        for (int o = srcItems.Count - 1; o >= 0 && amountRemaining > 0; o--)
+                        {
+                            if (srcItems[o].Type.SubtypeId != orderItem.Key)
                             {
-                                var transferAmount = MyFixedPoint.Min(amountRemaining, items[o].Amount).ToIntSafe();
-                                if (inv.TransferItemTo(shipInv, o, null, true, transferAmount))
-                                {
-                                    amountRemaining -= transferAmount;
-                                    break;
-                                }
+                                sb.AppendLine($"## WARNING Item {srcItems[o].Type.SubtypeId} discarded.");
+                                continue;
+                            }
+
+                            var transferAmount = MyFixedPoint.Min(amountRemaining, srcItems[o].Amount);
+                            sb.AppendLine($"## Moving {transferAmount}/{srcItems[o].Amount:F0} of {orderItem.Key} from {srcCargo.CustomName} to {Cargo.CustomName}.");
+
+                            if (srcInv.TransferItemTo(dstInv, srcItems[o], transferAmount))
+                            {
+                                sb.AppendLine($"## Moved {transferAmount} of {orderItem.Key} from {srcCargo.CustomName}.");
+                                amountRemaining -= transferAmount.ToIntSafe();
+                                break;
+                            }
+                            else
+                            {
+                                sb.AppendLine($"## ERROR Cannot move {transferAmount} of {orderItem.Key} from {srcCargo.CustomName} to {Cargo.CustomName}.");
                             }
                         }
                     }
+
+                    sb.AppendLine($"## Remaining {amountRemaining} of {orderItem.Key}.");
                 }
+
+                return sb.ToString();
             }
         }
         class Order
@@ -187,6 +210,7 @@ namespace Base
         readonly List<Ship> ships = new List<Ship>();
         readonly List<UnloadRequest> unloadRequests = new List<UnloadRequest>();
 
+        bool showExchanges = true;
         bool showShips = true;
         bool showOrders = true;
         bool showReceptions = true;
@@ -304,16 +328,10 @@ namespace Base
 
             WriteLCDs("[baseId]", baseId);
 
-            var forward = camera.WorldMatrix.Forward;
-            var up = camera.WorldMatrix.Up;
-            Echo($"{forward.X:F2},{forward.Y:F2},{forward.Z:F2}");
-            Echo($"{up.X:F2},{up.Y:F2},{up.Z:F2}");
-
             bl = IGC.RegisterBroadcastListener(channel);
-            Runtime.UpdateFrequency = UpdateFrequency.Update100; // Ejecuta cada ~1.6s
-            Echo($"Listening in channel: {channel}");
+            Echo($"Working. Listening in channel: {channel}");
 
-            WriteDataLCDs($"Listening in channel: {channel}", false);
+            Runtime.UpdateFrequency = UpdateFrequency.Update100; // Ejecuta cada ~1.6s
         }
 
         public void Main(string argument, UpdateType updateSource)
@@ -332,6 +350,8 @@ namespace Base
             if (showShips || showOrders)
             {
                 sbData.Clear();
+                sbData.AppendLine($"Listening in channel: {channel}");
+                PrintExchanges();
                 PrintShipStatus();
                 PrintOrders();
                 PrintReceptions();
@@ -346,10 +366,12 @@ namespace Base
             if (argument == "REQUEST_STATUS") RequestStatus();
             else if (argument == "REQUEST_DELIVERY") RequestDelivery();
             else if (argument == "REQUEST_RECEPTION") RequestReception();
+            else if (argument == "LIST_EXCHANGES") ListExchanges();
             else if (argument == "LIST_SHIPS") ListShips();
             else if (argument == "LIST_ORDERS") ListOrders();
             else if (argument == "LIST_RECEPTIONS") ListReceptions();
             else if (argument == "FAKE_ORDER") FakeOrder();
+            else if (argument.StartsWith("SHIP_LOADED")) ShipLoaded(argument);
         }
         /// <summary>
         /// Sec_A_1 - WH pide situación a todas las naves
@@ -366,7 +388,7 @@ namespace Base
         /// </summary>
         void RequestDelivery()
         {
-            var pendantOrders = orders.Where(o => string.IsNullOrWhiteSpace(o.AssignedShip)).ToList();
+            var pendantOrders = GetPendingOrders();
             if (pendantOrders.Count == 0)
             {
                 return;
@@ -376,7 +398,7 @@ namespace Base
             {
                 return;
             }
-            var freeShips = ships.Where(s => s.ShipStatus == ShipStatus.Idle).ToList();
+            var freeShips = GetFreeShips(ShipStatus.Idle);
             if (freeShips.Count == 0)
             {
                 RequestStatus();
@@ -384,27 +406,28 @@ namespace Base
             }
             WriteLogLCDs($"Deliveries: {pendantOrders.Count}; Free exchanges: {freeExchanges.Count}; Free ships: {freeShips.Count}");
 
-            int deliveryCount = Math.Min(freeExchanges.Count, Math.Min(freeShips.Count, pendantOrders.Count));
-            deliveryCount = Math.Min(deliveryCount, 1);
-
-            var shipExchangePairs = GetNearestShipsAndFromExchanges(freeShips, freeExchanges, deliveryCount);
-            for (int i = 0; i < deliveryCount; i++)
+            var shipExchangePair = GetNearestShipsFromExchanges(freeShips, freeExchanges).FirstOrDefault();
+            if (shipExchangePair == null)
             {
-                var order = pendantOrders[i];
-                var ship = shipExchangePairs[i].Ship;
-                var exchange = shipExchangePairs[i].Exchange;
-
-                order.AssignedShip = ship.Name;
-                exchange.DockedShipName = ship.Name;
-
-                string forward = VectorToStr(camera.WorldMatrix.Forward);
-                string up = VectorToStr(camera.WorldMatrix.Up);
-                string waypoints = exchange.GetApproachingWaypoints();
-                string message = $"Command=LOAD_ORDER|To={ship.Name}|Warehouse={baseId}|WarehouseParking={baseParking}|Customer={order.Customer}|CustomerParking={VectorToStr(order.CustomerParking)}|Order={order.Id}|Forward={forward}|Up={up}|WayPoints={waypoints}|Exchange={exchange.Name}";
-                SendIGCMessage(message);
-
-                exchange.MoveCargo(order, cargos);
+                return;
             }
+
+            var order = pendantOrders[0];
+            var ship = shipExchangePair.Ship;
+            var exchange = shipExchangePair.Exchange;
+
+            order.AssignedShip = ship.Name;
+            ship.ShipStatus = ShipStatus.ApproachingWarehouse;
+            exchange.DockedShipName = ship.Name;
+
+            string forward = VectorToStr(camera.WorldMatrix.Forward);
+            string up = VectorToStr(camera.WorldMatrix.Up);
+            string waypoints = exchange.GetApproachingWaypoints();
+            string message = $"Command=LOAD_ORDER|To={ship.Name}|Warehouse={baseId}|WarehouseParking={baseParking}|Customer={order.Customer}|CustomerParking={VectorToStr(order.CustomerParking)}|Order={order.Id}|Forward={forward}|Up={up}|WayPoints={waypoints}|Exchange={exchange.Name}";
+            SendIGCMessage(message);
+
+            //Pone el exchange en modo preparar pedido
+            exchange.TimerPrepare?.ApplyAction("TriggerNow");
         }
         /// <summary>
         /// Sec_D_1 - BASEX revisa las peticiones de descarga. Busca conectores libres y da la orden de descarga a NAVEX en el conector especificado
@@ -412,42 +435,73 @@ namespace Base
         /// </summary>
         void RequestReception()
         {
+            var unloads = GetPendingUnloadRequests();
+            if (unloads.Count == 0)
+            {
+                return;
+            }
             var freeExchanges = GetFreeExchanges();
             if (freeExchanges.Count == 0)
             {
                 return;
             }
-            var unloads = unloadRequests.Where(r => r.Idle).ToList();
-            if (unloads.Count == 0)
+            var waitingShips = GetFreeShips(ShipStatus.WaitingForUnload);
+            if (waitingShips.Count == 0)
             {
+                RequestStatus();
                 return;
             }
-            WriteLogLCDs($"Receptions: {unloads.Count}; Free exchanges: {freeExchanges.Count}");
+            WriteLogLCDs($"Receptions: {unloads.Count}; Free exchanges: {freeExchanges.Count}; Free ships: {waitingShips.Count}");
 
-            int unloadCount = Math.Min(freeExchanges.Count, unloads.Count);
-            for (int i = 0; i < unloadCount; i++)
+            var shipExchangePairs = GetNearestShipsFromExchanges(waitingShips, freeExchanges);
+            foreach (var request in unloads)
             {
-                var request = unloads[i];
-                var exchange = freeExchanges[i];
+                var pair = shipExchangePairs.FirstOrDefault(s => s.Ship.Name == request.From);
+                if (pair == null)
+                {
+                    continue;
+                }
+
+                var ship = pair.Ship;
+                var exchange = pair.Exchange;
 
                 request.Idle = false;
-                exchange.DockedShipName = request.From;
+                ship.ShipStatus = ShipStatus.ApproachingCustomer;
+                exchange.DockedShipName = ship.Name;
 
                 string forward = VectorToStr(camera.WorldMatrix.Forward);
                 string up = VectorToStr(camera.WorldMatrix.Up);
                 string waypoints = exchange.GetApproachingWaypoints();
                 string message = $"Command=UNLOAD_ORDER|To={request.From}|From={baseId}|Forward={forward}|Up={up}|WayPoints={waypoints}|Exchange={exchange.Name}";
                 SendIGCMessage(message);
+
+                break;
             }
         }
+        /// <summary>
+        /// Cambia el estado de la variable que controla la visualización de los exchanges
+        /// </summary>
+        void ListExchanges()
+        {
+            showExchanges = !showExchanges;
+        }
+        /// <summary>
+        /// Cambia el estado de la variable que controla la visualización de las naves
+        /// </summary>
         void ListShips()
         {
             showShips = !showShips;
         }
+        /// <summary>
+        /// Cambia el estado de la variable que controla la visualización de los pedidos
+        /// </summary>
         void ListOrders()
         {
             showOrders = !showOrders;
         }
+        /// <summary>
+        /// Cambia el estado de la variable que controla la visualización de las recepciones
+        /// </summary>
         void ListReceptions()
         {
             showReceptions = !showReceptions;
@@ -459,6 +513,27 @@ namespace Base
         void FakeOrder()
         {
             SendIGCMessage(fakeOrder);
+        }
+        /// <summary>
+        /// Sec_C_3b - WH termina la carga y avisa a NAVEX
+        /// Request:  SHIP_LOADED
+        /// Execute:  LOADED
+        /// </summary>
+        void ShipLoaded(string argument)
+        {
+            string[] lines = argument.Split('|');
+
+            string exchangeName = ReadArgument(lines, "Exchange");
+            var exchange = exchanges.Find(e => e.Name == exchangeName);
+            if (exchange == null)
+            {
+                return;
+            }
+
+            string message = $"Command=LOADED|To={exchange.DockedShipName}|From={baseId}";
+            SendIGCMessage(message);
+
+            exchange.DockedShipName = null;
         }
 
         void ParseMessage(string signal)
@@ -556,9 +631,8 @@ namespace Base
             orders.Add(order);
         }
         /// <summary>
-        /// Sec_C_3 - NAVEX avisa a WH que ha llegado para cargar el ID_PEDIDO en el connector y WH hace la carga
+        /// Sec_C_3a - NAVEX avisa a WH que ha llegado para cargar el ID_PEDIDO en el connector y WH hace la carga
         /// Request:  LOADING
-        /// Execute:  LOADED
         /// </summary>
         void CmdLoading(string[] lines)
         {
@@ -572,15 +646,13 @@ namespace Base
             int orderId = int.Parse(ReadArgument(lines, "Order"));
             string exchangeName = ReadArgument(lines, "Exchange");
 
+            var order = orders.FirstOrDefault(o => o.Id == orderId);
             var exchange = exchanges.Find(e => e.Name == exchangeName);
-            exchange?.TimerLoad?.ApplyAction("Start");
 
-            //TODO: Esperar a que se mueva la carga del Exchange a la nave
+            string moveLog = exchange.MoveCargo(order, cargos);
+            WriteLogLCDs(moveLog);
 
-            exchange.DockedShipName = null;
-
-            string message = $"Command=LOADED|To={from}|From={baseId}";
-            SendIGCMessage(message);
+            exchange.TimerUnload?.ApplyAction("Start");
         }
         /// <summary>
         /// Sec_C_5 - BASEX registra petición de descarga (lista de descargas)
@@ -617,9 +689,7 @@ namespace Base
 
             string exchangeName = ReadArgument(lines, "Exchange");
             var exchange = exchanges.Find(e => e.Name == exchangeName);
-            exchange?.TimerUnload?.ApplyAction("Start");
-
-            //TODO: Monitorizar el fin de la carga
+            exchange.TimerUnload?.ApplyAction("Start");
         }
         /// <summary>
         /// Sec_D_3 - BASEX registra que el pedido ID_PEDIDO ha sido descargado y lo elimina de la lista de descargas. Lanza [ORDER_RECEIVED] a WH
@@ -646,7 +716,7 @@ namespace Base
             var exchange = exchanges.Find(e => e.DockedShipName == req.From);
             if (exchange != null)
             {
-                exchange.DockedShipName = string.Empty;
+                exchange.DockedShipName = null;
             }
 
             //Enviar al WH el mensaje de que se ha recibido el pedido
@@ -692,7 +762,7 @@ namespace Base
 
                 foreach (var block in group)
                 {
-                    IMyShipConnector connector = block as IMyShipConnector;
+                    var connector = block as IMyShipConnector;
                     if (connector != null)
                     {
                         if (connector.CustomName.Contains(exchangeUpperConnector)) exchangeGroup.UpperConnector = connector;
@@ -701,14 +771,14 @@ namespace Base
                         continue;
                     }
 
-                    IMyCargoContainer cargo = block as IMyCargoContainer;
+                    var cargo = block as IMyCargoContainer;
                     if (cargo != null)
                     {
                         exchangeGroup.Cargo = cargo;
                         continue;
                     }
 
-                    IMyConveyorSorter sorter = block as IMyConveyorSorter;
+                    var sorter = block as IMyConveyorSorter;
                     if (sorter != null)
                     {
                         if (sorter.CustomName.Contains(exchangeSorterInput)) exchangeGroup.SorterInput = sorter;
@@ -716,12 +786,11 @@ namespace Base
                         continue;
                     }
 
-                    IMyTimerBlock timer = block as IMyTimerBlock;
+                    var timer = block as IMyTimerBlock;
                     if (timer != null)
                     {
                         if (timer.CustomName.Contains(exchangeTimerPrepare)) exchangeGroup.TimerPrepare = timer;
                         else if (timer.CustomName.Contains(exchangeTimerUnload)) exchangeGroup.TimerUnload = timer;
-                        else if (timer.CustomName.Contains(exchangeTimerLoad)) exchangeGroup.TimerLoad = timer;
                     }
                 }
 
@@ -736,13 +805,38 @@ namespace Base
                 }
             }
         }
+
+        List<UnloadRequest> GetPendingUnloadRequests()
+        {
+            return unloadRequests.Where(r => r.Idle).ToList();
+        }
+        List<Order> GetPendingOrders()
+        {
+            return orders.Where(o => string.IsNullOrWhiteSpace(o.AssignedShip)).ToList();
+        }
+        List<Ship> GetFreeShips(ShipStatus status)
+        {
+            return ships.Where(s => s.ShipStatus == status).ToList();
+        }
         List<ExchangeGroup> GetFreeExchanges()
         {
             return exchanges.Where(e => e.IsFree()).ToList();
         }
-        static List<ShipExchangePair> GetNearestShipsAndFromExchanges(List<Ship> freeShips, List<ExchangeGroup> freeExchanges, int deliveryCount)
+        static List<ShipExchangePair> GetNearestShipsFromExchanges(List<Ship> freeShips, List<ExchangeGroup> freeExchanges)
         {
             var shipExchangePairs = new List<ShipExchangePair>();
+
+            if (freeShips.Count == 1 && freeExchanges.Count == 1)
+            {
+                shipExchangePairs.Add(new ShipExchangePair
+                {
+                    Ship = freeShips[0],
+                    Exchange = freeExchanges[0],
+                });
+
+                return shipExchangePairs;
+            }
+
             foreach (var ship in freeShips)
             {
                 foreach (var exchange in freeExchanges)
@@ -757,13 +851,27 @@ namespace Base
                 }
             }
 
-            // Ordenar las parejas por distancia ascendente
-            shipExchangePairs = shipExchangePairs.OrderBy(pair => pair.Distance).ToList();
-
-            // Seleccionar las naves y exchanges más cercanos
-            return shipExchangePairs.Take(deliveryCount).ToList();
+            return shipExchangePairs.OrderBy(pair => pair.Distance).ToList();
         }
 
+        void PrintExchanges()
+        {
+            if (!showExchanges) return;
+
+            sbData.AppendLine("EXCHANGE STATUS");
+
+            if (exchanges.Count == 0)
+            {
+                sbData.AppendLine("No exchanges available.");
+                return;
+            }
+
+            foreach (var exchange in exchanges)
+            {
+                sbData.AppendLine($"Exchange: {exchange.Name} Docked ship: {exchange.DockedShipName ?? "Free"}");
+                sbData.AppendLine($"Connectors: {exchange.UpperConnector?.Status} - {exchange.LowerConnector?.Status}");
+            }
+        }
         void PrintShipStatus()
         {
             if (!showShips) return;
@@ -778,7 +886,8 @@ namespace Base
 
             foreach (var ship in ships)
             {
-                sbData.AppendLine($"{ship.Name} Status: {ship.ShipStatus} Position: {VectorToStr(ship.Position)}. Last update: {(DateTime.Now - ship.UpdateTime).TotalSeconds:F0} seconds");
+                sbData.AppendLine($"{ship.Name} Status: {ship.ShipStatus}.");
+                sbData.AppendLine($"Last known position: {VectorToStr(ship.Position)}. Last update: {(DateTime.Now - ship.UpdateTime).TotalSeconds:F0}secs");
                 if (string.IsNullOrEmpty(ship.Origin)) continue;
 
                 double distanceToOrigin = Vector3D.Distance(ship.Position, ship.OriginPosition);

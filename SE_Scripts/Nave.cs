@@ -262,6 +262,63 @@ namespace Nave
             else if (argument == "ARRIVAL_REQUEST_UNLOAD") ArrivalRequestUnload();
         }
         /// <summary>
+        /// Sec_C_2b - Cuando la nave llega al conector de carga, informa a la base para comenzar la carga
+        /// Request  : ALIGN_LOADING
+        /// Execute  : LOADING
+        /// </summary>
+        void AlignLoading()
+        {
+            string message = $"Command=LOADING|To={orderWarehouse}|From={shipId}|Order={orderId}|Exchange={exchangeName}";
+            SendIGCMessage(message);
+
+            //Atraque
+            timerLock.ApplyAction("Start");
+
+            //Activar modo carga
+            timerLoad.ApplyAction("Start");
+
+            status = ShipStatus.Loading;
+        }
+        /// <summary>
+        /// Sec_C_4b - NAVEX llega al último waypoint de la salida del conector y activa el piloto automático
+        /// Request:  ALIGN_REQUEST_UNLOAD
+        /// </summary>
+        void AlignRequestUnload()
+        {
+            timerPilot.ApplyAction("Start");
+        }
+        /// <summary>
+        /// Sec_C_4c - NAVEX llega a Parking_BASEX y solicita permiso para descargar
+        /// Request:  ARRIVAL_REQUEST_UNLOAD
+        /// Execute:  REQUEST_UNLOAD
+        /// </summary>
+        void ArrivalRequestUnload()
+        {
+            status = ShipStatus.WaitingForUnload;
+
+            string command = $"Command=REQUEST_UNLOAD|To={orderCustomer}|From={shipId}|Order={orderId}";
+            SendIGCMessage(command);
+
+            timerWaiting.ApplyAction("Start");
+        }
+        /// <summary>
+        /// Sec_D_2b - NAVEX avisa a BASEX que ha llegado para descargar el ID_PEDIDO en el conector. Lanza [UNLOADING] a BASEX
+        /// Request:  ALIGN_UNLOADING
+        /// Execute:  UNLOADING
+        /// </summary>
+        void AlignUnloading()
+        {
+            string command = $"Command=UNLOADING|To={orderCustomer}|From={shipId}|Order={orderId}|Exchange={exchangeName}";
+            SendIGCMessage(command);
+
+            timerLock.ApplyAction("Start");
+
+            //Activar modo descarga
+            timerUnload.ApplyAction("Start");
+
+            status = ShipStatus.Unloading;
+        }
+        /// <summary>
         /// Sec_D_2d - NAVEX informa del fin de la descarga a BASEX, empieza el camino de vuelta a Parking_WH
         /// Execute:  UNLOADED - Informa a BASEX
         /// Execute:  ALIGN_UNLOADED - Comienza la maniobra de salida del conector
@@ -302,49 +359,6 @@ namespace Nave
             exchangeDepartingWaypoints = null;
         }
         /// <summary>
-        /// Sec_C_2b - Cuando la nave llega al conector de carga, informa a la base para comenzar la carga
-        /// Request  : ALIGN_LOADING
-        /// Execute  : LOADING
-        /// </summary>
-        void AlignLoading()
-        {
-            string message = $"Command=LOADING|To={orderWarehouse}|From={shipId}|Order={orderId}|Exchange={exchangeName}";
-            SendIGCMessage(message);
-
-            //Atraque
-            timerLock.ApplyAction("Start");
-
-            //Activar modo carga
-            timerLoad.ApplyAction("Start");
-
-            status = ShipStatus.Loading;
-        }
-        /// <summary>
-        /// Sec_C_4b - NAVEX llega al último waypoint de la salida del conector y activa el piloto automático
-        /// Request:  ALIGN_REQUEST_UNLOAD
-        /// </summary>
-        void AlignRequestUnload()
-        {
-            timerPilot.ApplyAction("Start");
-        }
-        /// <summary>
-        /// Sec_D_2b - NAVEX avisa a BASEX que ha llegado para descargar el ID_PEDIDO en el conector. Lanza [UNLOADING] a BASEX
-        /// Request:  ALIGN_UNLOADING
-        /// Execute:  UNLOADING
-        /// </summary>
-        void AlignUnloading()
-        {
-            string command = $"Command=UNLOADING|To={orderCustomer}|From={shipId}|Order={orderId}|Exchange={exchangeName}";
-            SendIGCMessage(command);
-
-            timerLock.ApplyAction("Start");
-
-            //Activar modo descarga
-            timerUnload.ApplyAction("Start");
-
-            status = ShipStatus.Unloading;
-        }
-        /// <summary>
         /// Sec_D_2e - NAVEX activa el piloto automático cuando alcanza el último waypoint del conector
         /// </summary>
         void AlignUnloaded()
@@ -361,20 +375,6 @@ namespace Nave
             status = ShipStatus.Idle;
 
             //Pone la nave en espera
-            timerWaiting.ApplyAction("Start");
-        }
-        /// <summary>
-        /// Sec_C_4c - NAVEX llega a Parking_BASEX y solicita permiso para descargar
-        /// Request:  ARRIVAL_REQUEST_UNLOAD
-        /// Execute:  REQUEST_UNLOAD
-        /// </summary>
-        void ArrivalRequestUnload()
-        {
-            status = ShipStatus.WaitingForUnload;
-
-            string command = $"Command=REQUEST_UNLOAD|To={orderCustomer}|From={shipId}|Order={orderId}";
-            SendIGCMessage(command);
-
             timerWaiting.ApplyAction("Start");
         }
 
