@@ -214,6 +214,7 @@ namespace Base
         bool showShips = true;
         bool showOrders = true;
         bool showReceptions = true;
+        bool enableLogs = false;
 
         string ExtractGroupName(string input)
         {
@@ -282,6 +283,11 @@ namespace Base
         }
         void WriteLogLCDs(string text)
         {
+            if (!enableLogs)
+            {
+                return;
+            }
+
             sbLog.Insert(0, text + Environment.NewLine);
 
             var log = sbLog.ToString();
@@ -370,6 +376,7 @@ namespace Base
             else if (argument == "LIST_SHIPS") ListShips();
             else if (argument == "LIST_ORDERS") ListOrders();
             else if (argument == "LIST_RECEPTIONS") ListReceptions();
+            else if (argument == "ENABLE_LOGS") EnableLogs();
             else if (argument == "FAKE_ORDER") FakeOrder();
             else if (argument.StartsWith("SHIP_LOADED")) ShipLoaded(argument);
         }
@@ -505,6 +512,13 @@ namespace Base
         void ListReceptions()
         {
             showReceptions = !showReceptions;
+        }
+        /// <summary>
+        /// Cambia el estado de la variable que controla la visualización de los logs
+        /// </summary>
+        void EnableLogs()
+        {
+            enableLogs = !enableLogs;
         }
         /// <summary>
         /// Sec_B_1 - BASEX revisa el inventario y pide a WH

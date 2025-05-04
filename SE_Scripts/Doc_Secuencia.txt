@@ -75,3 +75,4 @@
 Arrival, revertir los waypoints y maniobra de salida
 Uso de Grand-Cruise para los viajes entre bases. Ahora se usa el Remote Control básico
 Permitir configurar delivery desde el custom data
+Permitir viajes de cargar todo y descargar todo

@@ -68,6 +68,8 @@ namespace Nave
         string exchangeApproachingWaypoints;
         string exchangeDepartingWaypoints;
 
+        bool enableLogs = false;
+
         T GetBlockWithName<T>(string name) where T : class, IMyTerminalBlock
         {
             List<T> blocks = new List<T>();
@@ -111,6 +113,11 @@ namespace Nave
         }
         void WriteLogLCDs(string text)
         {
+            if (!enableLogs)
+            {
+                return;
+            }
+
             sbLog.Insert(0, text + Environment.NewLine);
 
             var log = sbLog.ToString();
@@ -260,6 +267,7 @@ namespace Nave
             else if (argument == "ALIGN_UNLOADED") AlignUnloaded();
             else if (argument == "ARRIVAL_WAITING") ArrivalWainting();
             else if (argument == "ARRIVAL_REQUEST_UNLOAD") ArrivalRequestUnload();
+            else if (argument == "ENABLE_LOGS") EnableLogs();
         }
         /// <summary>
         /// Sec_C_2b - Cuando la nave llega al conector de carga, informa a la base para comenzar la carga
@@ -383,6 +391,13 @@ namespace Nave
 
             //Pone la nave en espera
             timerWaiting.ApplyAction("Start");
+        }
+        /// <summary>
+        /// Cambia el estado de la variable que controla la visualización de los logs
+        /// </summary>
+        void EnableLogs()
+        {
+            enableLogs = !enableLogs;
         }
 
         void ParseMessage(string signal)
