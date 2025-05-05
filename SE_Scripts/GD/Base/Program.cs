@@ -49,7 +49,7 @@ namespace SE_Scripts.GD.Base
             {
                 return
                     UpperConnector != null &&
-                    Cargo != null &&
+                    //Cargo != null &&
                     SorterInput != null &&
                     SorterOutput != null;
             }
@@ -379,6 +379,7 @@ namespace SE_Scripts.GD.Base
             else if (argument == "ENABLE_LOGS") EnableLogs();
             else if (argument == "FAKE_ORDER") FakeOrder();
             else if (argument.StartsWith("SHIP_LOADED")) ShipLoaded(argument);
+            else if (argument == "ORDER_BaseMarte4") SetOrder("BaseMarte4", "1034144.28:232383.37:1648954.36", 24);
         }
         /// <summary>
         /// Sec_A_1 - WH pide situación a todas las naves
@@ -527,6 +528,21 @@ namespace SE_Scripts.GD.Base
         void FakeOrder()
         {
             SendIGCMessage(fakeOrder);
+        }
+
+        void SetOrder(string warehouse, string warehouseParking, int orderId)
+        {
+            var freeShips = GetFreeShips(ShipStatus.Idle);
+            if (freeShips.Count == 0)
+            {
+                RequestStatus();
+                return;
+            }
+
+            var ship = freeShips[0];
+
+            string message = $"Command=GOTO_WAREHOUSE|To={ship.Name}|Warehouse={warehouse}|WarehouseParking={warehouseParking}|Customer={baseId}|CustomerParking={baseParking}|Order={orderId}";
+            SendIGCMessage(message);
         }
         /// <summary>
         /// Sec_C_3b - WH termina la carga y avisa a NAVEX

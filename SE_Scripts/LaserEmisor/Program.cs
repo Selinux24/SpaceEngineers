@@ -27,6 +27,11 @@ namespace SE_Scripts.LaserEmisor
                 Runtime.UpdateFrequency = UpdateFrequency.Update100;
             }
 
+            if (antena == null)
+            {
+                return;
+            }
+
             // Conectar si no está aún
             if (antena.Status != MyLaserAntennaStatus.Connected)
             {

@@ -412,6 +412,7 @@ namespace SE_Scripts.GD.Nave
             else if (command == "LOAD_ORDER") CmdLoadOrder(lines);
             else if (command == "LOADED") CmdLoaded(lines);
             else if (command == "UNLOAD_ORDER") CmdUnloadOrder(lines);
+            else if (command == "GOTO_WAREHOUSE") CmdGotoWarehouse(lines);
         }
         /// <summary>
         /// Sec_A_2 - La nave responde con su estado
@@ -510,6 +511,30 @@ namespace SE_Scripts.GD.Nave
             exchangeDepartingWaypoints = ReverseString(exchangeApproachingWaypoints);
 
             Align(exchangeForward, exchangeUp, exchangeApproachingWaypoints, "ALIGN_UNLOADING");
+        }
+        /// <summary>
+        /// NEW - Va directamente al parking del cliente, sin pasar por el Warehouse
+        /// </summary>
+        void CmdGotoWarehouse(string[] lines)
+        {
+            orderId = int.Parse(ReadArgument(lines, "Order"));
+            orderWarehouse = ReadArgument(lines, "Warehouse");
+            orderWarehouseParking = StrToVector(ReadArgument(lines, "WarehouseParking"));
+            orderCustomer = ReadArgument(lines, "Customer");
+            orderCustomerParking = StrToVector(ReadArgument(lines, "CustomerParking"));
+
+            timerUnlock?.ApplyAction("Start");
+
+            status = ShipStatus.RouteToWarehouse;
+
+            remotePilot.ClearWaypoints();
+            remotePilot.AddWaypoint(orderWarehouseParking, orderWarehouse);
+            remotePilot.SetCollisionAvoidance(true);
+            remotePilot.WaitForFreeWay = false;
+            remotePilot.FlightMode = FlightMode.OneWay;
+            remotePilot.SetAutoPilotEnabled(true);
+
+            Arrival(orderWarehouseParking, "ARRIVAL_WAITING");
         }
     }
 }
