@@ -8,7 +8,7 @@ using VRage;
 using VRage.Game.ModAPI.Ingame;
 using VRageMath;
 
-namespace Base
+namespace SE_Scripts.GD.Base
 {
     partial class Program : MyGridProgram
     {
@@ -71,7 +71,7 @@ namespace Base
                 for (int i = 0; i <= NumWaypoints; i++)
                 {
                     double t = i / (double)NumWaypoints;
-                    Vector3D point = Vector3D.Lerp(approachStart, targetDock, t) + (forward * 2.3);
+                    Vector3D point = Vector3D.Lerp(approachStart, targetDock, t) + forward * 2.3;
                     waypoints.Add(point);
                 }
 

@@ -3,7 +3,7 @@ using SpaceEngineers.Game.ModAPI.Ingame;
 using System.Collections.Generic;
 using VRage.Game.ModAPI.Ingame;
 
-namespace Inventory
+namespace SE_Scripts.Inventory
 {
     partial class Program : MyGridProgram
     {
@@ -11,9 +11,9 @@ namespace Inventory
         const string inventoryCargoName = "Cargo Container Components";
         // Nombre del contenedor donde se añaden los componentes a enviar
         const string outputCargoName = "Cargo Container Components MK3HQ Exports";
-        
+
         // Listener global
-        IMyBroadcastListener bl;
+        readonly IMyBroadcastListener bl;
 
         public Program()
         {

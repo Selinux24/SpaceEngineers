@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using VRageMath;
 
-namespace NaveAlign
+namespace SE_Scripts.GD.NaveAlign
 {
     partial class Program : MyGridProgram
     {

@@ -6,7 +6,7 @@ using System.Linq;
 using System.Text;
 using VRageMath;
 
-namespace Nave
+namespace SE_Scripts.GD.Nave
 {
     partial class Program : MyGridProgram
     {

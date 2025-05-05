@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using VRageMath;
 
-namespace NaveArrival
+namespace SE_Scripts.GD.NaveArrival
 {
     partial class Program : MyGridProgram
     {
