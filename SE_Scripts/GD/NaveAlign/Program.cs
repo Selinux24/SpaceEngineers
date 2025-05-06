@@ -26,13 +26,82 @@ namespace SE_Scripts.GD.NaveAlign
         readonly IMyShipConnector connectorA;
         readonly List<IMyThrust> thrusters = new List<IMyThrust>();
         readonly List<IMyGyro> gyros = new List<IMyGyro>();
+        readonly AlignData alignData = new AlignData();
 
-        List<Vector3D> waypoints = new List<Vector3D>();
-        int currentTarget = 0;
-        Vector3D targetForward = new Vector3D(1, 0, 0);
-        Vector3D targetUp = new Vector3D(0, 1, 0);
-        bool hasTarget = false;
-        string reachCommand = null;
+        class AlignData
+        {
+            public List<Vector3D> Waypoints = new List<Vector3D>();
+            public int CurrentTarget = 0;
+            public Vector3D TargetForward = new Vector3D(1, 0, 0);
+            public Vector3D TargetUp = new Vector3D(0, 1, 0);
+            public bool HasTarget = false;
+            public string ReachCommand = null;
+
+            public void InitAlignShip(string data)
+            {
+                CurrentTarget = 0;
+                Waypoints.Clear();
+                HasTarget = false;
+
+                var parts = data.Split('¬');
+                if (parts.Length != 2) return;
+
+                var coords = parts[0].Split('|');
+                if (coords.Length != 3) return;
+                TargetForward = -Vector3D.Normalize(StrToVector(coords[0]));
+                TargetUp = Vector3D.Normalize(StrToVector(coords[1]));
+                Waypoints = ParseWaypoints(coords[2]);
+
+                ReachCommand = parts[1];
+
+                HasTarget = true;
+            }
+            public void Next()
+            {
+                CurrentTarget++;
+            }
+            public void Clear()
+            {
+                CurrentTarget = 0;
+                Waypoints.Clear();
+                HasTarget = false;
+                ReachCommand = null;
+            }
+
+            public void LoadFromStorage(string[] storageLines)
+            {
+                if (storageLines.Length == 0)
+                {
+                    return;
+                }
+
+                Waypoints = ParseWaypoints(ReadString(storageLines, "Waypoints"));
+                CurrentTarget = ReadInt(storageLines, "CurrentTarget");
+                TargetForward = StrToVector(ReadString(storageLines, "TargetForward"));
+                TargetUp = StrToVector(ReadString(storageLines, "TargetUp"));
+                HasTarget = ReadInt(storageLines, "HasTarget") == 1;
+                ReachCommand = ReadString(storageLines, "ReachCommand");
+            }
+            public string SaveToStorage()
+            {
+                Dictionary<string, string> datos = new Dictionary<string, string>();
+
+                datos["Waypoints"] = string.Join(";", Waypoints.Select(VectorToStr));
+                datos["CurrentTarget"] = CurrentTarget.ToString();
+                datos["TargetForward"] = VectorToStr(TargetForward);
+                datos["TargetUp"] = VectorToStr(TargetUp);
+                datos["HasTarget"] = HasTarget ? "1" : "0";
+                datos["ReachCommand"] = ReachCommand ?? "";
+
+                var lineas = new List<string>();
+                foreach (var kvp in datos)
+                {
+                    lineas.Add($"{kvp.Key}={kvp.Value}");
+                }
+
+                return string.Join(Environment.NewLine, lineas);
+            }
+        }
 
         T GetBlockWithName<T>(string name) where T : class, IMyTerminalBlock
         {
@@ -40,6 +109,32 @@ namespace SE_Scripts.GD.NaveAlign
             GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid);
 
             return blocks.FirstOrDefault(b => b.CustomName.Contains(name));
+        }
+        static string ReadString(string[] lines, string name, string defaultValue = null)
+        {
+            string cmdToken = $"{name}=";
+            string value = lines.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";
+            if (string.IsNullOrEmpty(value))
+            {
+                return defaultValue;
+            }
+
+            return value;
+        }
+        static int ReadInt(string[] lines, string name, int defaultValue = 0)
+        {
+            string cmdToken = $"{name}=";
+            string value = lines.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";
+            if (string.IsNullOrEmpty(value))
+            {
+                return defaultValue;
+            }
+
+            return int.Parse(value);
+        }
+        static string VectorToStr(Vector3D v)
+        {
+            return $"{v.X}:{v.Y}:{v.Z}";
         }
         static Vector3D StrToVector(string input)
         {
@@ -49,6 +144,23 @@ namespace SE_Scripts.GD.NaveAlign
                 double.Parse(trimmed[1]),
                 double.Parse(trimmed[2])
             );
+        }
+        static List<Vector3D> ParseWaypoints(string data)
+        {
+            List<Vector3D> wp = new List<Vector3D>();
+
+            if (string.IsNullOrEmpty(data))
+            {
+                return wp;
+            }
+
+            string[] points = data.Split(';');
+            for (int i = 0; i < points.Length; i++)
+            {
+                wp.Add(StrToVector(points[i]));
+            }
+
+            return wp;
         }
         static double AngleBetweenVectors(Vector3D v1, Vector3D v2)
         {
@@ -61,6 +173,8 @@ namespace SE_Scripts.GD.NaveAlign
 
         public Program()
         {
+            LoadFromStorage();
+
             pb = GetBlockWithName<IMyProgrammableBlock>(shipProgrammableBlock);
             if (pb == null)
             {
@@ -98,9 +212,15 @@ namespace SE_Scripts.GD.NaveAlign
                     DoStopShip();
                     return;
                 }
+                if (argument.StartsWith("RESET"))
+                {
+                    DoReset();
+                    return;
+                }
 
-                InitAlignShip(argument);
                 Runtime.UpdateFrequency = UpdateFrequency.Update1;
+                alignData.InitAlignShip(argument);
+                SaveToStorage();
                 return;
             }
 
@@ -110,85 +230,61 @@ namespace SE_Scripts.GD.NaveAlign
             }
         }
 
-        void InitAlignShip(string data)
-        {
-            currentTarget = 0;
-            waypoints.Clear();
-            hasTarget = false;
-
-            var parts = data.Split('¬');
-            if (parts.Length != 2) return;
-
-            var coords = parts[0].Split('|');
-            if (coords.Length != 3) return;
-            targetForward = -Vector3D.Normalize(StrToVector(coords[0]));
-            targetUp = Vector3D.Normalize(StrToVector(coords[1]));
-            waypoints = ParseWaypoints(coords[2]);
-
-            reachCommand = parts[1];
-
-            hasTarget = true;
-        }
-        static List<Vector3D> ParseWaypoints(string data)
-        {
-            List<Vector3D> wp = new List<Vector3D>();
-
-            string[] points = data.Split(';');
-            for (int i = 0; i < points.Length; i++)
-            {
-                wp.Add(StrToVector(points[i]));
-            }
-
-            return wp;
-        }
-
         void DoAlignShip()
         {
-            if (!hasTarget)
+            if (!alignData.HasTarget)
             {
                 Echo("Esperando instrucciones...");
                 return;
             }
 
-            AlignToVectors(targetForward, targetUp);
+            AlignToVectors(alignData.TargetForward, alignData.TargetUp);
             NavigateWaypoints();
         }
         void DoStopShip()
         {
-            currentTarget = 0;
-            waypoints.Clear();
-            hasTarget = false;
-            reachCommand = null;
+            alignData.Clear();
+            SaveToStorage();
             ResetGyros();
             ResetThrust();
+        }
+        void DoReset()
+        {
+            alignData.Clear();
+            SaveToStorage();
+            ResetGyros();
+            ResetThrust();
+            Runtime.UpdateFrequency = UpdateFrequency.None;
+            Echo("Reset completo.");
         }
 
         void NavigateWaypoints()
         {
-            if (currentTarget >= waypoints.Count)
+            if (alignData.CurrentTarget >= alignData.Waypoints.Count)
             {
                 Runtime.UpdateFrequency = UpdateFrequency.None;
                 Echo("Última posición alcanzada.");
-                if (!string.IsNullOrWhiteSpace(reachCommand))
+                if (!string.IsNullOrWhiteSpace(alignData.ReachCommand))
                 {
-                    pb.TryRun(reachCommand);
-                    Echo($"Ejecutado {reachCommand}");
+                    pb.TryRun(alignData.ReachCommand);
+                    Echo($"Ejecutado {alignData.ReachCommand}");
                 }
                 DoStopShip();
                 return;
             }
 
             var currentPos = connectorA.GetPosition();
-            var targetPos = waypoints[currentTarget];
+            var targetPos = alignData.Waypoints[alignData.CurrentTarget];
             var toTarget = targetPos - currentPos;
             double distance = toTarget.Length();
 
-            Echo($"Progreso: {currentTarget + 1}/{waypoints.Count}. Distancia: {distance:F2}m");
-            Echo($"Command en Destino? {!string.IsNullOrWhiteSpace(reachCommand)}");
+            Echo($"Progreso: {alignData.CurrentTarget + 1}/{alignData.Waypoints.Count}. Distancia: {distance:F2}m");
+            Echo($"Command en Destino? {!string.IsNullOrWhiteSpace(alignData.ReachCommand)}");
 
             if (distance < arrivalThr)
             {
-                currentTarget++;
+                alignData.Next();
+                SaveToStorage();
                 ResetThrust();
                 Echo("Punto alcanzado, pasando al siguiente.");
                 return;
@@ -205,12 +301,12 @@ namespace SE_Scripts.GD.NaveAlign
 
             //Calcula velocidad deseada basada en distancia, cuando estemos avanzando hacia el último waypoint.
             double approachSpeed;
-            if (currentTarget == 0) approachSpeed = maxApproachSpeed; //Velocidad hasta el primer punto de aproximación.
-            else if (currentTarget == waypoints.Count - 1) approachSpeed = maxApproachSpeedLocking; //Velocidad desde el úlimo punto de aproximación.
+            if (alignData.CurrentTarget == 0) approachSpeed = maxApproachSpeed; //Velocidad hasta el primer punto de aproximación.
+            else if (alignData.CurrentTarget == alignData.Waypoints.Count - 1) approachSpeed = maxApproachSpeedLocking; //Velocidad desde el úlimo punto de aproximación.
             else approachSpeed = maxApproachSpeedAprox; //Velocidad entre puntos de aproximación.
 
             double desiredSpeed = approachSpeed;
-            if (distance < slowdownDistance && (currentTarget == 0 || currentTarget == waypoints.Count - 1))
+            if (distance < slowdownDistance && (alignData.CurrentTarget == 0 || alignData.CurrentTarget == alignData.Waypoints.Count - 1))
             {
                 desiredSpeed = Math.Max(distance / slowdownDistance * approachSpeed, 0.5);
             }
@@ -292,6 +388,22 @@ namespace SE_Scripts.GD.NaveAlign
                 gyro.Yaw = 0;
                 gyro.Roll = 0;
             }
+        }
+
+        void LoadFromStorage()
+        {
+            string[] storageLines = Storage.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+            if (storageLines.Length == 0)
+            {
+                return;
+            }
+
+            Runtime.UpdateFrequency = (UpdateFrequency)ReadInt(storageLines, "UpdateFrequency");
+            alignData.LoadFromStorage(storageLines);
+        }
+        void SaveToStorage()
+        {
+            Storage = $"UpdateFrequency={(int)Runtime.UpdateFrequency}{Environment.NewLine}" + alignData.SaveToStorage();
         }
     }
 }

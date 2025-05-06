@@ -13,10 +13,8 @@ namespace SE_Scripts.GD.Base
     partial class Program : MyGridProgram
     {
         const string channel = "SHIPS_DELIVERY";
-        const string baseId = "BaseWH1";
         const string baseCamera = "Camera";
         const string baseWarehouses = "Warehouse";
-        const string baseParking = "-50554.19:-86466.82:-43745.25";
         const string baseDataLCDs = "[DELIVERY_DATA]";
         const string baseLogLCDs = "[DELIVERY_LOG]";
         const int NumWaypoints = 5;
@@ -29,8 +27,28 @@ namespace SE_Scripts.GD.Base
         const string exchangeTimerPrepare = "Prepare";
         const string exchangeTimerUnload = "Unload";
 
-        const string warehouseId = "BaseWH1";
-        readonly string fakeOrder = $"Command=REQUEST_ORDER|To={warehouseId}|Customer={baseId}|CustomerParking={baseParking}|Items=SteelPlate:10;";
+        readonly string baseId;
+        readonly string baseParking;
+        readonly IMyCameraBlock camera;
+        readonly List<IMyCargoContainer> cargos = new List<IMyCargoContainer>();
+        readonly IMyBroadcastListener bl;
+        readonly List<IMyTextPanel> dataLCDs = new List<IMyTextPanel>();
+        readonly StringBuilder sbData = new StringBuilder();
+        readonly List<IMyTextPanel> logLCDs = new List<IMyTextPanel>();
+        readonly StringBuilder sbLog = new StringBuilder();
+
+        readonly System.Text.RegularExpressions.Regex exchangesRegex = new System.Text.RegularExpressions.Regex(exchangeGroupName);
+        readonly List<ExchangeGroup> exchanges = new List<ExchangeGroup>();
+        readonly List<Order> orders = new List<Order>();
+        readonly List<Ship> ships = new List<Ship>();
+        readonly List<UnloadRequest> unloadRequests = new List<UnloadRequest>();
+
+        bool showExchanges = true;
+        bool showShips = true;
+        bool showOrders = true;
+        bool showReceptions = true;
+        bool enableLogs = false;
+        bool fakeOrders = false;
 
         #region Helper classes
         class ExchangeGroup
@@ -49,7 +67,6 @@ namespace SE_Scripts.GD.Base
             {
                 return
                     UpperConnector != null &&
-                    //Cargo != null &&
                     SorterInput != null &&
                     SorterOutput != null;
             }
@@ -85,6 +102,12 @@ namespace SE_Scripts.GD.Base
             {
                 StringBuilder sb = new StringBuilder();
                 sb.AppendLine($"## Exchange: {Name}. MoveCargo {order.Id}");
+
+                if (Cargo == null)
+                {
+                    sb.AppendLine($"## ERROR Cargo not found in Exchange.");
+                    return sb.ToString();
+                }
 
                 sb.AppendLine($"## Destination Cargo: {Cargo.CustomName}. Warehouse cargos: {sourceCargos.Count}");
 
@@ -196,26 +219,6 @@ namespace SE_Scripts.GD.Base
         }
         #endregion
 
-        readonly IMyCameraBlock camera;
-        readonly List<IMyCargoContainer> cargos = new List<IMyCargoContainer>();
-        readonly IMyBroadcastListener bl;
-        readonly List<IMyTextPanel> dataLCDs = new List<IMyTextPanel>();
-        readonly StringBuilder sbData = new StringBuilder();
-        readonly List<IMyTextPanel> logLCDs = new List<IMyTextPanel>();
-        readonly StringBuilder sbLog = new StringBuilder();
-
-        readonly System.Text.RegularExpressions.Regex exchangesRegex = new System.Text.RegularExpressions.Regex(exchangeGroupName);
-        readonly List<ExchangeGroup> exchanges = new List<ExchangeGroup>();
-        readonly List<Order> orders = new List<Order>();
-        readonly List<Ship> ships = new List<Ship>();
-        readonly List<UnloadRequest> unloadRequests = new List<UnloadRequest>();
-
-        bool showExchanges = true;
-        bool showShips = true;
-        bool showOrders = true;
-        bool showReceptions = true;
-        bool enableLogs = false;
-
         string ExtractGroupName(string input)
         {
             var match = exchangesRegex.Match(input);
@@ -319,6 +322,9 @@ namespace SE_Scripts.GD.Base
 
         public Program()
         {
+            baseId = Me.CubeGrid.CustomName;
+            baseParking = Me.CustomData;
+
             InitializeExchangeGroups();
 
             camera = GetBlockWithName<IMyCameraBlock>(baseCamera);
@@ -527,6 +533,13 @@ namespace SE_Scripts.GD.Base
         /// </summary>
         void FakeOrder()
         {
+            if (!fakeOrders)
+            {
+                return;
+            }
+
+            string fakeOrder = $"Command=REQUEST_ORDER|To=BaseWarehouse1|Customer={baseId}|CustomerParking={baseParking}|Items=SteelPlate:10;";
+
             SendIGCMessage(fakeOrder);
         }
 
@@ -734,6 +747,8 @@ namespace SE_Scripts.GD.Base
                 return;
             }
 
+            string warehouse = ReadArgument(lines, "Warehouse");
+
             //Eliminar la orden de descarga del pedido
             int orderId = int.Parse(ReadArgument(lines, "Order"));
             var req = unloadRequests.FirstOrDefault(o => o.OrderId == orderId);
@@ -750,7 +765,7 @@ namespace SE_Scripts.GD.Base
             }
 
             //Enviar al WH el mensaje de que se ha recibido el pedido
-            string message = $"Command=ORDER_RECEIVED|To={warehouseId}|From={baseId}|Order={orderId}";
+            string message = $"Command=ORDER_RECEIVED|To={warehouse}|From={baseId}|Order={orderId}";
             SendIGCMessage(message);
         }
         /// <summary>

@@ -1,4 +1,5 @@
 ﻿using Sandbox.ModAPI.Ingame;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using VRageMath;
@@ -13,10 +14,55 @@ namespace SE_Scripts.GD.NaveArrival
 
         readonly IMyProgrammableBlock pb;
         readonly IMyRemoteControl remote;
+        readonly ArrivalData arrivalData = new ArrivalData();
 
-        bool hasPosition = false;
-        Vector3D targetPosition = Vector3D.Zero;
-        string arrivalMessage = null;
+        class ArrivalData
+        {
+            public bool HasPosition = false;
+            public Vector3D TargetPosition = Vector3D.Zero;
+            public string ArrivalMessage = null;
+
+            public void Initialize(Vector3D position, string arrivalMessage)
+            {
+                HasPosition = true;
+                TargetPosition = position;
+                ArrivalMessage = arrivalMessage;
+            }
+            public void Clear()
+            {
+                HasPosition = false;
+                TargetPosition = Vector3D.Zero;
+                ArrivalMessage = null;
+            }
+
+            public void LoadFromStorage(string[] storageLines)
+            {
+                if (storageLines.Length == 0)
+                {
+                    return;
+                }
+
+                TargetPosition = StrToVector(ReadString(storageLines, "TargetPosition"));
+                HasPosition = ReadInt(storageLines, "HasPosition") == 1;
+                ArrivalMessage = ReadString(storageLines, "ArrivalMessage");
+            }
+            public string SaveToStorage()
+            {
+                Dictionary<string, string> datos = new Dictionary<string, string>();
+
+                datos["TargetPosition"] = VectorToStr(TargetPosition);
+                datos["HasPosition"] = HasPosition ? "1" : "0";
+                datos["ArrivalMessage"] = ArrivalMessage ?? "";
+
+                var lineas = new List<string>();
+                foreach (var kvp in datos)
+                {
+                    lineas.Add($"{kvp.Key}={kvp.Value}");
+                }
+
+                return string.Join(Environment.NewLine, lineas);
+            }
+        }
 
         T GetBlockWithName<T>(string name) where T : class, IMyTerminalBlock
         {
@@ -34,9 +80,37 @@ namespace SE_Scripts.GD.NaveArrival
             }
             return new Vector3D();
         }
+        static string VectorToStr(Vector3D v)
+        {
+            return $"{v.X}:{v.Y}:{v.Z}";
+        }
+        static string ReadString(string[] lines, string name, string defaultValue = null)
+        {
+            string cmdToken = $"{name}=";
+            string value = lines.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";
+            if (string.IsNullOrEmpty(value))
+            {
+                return defaultValue;
+            }
+
+            return value;
+        }
+        static int ReadInt(string[] lines, string name, int defaultValue = 0)
+        {
+            string cmdToken = $"{name}=";
+            string value = lines.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";
+            if (string.IsNullOrEmpty(value))
+            {
+                return defaultValue;
+            }
+
+            return int.Parse(value);
+        }
 
         public Program()
         {
+            LoadFromStorage();
+
             pb = GetBlockWithName<IMyProgrammableBlock>(shipProgrammableBlock);
             if (pb == null)
             {
@@ -59,6 +133,17 @@ namespace SE_Scripts.GD.NaveArrival
         {
             if (!string.IsNullOrWhiteSpace(argument))
             {
+                if (argument.StartsWith("STOP"))
+                {
+                    DoStop();
+                    return;
+                }
+                if (argument.StartsWith("RESET"))
+                {
+                    DoReset();
+                    return;
+                }
+
                 ParseTerminalMessage(argument);
                 return;
             }
@@ -71,9 +156,8 @@ namespace SE_Scripts.GD.NaveArrival
 
         void ParseTerminalMessage(string message)
         {
-            hasPosition = false;
-            targetPosition = Vector3D.Zero;
-            arrivalMessage = null;
+            arrivalData.Clear();
+            SaveToStorage();
 
             var parts = message.Split('¬');
             if (parts.Length != 2)
@@ -81,43 +165,64 @@ namespace SE_Scripts.GD.NaveArrival
                 return;
             }
 
-            //Parsear la posición objetivo
-            hasPosition = true;
-            targetPosition = StrToVector(parts[0]);
-            arrivalMessage = parts[1];
-
+            arrivalData.Initialize(StrToVector(parts[0]), parts[1]);
             Runtime.UpdateFrequency = UpdateFrequency.Update100;  // Comenzar a comprobar la llegada
+            SaveToStorage();
         }
 
         void DoArrival()
         {
-            if (!hasPosition)
+            if (!arrivalData.HasPosition)
             {
                 Echo("Posición objetivo no definida.");
                 return;
             }
 
-            double distance = Vector3D.Distance(remote.GetPosition(), targetPosition);
+            double distance = Vector3D.Distance(remote.GetPosition(), arrivalData.TargetPosition);
             if (distance <= arrivalThreshold)
             {
-                Runtime.UpdateFrequency = UpdateFrequency.None;  // Detener comprobaciones
-
                 Echo("Posición alcanzada.");
 
-                if (!string.IsNullOrWhiteSpace(arrivalMessage))
+                if (!string.IsNullOrWhiteSpace(arrivalData.ArrivalMessage))
                 {
-                    pb.TryRun(arrivalMessage);
-                    Echo($"Ejecutado {arrivalMessage}");
+                    pb.TryRun(arrivalData.ArrivalMessage);
+                    Echo($"Ejecutado {arrivalData.ArrivalMessage}");
                 }
 
-                hasPosition = false;
-                targetPosition = Vector3D.Zero;
-                arrivalMessage = null;
+                DoStop();
 
                 return;
             }
 
             Echo($"Distancia a destino: {distance:F2}m.");
+        }
+        void DoStop()
+        {
+            Runtime.UpdateFrequency = UpdateFrequency.None;  // Detener comprobaciones
+            arrivalData.Clear();
+            SaveToStorage();
+        }
+        void DoReset()
+        {
+            arrivalData.Clear();
+            Runtime.UpdateFrequency = UpdateFrequency.None;  // Detener comprobaciones
+            SaveToStorage();
+        }
+
+        void LoadFromStorage()
+        {
+            string[] storageLines = Storage.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+            if (storageLines.Length == 0)
+            {
+                return;
+            }
+
+            Runtime.UpdateFrequency = (UpdateFrequency)ReadInt(storageLines, "UpdateFrequency");
+            arrivalData.LoadFromStorage(storageLines);
+        }
+        void SaveToStorage()
+        {
+            Storage = $"UpdateFrequency={(int)Runtime.UpdateFrequency}{Environment.NewLine}" + arrivalData.SaveToStorage();
         }
     }
 }
