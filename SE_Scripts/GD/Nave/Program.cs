@@ -1,10 +1,7 @@
-﻿using Sandbox.ModAPI.Ingame;
-using SpaceEngineers.Game.ModAPI.Ingame;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using VRageMath;
 
 namespace SE_Scripts.GD.Nave
 {
@@ -15,7 +12,6 @@ namespace SE_Scripts.GD.Nave
         const string shipRemoteControlPilot = "HT Remote Control Pilot";
         const string shipArrivalPB = "HT Automaton Programmable Block Arrival";
         const string shipAlignPB = "HT Automaton Programmable Block Align";
-        const string shipTimerPilot = "HT Automaton Timer Block Pilot";
         const string shipTimerLock = "HT Automaton Timer Block Locking";
         const string shipTimerUnlock = "HT Automaton Timer Block Unlocking";
         const string shipTimerLoad = "HT Automaton Timer Block Load";
@@ -39,6 +35,28 @@ namespace SE_Scripts.GD.Nave
             Unloading,
             RouteToWarehouse,
         }
+        class TripData
+        {
+            public int OrderId;
+            public string OrderWarehouse;
+            public Vector3D OrderWarehouseParking;
+            public string OrderCustomer;
+            public Vector3D OrderCustomerParking;
+
+            public string ExchangeName;
+            public string ExchangeForward;
+            public string ExchangeUp;
+            public string ExchangeApproachingWaypoints;
+            public string ExchangeDepartingWaypoints;
+
+            public string AlignFwd;
+            public string AlignUp;
+            public string Waypoints;
+            public string OnLastWaypoint;
+            public string DestinationName;
+            public Vector3D DestinationPosition;
+            public string OnDestinationArrival;
+        }
         #endregion
 
         readonly IMyBroadcastListener bl;
@@ -56,17 +74,7 @@ namespace SE_Scripts.GD.Nave
 
         ShipStatus status = ShipStatus.Idle;
 
-        int orderId;
-        string orderWarehouse;
-        Vector3D orderWarehouseParking;
-        string orderCustomer;
-        Vector3D orderCustomerParking;
-
-        string exchangeName;
-        string exchangeForward;
-        string exchangeUp;
-        string exchangeApproachingWaypoints;
-        string exchangeDepartingWaypoints;
+        TripData currentTrip = new TripData();
 
         bool enableLogs = false;
 
@@ -100,6 +108,18 @@ namespace SE_Scripts.GD.Nave
                 return new Vector3D(double.Parse(coords[0]), double.Parse(coords[1]), double.Parse(coords[2]));
             }
             return new Vector3D();
+        }
+        static List<Vector3D> ParseWaypoints(string data)
+        {
+            List<Vector3D> wp = new List<Vector3D>();
+
+            string[] points = data.Split(';');
+            for (int i = 0; i < points.Length; i++)
+            {
+                wp.Add(StrToVector(points[i]));
+            }
+
+            return wp;
         }
         void WriteLCDs(string wildcard, string text)
         {
@@ -161,13 +181,6 @@ namespace SE_Scripts.GD.Nave
 
         public Program()
         {
-            timerPilot = GetBlockWithName<IMyTimerBlock>(shipTimerPilot);
-            if (timerPilot == null)
-            {
-                Echo($"Timer '{shipTimerPilot}' no locallizado.");
-                return;
-            }
-
             arrivalPB = GetBlockWithName<IMyProgrammableBlock>(shipArrivalPB);
             if (arrivalPB == null)
             {
@@ -267,6 +280,7 @@ namespace SE_Scripts.GD.Nave
             else if (argument == "ALIGN_UNLOADED") AlignUnloaded();
             else if (argument == "ARRIVAL_WAITING") ArrivalWainting();
             else if (argument == "ARRIVAL_REQUEST_UNLOAD") ArrivalRequestUnload();
+            else if (argument == "DO_TRIP_WAYPOINTS") DoTripWaypoints();
             else if (argument == "ENABLE_LOGS") EnableLogs();
         }
         /// <summary>
@@ -276,7 +290,7 @@ namespace SE_Scripts.GD.Nave
         /// </summary>
         void AlignLoading()
         {
-            string message = $"Command=LOADING|To={orderWarehouse}|From={shipId}|Order={orderId}|Exchange={exchangeName}";
+            string message = $"Command=LOADING|To={currentTrip.OrderWarehouse}|From={shipId}|Order={currentTrip.OrderId}|Exchange={currentTrip.ExchangeName}";
             SendIGCMessage(message);
 
             //Atraque
@@ -293,7 +307,7 @@ namespace SE_Scripts.GD.Nave
         /// </summary>
         void AlignRequestUnload()
         {
-            timerPilot.ApplyAction("Start");
+            remotePilot.SetAutoPilotEnabled(true);
         }
         /// <summary>
         /// Sec_C_4c - NAVEX llega a Parking_BASEX y solicita permiso para descargar
@@ -307,7 +321,7 @@ namespace SE_Scripts.GD.Nave
             remotePilot.SetAutoPilotEnabled(false);
             remotePilot.ClearWaypoints();
 
-            string command = $"Command=REQUEST_UNLOAD|To={orderCustomer}|From={shipId}|Order={orderId}";
+            string command = $"Command=REQUEST_UNLOAD|To={currentTrip.OrderCustomer}|From={shipId}|Order={currentTrip.OrderId}";
             SendIGCMessage(command);
 
             timerWaiting.ApplyAction("Start");
@@ -319,7 +333,7 @@ namespace SE_Scripts.GD.Nave
         /// </summary>
         void AlignUnloading()
         {
-            string command = $"Command=UNLOADING|To={orderCustomer}|From={shipId}|Order={orderId}|Exchange={exchangeName}";
+            string command = $"Command=UNLOADING|To={currentTrip.OrderCustomer}|From={shipId}|Order={currentTrip.OrderId}|Exchange={currentTrip.ExchangeName}";
             SendIGCMessage(command);
 
             timerLock.ApplyAction("Start");
@@ -337,38 +351,36 @@ namespace SE_Scripts.GD.Nave
         /// </summary>
         void UnloadFinished()
         {
-            string message = $"Command=UNLOADED|To={orderCustomer}|From={shipId}|Order={orderId}";
+            string message = $"Command=UNLOADED|To={currentTrip.OrderCustomer}|From={shipId}|Order={currentTrip.OrderId}";
             SendIGCMessage(message);
-
-            timerUnlock?.ApplyAction("Start");
 
             status = ShipStatus.RouteToWarehouse;
 
-            remotePilot.ClearWaypoints();
-            remotePilot.AddWaypoint(orderWarehouseParking, orderWarehouse);
-            remotePilot.SetCollisionAvoidance(true);
-            remotePilot.WaitForFreeWay = false;
-            remotePilot.FlightMode = FlightMode.OneWay;
-
             //Carga la ruta de salida y al llegar al último waypoint del conector, ejecutará ALIGN_UNLOADED, que activará el pilotaje automático
-            Align(exchangeForward, exchangeUp, exchangeDepartingWaypoints, "ALIGN_UNLOADED");
-
+            currentTrip.AlignFwd = currentTrip.ExchangeForward;
+            currentTrip.AlignUp = currentTrip.ExchangeUp;
+            currentTrip.Waypoints = currentTrip.ExchangeDepartingWaypoints;
+            currentTrip.OnLastWaypoint = "ALIGN_UNLOADED";
             //Monitorizará el viaje hasta la posición de espera del Warehouse, y ejecutará ARRIVAL_WAITING, y esperará instrucciones de la base
-            Arrival(orderWarehouseParking, "ARRIVAL_WAITING");
+            currentTrip.DestinationName = currentTrip.OrderWarehouse;
+            currentTrip.DestinationPosition = currentTrip.OrderWarehouseParking;
+            currentTrip.OnDestinationArrival = "ARRIVAL_WAITING";
+
+            Depart();
 
             //Limpiar datos del pedido
-            orderId = -1;
-            orderWarehouse = "";
-            orderWarehouseParking = new Vector3D();
-            orderCustomer = "";
-            orderCustomerParking = new Vector3D();
+            currentTrip.OrderId = -1;
+            currentTrip.OrderWarehouse = "";
+            currentTrip.OrderWarehouseParking = new Vector3D();
+            currentTrip.OrderCustomer = "";
+            currentTrip.OrderCustomerParking = new Vector3D();
 
             //Limpiar datos del exchange
-            exchangeName = null;
-            exchangeForward = null;
-            exchangeUp = null;
-            exchangeApproachingWaypoints = null;
-            exchangeDepartingWaypoints = null;
+            currentTrip.ExchangeName = null;
+            currentTrip.ExchangeForward = null;
+            currentTrip.ExchangeUp = null;
+            currentTrip.ExchangeApproachingWaypoints = null;
+            currentTrip.ExchangeDepartingWaypoints = null;
         }
         /// <summary>
         /// Sec_D_2e - NAVEX activa el piloto automático cuando alcanza el último waypoint del conector
@@ -376,7 +388,7 @@ namespace SE_Scripts.GD.Nave
         void AlignUnloaded()
         {
             //Activa el pilotaje automático
-            timerPilot.ApplyAction("Start");
+            remotePilot.SetAutoPilotEnabled(true);
         }
         /// <summary>
         /// Sec_D_2f - NAVEX alcanza Parking_WH y se queda en espera
@@ -423,7 +435,7 @@ namespace SE_Scripts.GD.Nave
         {
             string from = ReadArgument(lines, "From");
             Vector3D position = remotePilot.GetPosition();
-            string message = $"Command=RESPONSE_STATUS|To={from}|From={shipId}|Status={status}|Origin={orderWarehouse}|OriginPosition={VectorToStr(orderWarehouseParking)}|Destination={orderCustomer}|DestinationPosition={VectorToStr(orderCustomerParking)}|Position={VectorToStr(position)}";
+            string message = $"Command=RESPONSE_STATUS|To={from}|From={shipId}|Status={status}|Origin={currentTrip.OrderWarehouse}|OriginPosition={VectorToStr(currentTrip.OrderWarehouseParking)}|Destination={currentTrip.OrderCustomer}|DestinationPosition={VectorToStr(currentTrip.OrderCustomerParking)}|Position={VectorToStr(position)}";
             SendIGCMessage(message);
         }
         /// <summary>
@@ -439,21 +451,21 @@ namespace SE_Scripts.GD.Nave
                 return;
             }
 
+            currentTrip.OrderId = int.Parse(ReadArgument(lines, "Order"));
+            currentTrip.OrderWarehouse = ReadArgument(lines, "Warehouse");
+            currentTrip.OrderWarehouseParking = StrToVector(ReadArgument(lines, "WarehouseParking"));
+            currentTrip.OrderCustomer = ReadArgument(lines, "Customer");
+            currentTrip.OrderCustomerParking = StrToVector(ReadArgument(lines, "CustomerParking"));
+
+            currentTrip.ExchangeName = ReadArgument(lines, "Exchange");
+            currentTrip.ExchangeForward = ReadArgument(lines, "Forward");
+            currentTrip.ExchangeUp = ReadArgument(lines, "Up");
+            currentTrip.ExchangeApproachingWaypoints = ReadArgument(lines, "WayPoints");
+            currentTrip.ExchangeDepartingWaypoints = ReverseString(currentTrip.ExchangeApproachingWaypoints);
+
             status = ShipStatus.ApproachingWarehouse;
 
-            orderId = int.Parse(ReadArgument(lines, "Order"));
-            orderWarehouse = ReadArgument(lines, "Warehouse");
-            orderWarehouseParking = StrToVector(ReadArgument(lines, "WarehouseParking"));
-            orderCustomer = ReadArgument(lines, "Customer");
-            orderCustomerParking = StrToVector(ReadArgument(lines, "CustomerParking"));
-
-            exchangeName = ReadArgument(lines, "Exchange");
-            exchangeForward = ReadArgument(lines, "Forward");
-            exchangeUp = ReadArgument(lines, "Up");
-            exchangeApproachingWaypoints = ReadArgument(lines, "WayPoints");
-            exchangeDepartingWaypoints = ReverseString(exchangeApproachingWaypoints);
-
-            Align(exchangeForward, exchangeUp, exchangeApproachingWaypoints, "ALIGN_LOADING");
+            Align(currentTrip.ExchangeForward, currentTrip.ExchangeUp, currentTrip.ExchangeApproachingWaypoints, "ALIGN_LOADING");
         }
         /// <summary>
         /// Sec_C_4a - NAVEX carga la ruta hasta Parking_BASEX y comienza la maniobra de salida desde el conector de WH
@@ -469,26 +481,24 @@ namespace SE_Scripts.GD.Nave
                 return;
             }
 
-            timerUnlock?.ApplyAction("Start");
-
             status = ShipStatus.RouteToCustomer;
 
-            remotePilot.ClearWaypoints();
-            remotePilot.AddWaypoint(orderCustomerParking, orderCustomer);
-            remotePilot.SetCollisionAvoidance(true);
-            remotePilot.WaitForFreeWay = false;
-            remotePilot.FlightMode = FlightMode.OneWay;
+            currentTrip.AlignFwd = currentTrip.ExchangeForward;
+            currentTrip.AlignUp = currentTrip.ExchangeUp;
+            currentTrip.Waypoints = currentTrip.ExchangeDepartingWaypoints;
+            currentTrip.OnLastWaypoint = "ALIGN_REQUEST_UNLOAD";
+            currentTrip.DestinationName = currentTrip.OrderCustomer;
+            currentTrip.DestinationPosition = currentTrip.OrderCustomerParking;
+            currentTrip.OnDestinationArrival = "ARRIVAL_REQUEST_UNLOAD";
 
-            Arrival(orderCustomerParking, "ARRIVAL_REQUEST_UNLOAD");
-
-            Align(exchangeForward, exchangeUp, exchangeDepartingWaypoints, "ALIGN_REQUEST_UNLOAD");
+            Depart();
 
             //Limpiar datos del exchange
-            exchangeName = null;
-            exchangeForward = null;
-            exchangeUp = null;
-            exchangeApproachingWaypoints = null;
-            exchangeDepartingWaypoints = null;
+            currentTrip.ExchangeName = null;
+            currentTrip.ExchangeForward = null;
+            currentTrip.ExchangeUp = null;
+            currentTrip.ExchangeApproachingWaypoints = null;
+            currentTrip.ExchangeDepartingWaypoints = null;
         }
         /// <summary>
         /// Sec_D_2a - NAVEX comienza la navegación al conector especificado y atraca en MODO DESCARGA.
@@ -502,39 +512,96 @@ namespace SE_Scripts.GD.Nave
                 return;
             }
 
+            currentTrip.ExchangeName = ReadArgument(lines, "Exchange");
+            currentTrip.ExchangeForward = ReadArgument(lines, "Forward");
+            currentTrip.ExchangeUp = ReadArgument(lines, "Up");
+            currentTrip.ExchangeApproachingWaypoints = ReadArgument(lines, "WayPoints");
+            currentTrip.ExchangeDepartingWaypoints = ReverseString(currentTrip.ExchangeApproachingWaypoints);
+
             status = ShipStatus.ApproachingCustomer;
 
-            exchangeName = ReadArgument(lines, "Exchange");
-            exchangeForward = ReadArgument(lines, "Forward");
-            exchangeUp = ReadArgument(lines, "Up");
-            exchangeApproachingWaypoints = ReadArgument(lines, "WayPoints");
-            exchangeDepartingWaypoints = ReverseString(exchangeApproachingWaypoints);
+            currentTrip.AlignFwd = currentTrip.ExchangeForward;
+            currentTrip.AlignUp = currentTrip.ExchangeUp;
+            currentTrip.Waypoints = currentTrip.ExchangeApproachingWaypoints;
+            currentTrip.OnLastWaypoint = "ALIGN_UNLOADING";
 
-            Align(exchangeForward, exchangeUp, exchangeApproachingWaypoints, "ALIGN_UNLOADING");
+            Approach();
         }
         /// <summary>
         /// NEW - Va directamente al parking del cliente, sin pasar por el Warehouse
         /// </summary>
         void CmdGotoWarehouse(string[] lines)
         {
-            orderId = int.Parse(ReadArgument(lines, "Order"));
-            orderWarehouse = ReadArgument(lines, "Warehouse");
-            orderWarehouseParking = StrToVector(ReadArgument(lines, "WarehouseParking"));
-            orderCustomer = ReadArgument(lines, "Customer");
-            orderCustomerParking = StrToVector(ReadArgument(lines, "CustomerParking"));
+            string to = ReadArgument(lines, "To");
+            if (to != shipId)
+            {
+                return;
+            }
 
-            timerUnlock?.ApplyAction("Start");
+            currentTrip.OrderId = int.Parse(ReadArgument(lines, "Order"));
+            currentTrip.OrderWarehouse = ReadArgument(lines, "Warehouse");
+            currentTrip.OrderWarehouseParking = StrToVector(ReadArgument(lines, "WarehouseParking"));
+            currentTrip.OrderCustomer = ReadArgument(lines, "Customer");
+            currentTrip.OrderCustomerParking = StrToVector(ReadArgument(lines, "CustomerParking"));
 
             status = ShipStatus.RouteToWarehouse;
 
-            remotePilot.ClearWaypoints();
-            remotePilot.AddWaypoint(orderWarehouseParking, orderWarehouse);
-            remotePilot.SetCollisionAvoidance(true);
-            remotePilot.WaitForFreeWay = false;
-            remotePilot.FlightMode = FlightMode.OneWay;
-            remotePilot.SetAutoPilotEnabled(true);
+            SetTripAutoPilot(currentTrip.OrderWarehouseParking, currentTrip.OrderWarehouse, "ARRIVAL_WAITING", true);
+        }
 
-            Arrival(orderWarehouseParking, "ARRIVAL_WAITING");
+        /// <summary>
+        /// Realiza la maniobra de aproximación desde cualquier posición
+        /// </summary>
+        void Approach()
+        {
+            //Obtener la distancia al primer punto de aproximación
+            var shipPosition = remotePilot.GetPosition();
+            var wp = ParseWaypoints(currentTrip.Waypoints).First();
+            double distance = Vector3D.Distance(shipPosition, wp);
+            if (distance > 200)
+            {
+                //Carga en el piloto automático hasta la posición del primer waypoint
+                SetTripAutoPilot(wp, "Path to Connector", "DO_TRIP_WAYPOINTS", true);
+            }
+            else
+            {
+                DoTripWaypoints();
+            }
+        }
+        /// <summary>
+        /// Realiza la maniobra de desacople y viaja hasta el destino
+        /// </summary>
+        void Depart()
+        {
+            timerUnlock?.ApplyAction("Start");
+
+            //Comienza la maniobra de salida
+            Align(currentTrip.AlignFwd, currentTrip.AlignUp, currentTrip.Waypoints, currentTrip.OnLastWaypoint);
+
+            //Carga los datos en el piloto automático y espera
+            SetTripAutoPilot(currentTrip.DestinationPosition, currentTrip.DestinationName, currentTrip.OnDestinationArrival, false);
+        }
+        /// <summary>
+        /// Recorre los waypoints
+        /// </summary>
+        void DoTripWaypoints()
+        {
+            Align(currentTrip.AlignFwd, currentTrip.AlignUp, currentTrip.Waypoints, currentTrip.OnLastWaypoint);
+        }
+        /// <summary>
+        /// Configura el piloto automático
+        /// </summary>
+        void SetTripAutoPilot(Vector3D destination, string destinationName, string onArrival, bool start)
+        {
+            remotePilot.ClearWaypoints();
+            remotePilot.AddWaypoint(destination, destinationName);
+            remotePilot.SetCollisionAvoidance(true);
+            remotePilot.WaitForFreeWay = true;
+            remotePilot.FlightMode = FlightMode.OneWay;
+
+            Arrival(destination, onArrival);
+
+            if (start) remotePilot.SetAutoPilotEnabled(true);
         }
     }
 }
