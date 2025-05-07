@@ -28,6 +28,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Elementos de la solución",
 		.gitignore = .gitignore
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Navigator", "Navigator\Navigator.csproj", "{C90AC0BB-F568-68B9-B833-A6BD75B3E5A4}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -58,6 +60,10 @@ Global
 		{5C68D4AC-8828-D4C3-EA90-3D551D7B891A}.Debug|x64.Build.0 = Debug|x64
 		{5C68D4AC-8828-D4C3-EA90-3D551D7B891A}.Release|x64.ActiveCfg = Release|x64
 		{5C68D4AC-8828-D4C3-EA90-3D551D7B891A}.Release|x64.Build.0 = Release|x64
+		{C90AC0BB-F568-68B9-B833-A6BD75B3E5A4}.Debug|x64.ActiveCfg = Debug|x64
+		{C90AC0BB-F568-68B9-B833-A6BD75B3E5A4}.Debug|x64.Build.0 = Debug|x64
+		{C90AC0BB-F568-68B9-B833-A6BD75B3E5A4}.Release|x64.ActiveCfg = Release|x64
+		{C90AC0BB-F568-68B9-B833-A6BD75B3E5A4}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
