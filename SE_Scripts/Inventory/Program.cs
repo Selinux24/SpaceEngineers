@@ -3,9 +3,9 @@ using SpaceEngineers.Game.ModAPI.Ingame;
 using System.Collections.Generic;
 using VRage.Game.ModAPI.Ingame;
 
-namespace SE_Scripts.Inventory
+namespace IngameScript
 {
-    partial class Program : MyGridProgram
+    partial class Inventory : MyGridProgram
     {
         // Nombre de los contenedores donde se va a validar que exiten los componentes pedidos. Debe incluir contenedor de salida y el conector del Shuttle
         const string inventoryCargoName = "Cargo Container Components";
@@ -15,7 +15,7 @@ namespace SE_Scripts.Inventory
         // Listener global
         readonly IMyBroadcastListener bl;
 
-        public Program()
+        public Inventory()
         {
             string canal = Me.CustomData.Split(',')[0].Trim();
 

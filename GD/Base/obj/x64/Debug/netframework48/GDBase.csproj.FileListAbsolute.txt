@@ -1,0 +1,8 @@
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\GDBase\bin\x64\Debug\netframework48\GDBase.dll
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\GDBase\bin\x64\Debug\netframework48\GDBase.pdb
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\GDBase\obj\x64\Debug\netframework48\GDBase.csproj.AssemblyReference.cache
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\GDBase\obj\x64\Debug\netframework48\GDBase.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\GDBase\obj\x64\Debug\netframework48\GDBase.csproj.CoreCompileInputs.cache
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\GDBase\obj\x64\Debug\netframework48\GDBase.sourcelink.json
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\GDBase\obj\x64\Debug\netframework48\GDBase.dll
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\GDBase\obj\x64\Debug\netframework48\GDBase.pdb

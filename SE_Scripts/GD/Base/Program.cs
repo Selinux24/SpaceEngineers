@@ -8,9 +8,9 @@ using VRage;
 using VRage.Game.ModAPI.Ingame;
 using VRageMath;
 
-namespace SE_Scripts.GD.Base
+namespace IngameScript
 {
-    partial class Program : MyGridProgram
+    partial class GDBase : MyGridProgram
     {
         const string channel = "SHIPS_DELIVERY";
         const string baseCamera = "Camera";
@@ -320,7 +320,7 @@ namespace SE_Scripts.GD.Base
             IGC.SendBroadcastMessage(channel, message);
         }
 
-        public Program()
+        public GDBase()
         {
             baseId = Me.CubeGrid.CustomName;
             baseParking = Me.CustomData;

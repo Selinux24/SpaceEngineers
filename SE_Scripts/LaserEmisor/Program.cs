@@ -1,9 +1,9 @@
 ﻿using Sandbox.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
 
-namespace SE_Scripts.LaserEmisor
+namespace IngameScript
 {
-    partial class Program : MyGridProgram
+    partial class LaserEmisor : MyGridProgram
     {
         readonly string nombreAntena = "Laser Emisor";
         readonly string gpsReceptor = "GPS:Laser Receptor:-50027.34:-87333.41:-43673.9:";

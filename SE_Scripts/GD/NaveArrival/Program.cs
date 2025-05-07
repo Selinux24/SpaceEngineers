@@ -4,9 +4,9 @@ using System.Collections.Generic;
 using System.Linq;
 using VRageMath;
 
-namespace SE_Scripts.GD.NaveArrival
+namespace IngameScript
 {
-    partial class Program : MyGridProgram
+    partial class GDNaveArrival : MyGridProgram
     {
         const string shipProgrammableBlock = "HT Automaton Programmable Block Ship";
         const string shipRemoteControlPilot = "HT Remote Control Pilot";
@@ -107,7 +107,7 @@ namespace SE_Scripts.GD.NaveArrival
             return int.Parse(value);
         }
 
-        public Program()
+        public GDNaveArrival()
         {
             LoadFromStorage();
 

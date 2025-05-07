@@ -4,9 +4,9 @@ using System.Collections.Generic;
 using System.Linq;
 using VRageMath;
 
-namespace SE_Scripts.GD.NaveAlign
+namespace IngameScript
 {
-    partial class Program : MyGridProgram
+    partial class GDNaveAlign : MyGridProgram
     {
         const string shipProgrammableBlock = "HT Automaton Programmable Block Ship";
         const string shipRemoteControlLocking = "HT Remote Control Locking";
@@ -171,7 +171,7 @@ namespace SE_Scripts.GD.NaveAlign
             return Math.Acos(dot);
         }
 
-        public Program()
+        public GDNaveAlign()
         {
             LoadFromStorage();
 

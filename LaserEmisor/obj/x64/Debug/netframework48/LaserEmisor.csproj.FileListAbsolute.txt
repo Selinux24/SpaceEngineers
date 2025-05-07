@@ -1,0 +1,16 @@
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\Inventario\bin\x64\Debug\netframework48\LaserEmisor.dll
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\Inventario\bin\x64\Debug\netframework48\LaserEmisor.pdb
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\Inventario\obj\x64\Debug\netframework48\LaserEmisor.csproj.AssemblyReference.cache
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\Inventario\obj\x64\Debug\netframework48\LaserEmisor.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\Inventario\obj\x64\Debug\netframework48\LaserEmisor.csproj.CoreCompileInputs.cache
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\Inventario\obj\x64\Debug\netframework48\LaserEmisor.sourcelink.json
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\Inventario\obj\x64\Debug\netframework48\LaserEmisor.dll
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\Inventario\obj\x64\Debug\netframework48\LaserEmisor.pdb
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\LaserEmisor\bin\x64\Debug\netframework48\LaserEmisor.dll
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\LaserEmisor\bin\x64\Debug\netframework48\LaserEmisor.pdb
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\LaserEmisor\obj\x64\Debug\netframework48\LaserEmisor.csproj.AssemblyReference.cache
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\LaserEmisor\obj\x64\Debug\netframework48\LaserEmisor.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\LaserEmisor\obj\x64\Debug\netframework48\LaserEmisor.csproj.CoreCompileInputs.cache
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\LaserEmisor\obj\x64\Debug\netframework48\LaserEmisor.sourcelink.json
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\LaserEmisor\obj\x64\Debug\netframework48\LaserEmisor.dll
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\LaserEmisor\obj\x64\Debug\netframework48\LaserEmisor.pdb

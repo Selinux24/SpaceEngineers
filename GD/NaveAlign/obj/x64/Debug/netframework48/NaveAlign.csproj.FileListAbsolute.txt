@@ -1,0 +1,8 @@
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\GD\NaveAlign\bin\x64\Debug\netframework48\NaveAlign.dll
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\GD\NaveAlign\bin\x64\Debug\netframework48\NaveAlign.pdb
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\GD\NaveAlign\obj\x64\Debug\netframework48\NaveAlign.csproj.AssemblyReference.cache
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\GD\NaveAlign\obj\x64\Debug\netframework48\NaveAlign.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\GD\NaveAlign\obj\x64\Debug\netframework48\NaveAlign.csproj.CoreCompileInputs.cache
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\GD\NaveAlign\obj\x64\Debug\netframework48\NaveAlign.sourcelink.json
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\GD\NaveAlign\obj\x64\Debug\netframework48\NaveAlign.dll
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\GD\NaveAlign\obj\x64\Debug\netframework48\NaveAlign.pdb

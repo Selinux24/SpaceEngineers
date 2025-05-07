@@ -1,0 +1,8 @@
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\GD\NaveArrival\bin\x64\Debug\netframework48\NaveArrival.dll
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\GD\NaveArrival\bin\x64\Debug\netframework48\NaveArrival.pdb
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\GD\NaveArrival\obj\x64\Debug\netframework48\NaveArrival.csproj.AssemblyReference.cache
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\GD\NaveArrival\obj\x64\Debug\netframework48\NaveArrival.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\GD\NaveArrival\obj\x64\Debug\netframework48\NaveArrival.csproj.CoreCompileInputs.cache
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\GD\NaveArrival\obj\x64\Debug\netframework48\NaveArrival.sourcelink.json
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\GD\NaveArrival\obj\x64\Debug\netframework48\NaveArrival.dll
+C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\GD\NaveArrival\obj\x64\Debug\netframework48\NaveArrival.pdb

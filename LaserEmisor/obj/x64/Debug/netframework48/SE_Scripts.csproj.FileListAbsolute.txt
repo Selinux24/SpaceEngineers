@@ -1,0 +1,13 @@
+C:\Users\Usuario\Source\Repos\Selinux24\SpaceEngineers\SE_Scripts\bin\x64\Debug\netframework48\SE_Scripts.exe.config
+C:\Users\Usuario\Source\Repos\Selinux24\SpaceEngineers\SE_Scripts\bin\x64\Debug\netframework48\SE_Scripts.exe
+C:\Users\Usuario\Source\Repos\Selinux24\SpaceEngineers\SE_Scripts\bin\x64\Debug\netframework48\SE_Scripts.pdb
+C:\Users\Usuario\Source\Repos\Selinux24\SpaceEngineers\SE_Scripts\obj\x64\Debug\netframework48\SE_Scripts.csproj.AssemblyReference.cache
+C:\Users\Usuario\Source\Repos\Selinux24\SpaceEngineers\SE_Scripts\obj\x64\Debug\netframework48\SE_Scripts.csproj.SuggestedBindingRedirects.cache
+C:\Users\Usuario\Source\Repos\Selinux24\SpaceEngineers\SE_Scripts\obj\x64\Debug\netframework48\SE_Scripts.exe.config
+C:\Users\Usuario\Source\Repos\Selinux24\SpaceEngineers\SE_Scripts\obj\x64\Debug\netframework48\SE_Scripts.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Usuario\Source\Repos\Selinux24\SpaceEngineers\SE_Scripts\obj\x64\Debug\netframework48\SE_Scripts.csproj.CoreCompileInputs.cache
+C:\Users\Usuario\Source\Repos\Selinux24\SpaceEngineers\SE_Scripts\obj\x64\Debug\netframework48\SE_Scripts.sourcelink.json
+C:\Users\Usuario\Source\Repos\Selinux24\SpaceEngineers\SE_Scripts\obj\x64\Debug\netframework48\SE_Scripts.exe
+C:\Users\Usuario\Source\Repos\Selinux24\SpaceEngineers\SE_Scripts\obj\x64\Debug\netframework48\SE_Scripts.pdb
+C:\Users\Usuario\Source\Repos\Selinux24\SpaceEngineers\SE_Scripts\bin\x64\Debug\netframework48\SE_Scripts.dll
+C:\Users\Usuario\Source\Repos\Selinux24\SpaceEngineers\SE_Scripts\obj\x64\Debug\netframework48\SE_Scripts.dll

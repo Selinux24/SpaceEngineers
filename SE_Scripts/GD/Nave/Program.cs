@@ -6,9 +6,9 @@ using System.Linq;
 using System.Text;
 using VRageMath;
 
-namespace SE_Scripts.GD.Nave
+namespace IngameScript
 {
-    partial class Program : MyGridProgram
+    partial class GDNave : MyGridProgram
     {
         const string channel = "SHIPS_DELIVERY";
         const string shipRemoteControlPilot = "HT Remote Control Pilot";
@@ -338,7 +338,7 @@ namespace SE_Scripts.GD.Nave
             arrivalPB.TryRun(message);
         }
 
-        public Program()
+        public GDNave()
         {
             shipId = Me.CubeGrid.CustomName;
 
