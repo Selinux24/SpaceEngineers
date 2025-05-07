@@ -1,8 +1,0 @@
-C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\Inventario\bin\x64\Debug\netframework48\Inventario.dll
-C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\Inventario\bin\x64\Debug\netframework48\Inventario.pdb
-C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\Inventario\obj\x64\Debug\netframework48\Inventario.csproj.AssemblyReference.cache
-C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\Inventario\obj\x64\Debug\netframework48\Inventario.GeneratedMSBuildEditorConfig.editorconfig
-C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\Inventario\obj\x64\Debug\netframework48\Inventario.csproj.CoreCompileInputs.cache
-C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\Inventario\obj\x64\Debug\netframework48\Inventario.sourcelink.json
-C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\Inventario\obj\x64\Debug\netframework48\Inventario.dll
-C:\Users\Usuario\source\repos\Selinux24\SpaceEngineers\Inventario\obj\x64\Debug\netframework48\Inventario.pdb

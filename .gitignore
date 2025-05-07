@@ -1,5 +1,3 @@
 ﻿## Ignore Visual Studio
 
 .vs
-bin/
-obj/
