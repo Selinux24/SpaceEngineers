@@ -232,13 +232,18 @@ namespace IngameScript
                 return;
             }
 
-            if (thrusting && (DateTime.Now - alignThrustStart).TotalSeconds > ThrustSeconds)
+            if (thrusting)
             {
-                // Desactivar propulsores
-                ResetThrust();
-                StopThrust();
-                ResetGyros();
-                thrusting = false;
+                if ((DateTime.Now - alignThrustStart).TotalSeconds > ThrustSeconds)
+                {
+                    // Desactivar propulsores
+                    ResetThrust();
+                    StopThrust();
+                    ResetGyros();
+                    thrusting = false;
+                }
+
+                return;
             }
 
             if (shipVelocity.Length() >= MaxSpeed * 0.95)
