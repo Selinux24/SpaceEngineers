@@ -8,19 +8,31 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        const string NavTag = "NAV|";                // Prefijo para el argumento de navegación
-        const double MaxSpeed = 10.0;               // Velocidad máxima de crucero
-        const double gyrosThr = 0.001;               //Precisión de alineación
-        const double gyrosSpeed = 5f;                //Velocidad de los giroscopios
-        const double ToTargetBrakingDistance = 1000.0;  // Rango de frenado hasta el objetivo
-        const double CollisionDetectRange = 1000.0;  // Rango de detección de colisiones
-        const double LateralAvoidDistance = 1000.0;  // Distancia a recorrer al esquivar
-        const string RemoteName = "Stingray Remote Control";  // Nombre del remote control
-        const string CameraName = "Stingray Camera";  // Nombre del remote control
-        const string BeaconName = "Stingray Distress Beacon"; // Nombre del beacon
-        const double ThrustSeconds = 5.0; // Tiempo de encendido de thrusters hasta alineación
-        const double AlignThr = 0.001;               //Precisión de alineación
-        const double CruiseAlignThr = 0.01;               //Precisión de alineación
+        const string NavTag = "NAV|";
+        const string RemoteName = "Stingray Remote Control";
+        const string CameraName = "Stingray Camera";
+        const string BeaconName = "Stingray Distress Beacon";
+
+        //Velocidad de los giroscopios
+        const double GyrosSpeed = 5f;
+
+        // Velocidad máxima de crucero
+        const double MaxSpeed = 10.0;
+        const double MaxSpeedTrh = 0.95;
+
+        // Tiempo de encendido de thrusters hasta alineación
+        const double ThrustSeconds = 5.0;
+        // Precisión de alineación
+        const double AlignThr = 0.001;
+        // Precisión de alineación
+        const double CruiseAlignThr = 0.01;
+
+        // Rango de frenado hasta el objetivo
+        const double ToTargetBrakingDistance = 1000.0;
+
+        // Rango de detección de colisiones
+        const double CollisionDetectRange = 1000.0;
+        const double EvadingWaypointDistance = 100.0;
 
         /*
         Fase1 - Encarar al destino
@@ -59,9 +71,6 @@ namespace IngameScript
         MyDetectedEntityInfo lastHit;
         Vector3D toTarget;
         Vector3D toTargetN;
-        bool isMoving = false;
-        Vector3D shipVelocity;
-        Vector3D shipVelocityN;
 
         bool thrusting = false;
         DateTime alignThrustStart = DateTime.Now;
@@ -115,7 +124,6 @@ namespace IngameScript
             if (!hasTarget || currentState == NavState.Idle)
             {
                 IsObstacleAhead();
-
                 Echo("Waiting for position...");
                 return;
             }
@@ -123,13 +131,8 @@ namespace IngameScript
             toTarget = destination - camera.GetPosition();
             toTargetN = Vector3D.Normalize(toTarget);
 
-            shipVelocity = remote.GetShipVelocities().LinearVelocity;
-            isMoving = shipVelocity.Length() > 0;
-            shipVelocityN = isMoving ? Vector3D.Normalize(shipVelocity) : Vector3D.Zero;
-
             Echo($"To target: {toTarget.Length():F2}m.");
             Echo($"T: {VecToStr(toTargetN)}");
-            Echo($"V: {VecToStr(shipVelocityN)}");
             Echo($"S: {VecToStr(remote.WorldMatrix.Forward)}");
 
             Echo($"HIT {VecToStr(lastHit.HitPosition ?? Vector3D.Zero)}");
@@ -141,6 +144,10 @@ namespace IngameScript
 
             switch (currentState)
             {
+                case NavState.Distress:
+                    Distress();
+                    break;
+
                 case NavState.Locating:
                     Locate();
                     break;
@@ -156,9 +163,6 @@ namespace IngameScript
 
                 case NavState.Avoiding:
                     Avoid();
-                    break;
-                case NavState.Distress:
-                    Distress();
                     break;
             }
 
@@ -177,6 +181,14 @@ namespace IngameScript
 
         // === ESTADOS ===
 
+        void Distress()
+        {
+            if (beacon != null) beacon.Enabled = true;
+            BroadcastStatus($"DISTRESS: Engines damaged!, waiting in position {VecToStr(remote.GetPosition())}");
+            ResetThrust();
+            ResetGyros();
+        }
+
         void Locate()
         {
             if (AlignToDirection(remote.WorldMatrix.Forward, AlignThr))
@@ -187,37 +199,39 @@ namespace IngameScript
         }
         void Accelerate()
         {
-            //if (TestCollision())
-            //{
-            //    return;
-            //}
+            if (IsObstacleAhead())
+            {
+                BroadcastStatus("Obstacle detected. Avoiding...");
+                currentState = NavState.Avoiding;
+                return;
+            }
 
-            if (shipVelocity.Length() >= MaxSpeed * 0.95)
+            var shipVelocity = remote.GetShipVelocities().LinearVelocity.Length();
+            if (shipVelocity >= MaxSpeed * MaxSpeedTrh)
             {
                 BroadcastStatus("Reached cruise speed. Deactivating thrusters.");
-                ResetThrust();
-                ResetGyros();
-                StopThrust(); //Desactivar los propulsores
                 currentState = NavState.Cruising;
                 return;
             }
 
             // Acelerar
-            ApplyThrust(toTargetN * 10000);
+            ThrustToTarget();
         }
         void Cruise()
         {
-            //if (TestCollision())
-            //{
-            //    return;
-            //}
+            if (IsObstacleAhead())
+            {
+                BroadcastStatus("Obstacle detected. Avoiding...");
+                currentState = NavState.Avoiding;
+
+                return;
+            }
 
             if (toTarget.Length() < ToTargetBrakingDistance)
             {
-                ResetThrust();
-                ResetGyros();
                 BroadcastStatus("Destination reached. Braking.");
                 currentState = NavState.Braking;
+
                 return;
             }
 
@@ -225,7 +239,7 @@ namespace IngameScript
             if (!AlignToDirection(remote.WorldMatrix.Forward, CruiseAlignThr))
             {
                 // Encender los propulsores hasta alinear de nuevo el vector velocidad con el vector hasta el objetivo
-                ResetThrust();
+                ThrustToTarget();
                 alignThrustStart = DateTime.Now;
                 thrusting = true;
 
@@ -234,78 +248,148 @@ namespace IngameScript
 
             if (thrusting)
             {
+                // Propulsores encendidos para recuperar la alineación
                 if ((DateTime.Now - alignThrustStart).TotalSeconds > ThrustSeconds)
                 {
-                    // Desactivar propulsores
-                    ResetThrust();
-                    StopThrust();
-                    ResetGyros();
+                    // Tiempo de alineación consumido. Desactivar propulsores
+                    EnterCruising();
                     thrusting = false;
                 }
 
                 return;
             }
 
-            if (shipVelocity.Length() >= MaxSpeed * 0.95)
+            var shipVelocity = remote.GetShipVelocities().LinearVelocity.Length();
+            if (shipVelocity > MaxSpeed)
             {
+                // Velocidad máxima superada. Encender propulsores en neutro para frenar
                 ResetThrust();
                 ResetGyros();
+
+                return;
             }
-            else
+
+            if (shipVelocity < MaxSpeed * MaxSpeedTrh)
             {
-                ResetThrust();
-                StopThrust();
-                ResetGyros();
+                // Por debajo de la velocidad deseada. Acelerar hasta alcanzarla
+                ThrustToTarget();
+
+                return;
             }
+
+            EnterCruising();
         }
         void Brake()
         {
             ResetThrust();
             ResetGyros();
 
-            //TODO: Una vez la nave se pare comenzar acercamiento a punto destino con Remote Control
+            var shipVelocity = remote.GetShipVelocities().LinearVelocity.Length();
+            if (shipVelocity <= 0.1)
+            {
+                BroadcastStatus("Destination reached.");
+                currentState = NavState.Idle;
+            }
         }
-
-
 
         void Avoid()
         {
+            // Calcular los puntos de evasión
+            if (!CalculateEvadingWaypoints())
+            {
+                //No se puede calcular un punto de evasión
+                currentState = NavState.Braking;
 
-        }
-        void Distress()
-        {
-            if (beacon != null) beacon.Enabled = true;
-            BroadcastStatus($"DISTRESS: Engines damaged!, waiting in position {VecToStr(remote.GetPosition())}");
+                return;
+            }
+
+            // Navegar entre los puntos de evasión
+            if (evadingPoints.Count > 0)
+            {
+                NavigateTo(evadingPoints[0]);
+
+                return;
+            }
+
             ResetThrust();
-            ResetGyros();
+
+            // Volver a navegación cuando se alcance el último punto de navegación
+            currentState = NavState.Locating;
+        }
+        bool CalculateEvadingWaypoints()
+        {
+            if (lastHit.IsEmpty())
+            {
+                return false;
+            }
+
+            var boxCenter = lastHit.BoundingBox.Center;
+            var boxPerimeter = lastHit.BoundingBox.Perimeter;
+
+            //Punto sobre el obstáculo desde el punto de vista de la nave
+            var p1 = boxCenter + (remote.WorldMatrix.Up * boxPerimeter);
+            evadingPoints.Add(p1);
+
+            //Punto al otro lado del obstáculo desde el punto de vista de la nave
+            var p2 = boxCenter + (remote.WorldMatrix.Forward * CollisionDetectRange);
+            evadingPoints.Add(p2);
+
+            return true;
+        }
+        void NavigateTo(Vector3D wayPoint)
+        {
+            if (Vector3D.Distance(wayPoint, camera.GetPosition()) <= EvadingWaypointDistance)
+            {
+                // Waypoint alcanzado
+                evadingPoints.RemoveAt(0);
+
+                return;
+            }
+
+            ThrustToPosition(wayPoint);
         }
 
         // === UTILIDAD ===
 
-        bool TestCollision()
+        void BroadcastStatus(string msg)
         {
-            if (IsObstacleAhead())
-            {
-                ResetThrust();
-                ResetGyros();
-                currentState = NavState.Avoiding;
-                BroadcastStatus("Obstacle detected. Braking...");
-                return true;
-            }
-            return false;
+            IGC.SendBroadcastMessage("NAV_STATUS", msg);
+            Echo(msg);
         }
 
+        void ThrustToTarget()
+        {
+            var force = CalculateThrustForce(toTargetN, MaxSpeed);
+            ApplyThrust(force);
+        }
+        void ThrustToPosition(Vector3D position)
+        {
+            var v = Vector3D.Normalize(camera.GetPosition() - position);
+
+            var force = CalculateThrustForce(v, MaxSpeed);
+            ApplyThrust(force);
+        }
+
+        Vector3D CalculateThrustForce(Vector3D toTarget, double desiredSpeed)
+        {
+            var desiredDirection = Vector3D.Normalize(toTarget);
+            var currentVelocity = remote.GetShipVelocities().LinearVelocity;
+
+            var desiredVelocity = desiredDirection * desiredSpeed;
+            var velocityError = desiredVelocity - currentVelocity;
+
+            double mass = remote.CalculateShipMass().PhysicalMass;
+            return velocityError * mass * 0.5;  // Ganancia ajustable.
+        }
         void ApplyThrust(Vector3D force)
         {
-            double mass = remote.CalculateShipMass().PhysicalMass;
-            var requiredAccel = force / mass;
-
             foreach (var t in thrusters)
             {
-                var d = t.WorldMatrix.Backward;
-                double dot = d.Dot(requiredAccel);
+                var dir = t.WorldMatrix.Backward;
+                double alignment = dir.Dot(force);
+
                 t.Enabled = true;
-                t.ThrustOverridePercentage = (dot > 0 ? 1f : 0f) * 0.2f;
+                t.ThrustOverridePercentage = alignment > 0 ? (float)Math.Min(alignment / t.MaxEffectiveThrust, 1f) : 0f;
             }
         }
         void ResetThrust()
@@ -351,7 +435,7 @@ namespace IngameScript
             foreach (var gyro in gyros)
             {
                 var localAxis = Vector3D.TransformNormal(axis, MatrixD.Transpose(gyro.WorldMatrix));
-                var gyroRot = localAxis * -gyrosSpeed;
+                var gyroRot = localAxis * -GyrosSpeed;
                 gyro.GyroOverride = true;
                 gyro.Pitch = (float)gyroRot.X;
                 gyro.Yaw = (float)gyroRot.Y;
@@ -369,31 +453,23 @@ namespace IngameScript
             }
         }
 
+        void EnterCruising()
+        {
+            ResetThrust();
+            StopThrust();
+            ResetGyros();
+        }
+
         bool IsObstacleAhead()
         {
             camera.EnableRaycast = true;
             if (camera.CanScan(CollisionDetectRange))
             {
                 lastHit = camera.Raycast(CollisionDetectRange);
-                return !lastHit.IsEmpty();
+                return !lastHit.IsEmpty() && Vector3D.Distance(lastHit.HitPosition, camera.GetPosition()) <= CollisionDetectRange;
             }
 
             return false;
-        }
-        bool IsObstacleAhead(Vector3D direction)
-        {
-            if (camera.CanScan(CollisionDetectRange))
-            {
-                lastHit = camera.Raycast(CollisionDetectRange, direction);
-                return !lastHit.IsEmpty();
-            }
-
-            return false;
-        }
-        void BroadcastStatus(string msg)
-        {
-            IGC.SendBroadcastMessage("NAV_STATUS", msg);
-            Echo(msg);
         }
 
         static double AngleBetweenVectors(Vector3D v1, Vector3D v2)
