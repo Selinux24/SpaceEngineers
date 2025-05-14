@@ -17,7 +17,7 @@ namespace IngameScript
         const double GyrosSpeed = 5f;
 
         // Velocidad máxima de crucero
-        const double MaxSpeed = 50.0;
+        const double MaxSpeed = 100.0;
         const double MaxSpeedTrh = 0.95;
 
         // Tiempo de encendido de thrusters hasta alineación
@@ -33,7 +33,7 @@ namespace IngameScript
         // Rango de detección de colisiones
         const double CollisionDetectRange = 2500.0;
         const double EvadingWaypointDistance = 100.0;
-        const double EvadingMaxSpeed = 10.0;
+        const double EvadingMaxSpeed = 19.5;
 
         /*
         Fase1 - Encarar al destino
@@ -55,7 +55,7 @@ namespace IngameScript
 
         enum NavState
         {
-            Idle, Locating, Accelerating, Braking, Cruising, Avoiding, Returning, Distress
+            Idle, Locating, Accelerating, Braking, Cruising, Avoiding, Distress
         }
 
         readonly IMyRemoteControl remote;
