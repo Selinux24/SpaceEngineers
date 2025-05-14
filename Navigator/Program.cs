@@ -466,7 +466,7 @@ namespace IngameScript
             if (camera.CanScan(CollisionDetectRange))
             {
                 lastHit = camera.Raycast(CollisionDetectRange);
-                return !lastHit.IsEmpty() && Vector3D.Distance(lastHit.HitPosition, camera.GetPosition()) <= CollisionDetectRange;
+                return !lastHit.IsEmpty() && Vector3D.Distance(lastHit.HitPosition.Value, camera.GetPosition()) <= CollisionDetectRange;
             }
 
             return false;
