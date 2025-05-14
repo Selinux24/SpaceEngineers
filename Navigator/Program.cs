@@ -9,9 +9,10 @@ namespace IngameScript
     partial class Program : MyGridProgram
     {
         const string NavTag = "NAV|";
-        const string RemoteName = "Stingray Remote Control";
-        const string CameraName = "Stingray Camera";
-        const string BeaconName = "Stingray Distress Beacon";
+        const string StopTag = "STOP";
+        const string RemoteName = "HT Remote Control Pilot";
+        const string CameraName = "HT Camera Pilot";
+        const string BeaconName = "HT Distress Beacon";
 
         //Velocidad de los giroscopios
         const double GyrosSpeed = 5f;
@@ -115,9 +116,15 @@ namespace IngameScript
                 $"{VecToStr(destination)}",
                 $"{(hasTarget?1:0)}",
                 $"{(thrusting?1:0)}",
-                $"{evadingPoints.Count}",
-                evadingPoints.Select(v => VecToStr(v)).Aggregate((a, b) => $"{a}|{b}"),
             };
+            if (evadingPoints.Count > 0)
+            {
+                parts.Add($"{evadingPoints.Count}");
+                foreach (var p in evadingPoints)
+                {
+                    parts.Add($"{VecToStr(p)}");
+                }
+            }
 
             Storage = string.Join("|", parts);
         }
@@ -127,6 +134,12 @@ namespace IngameScript
             if (argument.StartsWith(NavTag))
             {
                 StartNavigation(argument.Substring(NavTag.Length));
+                return;
+            }
+
+            if (argument == StopTag)
+            {
+                Stop();
                 return;
             }
 
@@ -207,7 +220,22 @@ namespace IngameScript
             hasTarget = true;
             evadingPoints.Clear();
             currentState = NavState.Locating;
+            thrusting = false;
+            evadingPoints.Clear();
+            lastHit = new MyDetectedEntityInfo();
             BroadcastStatus("Starting navigation.");
+            SaveState();
+        }
+        void Stop()
+        {
+            destination = Vector3D.Zero;
+            hasTarget = false;
+            evadingPoints.Clear();
+            currentState = NavState.Idle;
+            thrusting = false;
+            evadingPoints.Clear();
+            lastHit = new MyDetectedEntityInfo();
+            BroadcastStatus("Navigation stopped.");
             SaveState();
         }
 

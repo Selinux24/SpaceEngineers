@@ -14,6 +14,7 @@ namespace IngameScript
         const string shipRemoteControlPilot = "HT Remote Control Pilot";
         const string shipArrivalPB = "HT Automaton Programmable Block Arrival";
         const string shipAlignPB = "HT Automaton Programmable Block Align";
+        const string shipNavigatorPB = "HT Automaton Programmable Block Navigator";
         const string shipTimerPilot = "HT Automaton Timer Block Pilot";
         const string shipTimerLock = "HT Automaton Timer Block Locking";
         const string shipTimerUnlock = "HT Automaton Timer Block Unlocking";
@@ -21,7 +22,6 @@ namespace IngameScript
         const string shipTimerUnload = "HT Automaton Timer Block Unload";
         const string shipTimerWaiting = "HT Automaton Timer Block Waiting";
         const string shipLogLCDs = "[DELIVERY_LOG]";
-        const int tripVelocity = 80;
         const int approachVelocity = 15;
 
         readonly string shipId;
@@ -29,6 +29,7 @@ namespace IngameScript
         readonly IMyRemoteControl remotePilot;
         readonly IMyProgrammableBlock arrivalPB;
         readonly IMyProgrammableBlock alignPB;
+        readonly IMyProgrammableBlock navigatorPB;
         readonly IMyTimerBlock timerPilot;
         readonly IMyTimerBlock timerLock;
         readonly IMyTimerBlock timerUnlock;
@@ -337,6 +338,12 @@ namespace IngameScript
             WriteLogLCDs($"Arrival: {message}");
             arrivalPB.TryRun(message);
         }
+        void Navigator(Vector3D position)
+        {
+            string message = $"NAV|{VectorToStr(position)}";
+            WriteLogLCDs($"Navigator: {message}");
+            navigatorPB.TryRun(message);
+        }
 
         public Program()
         {
@@ -355,6 +362,13 @@ namespace IngameScript
             if (alignPB == null)
             {
                 Echo($"Programmable Block '{shipAlignPB}' no localizado.");
+                return;
+            }
+
+            navigatorPB = GetBlockWithName<IMyProgrammableBlock>(shipNavigatorPB);
+            if (navigatorPB == null)
+            {
+                Echo($"Programmable Block '{shipNavigatorPB}' no localizado.");
                 return;
             }
 
@@ -473,6 +487,7 @@ namespace IngameScript
 
             arrivalPB.TryRun("STOP");
             alignPB.TryRun("STOP");
+            navigatorPB.TryRun("STOP");
         }
         /// <summary>
         /// Sec_C_2b - Cuando la nave llega al conector de carga, informa a la base para comenzar la carga
@@ -508,9 +523,6 @@ namespace IngameScript
         void ArrivalRequestUnload()
         {
             status = ShipStatus.WaitingForUnload;
-
-            remotePilot.SetAutoPilotEnabled(false);
-            remotePilot.ClearWaypoints();
 
             string command = $"Command=REQUEST_UNLOAD|To={currentTrip.OrderCustomer}|From={shipId}|Order={currentTrip.OrderId}";
             SendIGCMessage(command);
@@ -576,9 +588,6 @@ namespace IngameScript
         {
             //Se produce cuando la nave llega al último waypoint de la ruta de entrega
             status = ShipStatus.Idle;
-
-            remotePilot.SetAutoPilotEnabled(false);
-            remotePilot.ClearWaypoints();
 
             //Pone la nave en espera
             timerWaiting.ApplyAction("Start");
@@ -717,9 +726,9 @@ namespace IngameScript
                 ReadArgument(lines, "Customer"),
                 StrToVector(ReadArgument(lines, "CustomerParking")));
 
-            SetTripAutoPilot(currentTrip.OrderWarehouseParking, currentTrip.OrderWarehouse, tripVelocity, "ARRIVAL_WAITING", true);
+            StartCrusing(currentTrip.OrderWarehouseParking, "ARRIVAL_WAITING");
         }
-
+        
         /// <summary>
         /// Realiza la maniobra de aproximación desde cualquier posición
         /// </summary>
@@ -750,7 +759,7 @@ namespace IngameScript
             Align(currentTrip.AlignFwd, currentTrip.AlignUp, currentTrip.Waypoints, currentTrip.OnLastWaypoint);
 
             //Carga los datos en el piloto automático y espera
-            SetTripAutoPilot(currentTrip.DestinationPosition, currentTrip.DestinationName, tripVelocity, currentTrip.OnDestinationArrival, false);
+            StartCrusing(currentTrip.DestinationPosition, currentTrip.OnDestinationArrival);
         }
         /// <summary>
         /// Recorre los waypoints
@@ -780,6 +789,15 @@ namespace IngameScript
             {
                 timerPilot.ApplyAction("Start");
             }
+        }
+        /// <summary>
+        /// Configura el viaje largo
+        /// </summary>
+        void StartCrusing(Vector3D destination, string onArrival)
+        {
+            Navigator(destination);
+
+            Arrival(destination, onArrival);
         }
 
         void LoadFromStorage()
