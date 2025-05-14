@@ -17,7 +17,7 @@ namespace IngameScript
         const double GyrosSpeed = 5f;
 
         // Velocidad máxima de crucero
-        const double MaxSpeed = 10.0;
+        const double MaxSpeed = 50.0;
         const double MaxSpeedTrh = 0.95;
 
         // Tiempo de encendido de thrusters hasta alineación
@@ -28,11 +28,12 @@ namespace IngameScript
         const double CruiseAlignThr = 0.01;
 
         // Rango de frenado hasta el objetivo
-        const double ToTargetBrakingDistance = 1000.0;
+        const double ToTargetBrakingDistance = 500.0;
 
         // Rango de detección de colisiones
-        const double CollisionDetectRange = 1000.0;
+        const double CollisionDetectRange = 2500.0;
         const double EvadingWaypointDistance = 100.0;
+        const double EvadingMaxSpeed = 10.0;
 
         /*
         Fase1 - Encarar al destino
@@ -123,7 +124,29 @@ namespace IngameScript
 
             if (!hasTarget || currentState == NavState.Idle)
             {
+                /*
                 IsObstacleAhead();
+                if (!lastHit.IsEmpty())
+                {
+                    evadingPoints.Clear();
+                    if (CalculateEvadingWaypoints())
+                    {
+                        Echo($"Obstacle center {lastHit.Position}");
+                        Echo($"Navigating to waypoint {VecToStr(evadingPoints[0])}");
+                        Echo($"Current position {VecToStr(camera.GetPosition())}");
+                        Echo($"Distance to waypoint {Vector3D.Distance(evadingPoints[0], camera.GetPosition()):F2}m.");
+
+                        // Mostrar en formato GPS
+                        Echo($"GPS:Ship:{camera.GetPosition().X:F2}:{camera.GetPosition().Y:F2}:{camera.GetPosition().Z:F2}:#FFAAFF");
+                        Echo($"GPS:Obstacle:{lastHit.Position.X:F2}:{lastHit.Position.Y:F2}:{lastHit.Position.Z:F2}:#FFAAFF");
+                        for (int i = 0; i < evadingPoints.Count; i++)
+                        {
+                            var wp = evadingPoints[i];
+                            Echo($"GPS:WP_{i}:{wp.X:F2}:{wp.Y:F2}:{wp.Z:F2}:#FFAAFF");
+                        }
+                    }
+                }
+                */
                 Echo("Waiting for position...");
                 return;
             }
@@ -132,14 +155,13 @@ namespace IngameScript
             toTargetN = Vector3D.Normalize(toTarget);
 
             Echo($"To target: {toTarget.Length():F2}m.");
-            Echo($"T: {VecToStr(toTargetN)}");
-            Echo($"S: {VecToStr(remote.WorldMatrix.Forward)}");
+            //Echo($"T: {VecToStr(toTargetN)}");
+            //Echo($"S: {VecToStr(remote.WorldMatrix.Forward)}");
 
-            Echo($"HIT {VecToStr(lastHit.HitPosition ?? Vector3D.Zero)}");
+            //Echo($"HIT {VecToStr(lastHit.HitPosition ?? Vector3D.Zero)}");
             if (!lastHit.IsEmpty())
             {
-                Echo($"{lastHit.Name} - Type {lastHit.Type}");
-                Echo($"{VecToStr(lastHit.BoundingBox.Extents)}");
+                Echo($"Obstacle detected. {lastHit.Name} - Type {lastHit.Type}");
             }
 
             switch (currentState)
@@ -195,7 +217,11 @@ namespace IngameScript
             {
                 BroadcastStatus("Destination located. Initializing acceleration.");
                 currentState = NavState.Accelerating;
+
+                return;
             }
+
+            ResetThrust();
         }
         void Accelerate()
         {
@@ -203,6 +229,14 @@ namespace IngameScript
             {
                 BroadcastStatus("Obstacle detected. Avoiding...");
                 currentState = NavState.Avoiding;
+                return;
+            }
+
+            if (toTarget.Length() < ToTargetBrakingDistance)
+            {
+                BroadcastStatus("Destination reached. Braking.");
+                currentState = NavState.Braking;
+
                 return;
             }
 
@@ -215,7 +249,7 @@ namespace IngameScript
             }
 
             // Acelerar
-            ThrustToTarget();
+            ThrustToTarget(MaxSpeed);
         }
         void Cruise()
         {
@@ -239,7 +273,7 @@ namespace IngameScript
             if (!AlignToDirection(remote.WorldMatrix.Forward, CruiseAlignThr))
             {
                 // Encender los propulsores hasta alinear de nuevo el vector velocidad con el vector hasta el objetivo
-                ThrustToTarget();
+                ThrustToTarget(MaxSpeed);
                 alignThrustStart = DateTime.Now;
                 thrusting = true;
 
@@ -272,7 +306,7 @@ namespace IngameScript
             if (shipVelocity < MaxSpeed * MaxSpeedTrh)
             {
                 // Por debajo de la velocidad deseada. Acelerar hasta alcanzarla
-                ThrustToTarget();
+                ThrustToTarget(MaxSpeed);
 
                 return;
             }
@@ -294,6 +328,14 @@ namespace IngameScript
 
         void Avoid()
         {
+            if (toTarget.Length() < ToTargetBrakingDistance)
+            {
+                BroadcastStatus("Destination reached. Braking.");
+                currentState = NavState.Braking;
+
+                return;
+            }
+
             // Calcular los puntos de evasión
             if (!CalculateEvadingWaypoints())
             {
@@ -306,39 +348,52 @@ namespace IngameScript
             // Navegar entre los puntos de evasión
             if (evadingPoints.Count > 0)
             {
-                NavigateTo(evadingPoints[0]);
+                NavigateTo(evadingPoints[0], EvadingMaxSpeed);
+
+                if (evadingPoints.Count == 0)
+                {
+                    // Limpiar la información del obstáculo
+                    lastHit = new MyDetectedEntityInfo();
+
+                    ResetThrust();
+
+                    // Volver a navegación cuando se alcance el último punto de navegación
+                    currentState = NavState.Locating;
+                }
 
                 return;
             }
-
-            ResetThrust();
-
-            // Volver a navegación cuando se alcance el último punto de navegación
-            currentState = NavState.Locating;
         }
         bool CalculateEvadingWaypoints()
         {
+            if (evadingPoints.Count > 0)
+            {
+                // Ya se han calculado los puntos de evasión
+                return true;
+            }
+
             if (lastHit.IsEmpty())
             {
                 return false;
             }
 
-            var boxCenter = lastHit.BoundingBox.Center;
-            var boxPerimeter = lastHit.BoundingBox.Perimeter;
+            var obstacleCenter = lastHit.Position;
+            var obstacleSize = Math.Max(lastHit.BoundingBox.Extents.X, Math.Max(lastHit.BoundingBox.Extents.Y, lastHit.BoundingBox.Extents.Z));
 
             //Punto sobre el obstáculo desde el punto de vista de la nave
-            var p1 = boxCenter + (remote.WorldMatrix.Up * boxPerimeter);
+            var p1 = obstacleCenter + (camera.WorldMatrix.Up * obstacleSize);
             evadingPoints.Add(p1);
 
             //Punto al otro lado del obstáculo desde el punto de vista de la nave
-            var p2 = boxCenter + (remote.WorldMatrix.Forward * CollisionDetectRange);
+            var p2 = obstacleCenter + (camera.WorldMatrix.Forward * obstacleSize);
             evadingPoints.Add(p2);
 
             return true;
         }
-        void NavigateTo(Vector3D wayPoint)
+        void NavigateTo(Vector3D wayPoint, double maxSpeed)
         {
-            if (Vector3D.Distance(wayPoint, camera.GetPosition()) <= EvadingWaypointDistance)
+            var d = Vector3D.Distance(wayPoint, camera.GetPosition());
+            if (d <= EvadingWaypointDistance)
             {
                 // Waypoint alcanzado
                 evadingPoints.RemoveAt(0);
@@ -346,7 +401,10 @@ namespace IngameScript
                 return;
             }
 
-            ThrustToPosition(wayPoint);
+            Echo($"Evading route...");
+            Echo($"Distance to waypoint {d:F2}m.");
+
+            ThrustToPosition(wayPoint, maxSpeed);
         }
 
         // === UTILIDAD ===
@@ -357,16 +415,17 @@ namespace IngameScript
             Echo(msg);
         }
 
-        void ThrustToTarget()
+        void ThrustToTarget(double maxSpeed)
         {
-            var force = CalculateThrustForce(toTargetN, MaxSpeed);
+            var force = CalculateThrustForce(toTargetN, maxSpeed);
             ApplyThrust(force);
         }
-        void ThrustToPosition(Vector3D position)
+        void ThrustToPosition(Vector3D position, double maxSpeed)
         {
-            var v = Vector3D.Normalize(camera.GetPosition() - position);
+            // Vector normalizado desde la cámara al objetivo
+            var v = Vector3D.Normalize(position - camera.GetPosition());
 
-            var force = CalculateThrustForce(v, MaxSpeed);
+            var force = CalculateThrustForce(v, maxSpeed);
             ApplyThrust(force);
         }
 
