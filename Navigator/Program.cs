@@ -67,13 +67,12 @@ namespace IngameScript
         NavState currentState = NavState.Idle;
         Vector3D destination;
         bool hasTarget = false;
+        bool thrusting = false;
         readonly List<Vector3D> evadingPoints = new List<Vector3D>();
 
         MyDetectedEntityInfo lastHit;
         Vector3D toTarget;
         Vector3D toTargetN;
-
-        bool thrusting = false;
         DateTime alignThrustStart = DateTime.Now;
 
         public Program()
@@ -98,7 +97,14 @@ namespace IngameScript
             {
                 currentState = (NavState)StrToInt(parts[0]);
                 destination = StrToVec(parts[1]);
-                hasTarget = StrToInt(parts[5]) == 1;
+                hasTarget = StrToInt(parts[2]) == 1;
+                thrusting = StrToInt(parts[3]) == 1;
+                int evadingCount = StrToInt(parts[4]);
+                evadingPoints.Clear();
+                for (int i = 0; i < evadingCount; i++)
+                {
+                    evadingPoints.Add(StrToVec(parts[5 + i]));
+                }
             }
         }
         void SaveState()
@@ -108,7 +114,11 @@ namespace IngameScript
                 $"{(int)currentState}",
                 $"{VecToStr(destination)}",
                 $"{(hasTarget?1:0)}",
+                $"{(thrusting?1:0)}",
+                $"{evadingPoints.Count}",
+                evadingPoints.Select(v => VecToStr(v)).Aggregate((a, b) => $"{a}|{b}"),
             };
+
             Storage = string.Join("|", parts);
         }
 
