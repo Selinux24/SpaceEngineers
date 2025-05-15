@@ -726,7 +726,7 @@ namespace IngameScript
                 ReadArgument(lines, "Customer"),
                 StrToVector(ReadArgument(lines, "CustomerParking")));
 
-            StartCrusing(currentTrip.OrderWarehouseParking, "ARRIVAL_WAITING");
+            StartCruising(currentTrip.OrderWarehouseParking, "ARRIVAL_WAITING");
         }
         
         /// <summary>
@@ -759,7 +759,7 @@ namespace IngameScript
             Align(currentTrip.AlignFwd, currentTrip.AlignUp, currentTrip.Waypoints, currentTrip.OnLastWaypoint);
 
             //Carga los datos en el piloto automático y espera
-            StartCrusing(currentTrip.DestinationPosition, currentTrip.OnDestinationArrival);
+            StartCruising(currentTrip.DestinationPosition, currentTrip.OnDestinationArrival);
         }
         /// <summary>
         /// Recorre los waypoints
@@ -793,7 +793,7 @@ namespace IngameScript
         /// <summary>
         /// Configura el viaje largo
         /// </summary>
-        void StartCrusing(Vector3D destination, string onArrival)
+        void StartCruising(Vector3D destination, string onArrival)
         {
             Navigator(destination);
 

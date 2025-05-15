@@ -166,7 +166,7 @@ namespace IngameScript
         {
             static int lastId = 0;
 
-            public readonly int Id;
+            public int Id;
             public string Customer;
             public Vector3D CustomerParking;
             public string Warehouse;
@@ -177,6 +177,53 @@ namespace IngameScript
             public Order()
             {
                 Id = ++lastId;
+            }
+            public Order(string line)
+            {
+                LoadFromStorage(line);
+            }
+
+            public string SaveToStorage()
+            {
+                List<string> parts = new List<string>
+                {
+                    $"Id={Id}",
+                    $"Customer={Customer}",
+                    $"CustomerParking={VectorToStr(CustomerParking)}",
+                    $"Warehouse={Warehouse}",
+                    $"WarehouseParking={VectorToStr(WarehouseParking)}",
+                    $"AssignedShip={AssignedShip}",
+                    $"Items={string.Join(";", Items.Select(i => $"{i.Key}:{i.Value}"))}",
+                };
+
+                return string.Join("|", parts);
+            }
+            public void LoadFromStorage(string line)
+            {
+                var parts = line.Split('|');
+
+                Id = ReadInt(parts, "Id");
+                Customer = ReadString(parts, "Customer");
+                CustomerParking = StrToVector(ReadString(parts, "CustomerParking"));
+                Warehouse = ReadString(parts, "Warehouse");
+                WarehouseParking = StrToVector(ReadString(parts, "WarehouseParking"));
+                AssignedShip = ReadString(parts, "AssignedShip");
+
+                Items.Clear();
+                var itemsParts = ReadString(parts, "Items").Split(';');
+                foreach (var item in itemsParts)
+                {
+                    var itemParts = item.Split(':');
+                    if (itemParts.Length != 2) continue;
+
+                    string itemName = itemParts[0];
+
+                    int itemAmount;
+                    if (!int.TryParse(itemParts[1], out itemAmount)) continue;
+                    Items[itemName] = itemAmount;
+                }
+
+                lastId = Id + 1;
             }
         }
         enum ShipStatus
@@ -210,6 +257,27 @@ namespace IngameScript
             public string From;
             public int OrderId;
             public bool Idle;
+
+            public UnloadRequest()
+            {
+
+            }
+            public UnloadRequest(string line)
+            {
+                LoadFromStorage(line);
+            }
+
+            public string SaveToStorage()
+            {
+                return $"UnloadRequest={From}|OrderId={OrderId}|Idle={(Idle ? 1 : 0)}";
+            }
+            public void LoadFromStorage(string line)
+            {
+                var parts = line.Split('|');
+                From = ReadString(parts, "From");
+                OrderId = ReadInt(parts, "OrderId");
+                Idle = ReadInt(parts, "Idle") == 1;
+            }
         }
         class ShipExchangePair
         {
@@ -240,6 +308,28 @@ namespace IngameScript
         {
             string cmdToken = $"{command}=";
             return lines.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";
+        }
+        static string ReadString(string[] lines, string name, string defaultValue = null)
+        {
+            string cmdToken = $"{name}=";
+            string value = lines.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";
+            if (string.IsNullOrEmpty(value))
+            {
+                return defaultValue;
+            }
+
+            return value;
+        }
+        static int ReadInt(string[] lines, string name, int defaultValue = 0)
+        {
+            string cmdToken = $"{name}=";
+            string value = lines.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";
+            if (string.IsNullOrEmpty(value))
+            {
+                return defaultValue;
+            }
+
+            return int.Parse(value);
         }
         static string VectorToStr(Vector3D v)
         {
@@ -325,6 +415,8 @@ namespace IngameScript
             baseId = Me.CubeGrid.CustomName;
             baseParking = Me.CustomData;
 
+            LoadFromStorage();
+
             InitializeExchangeGroups();
 
             camera = GetBlockWithName<IMyCameraBlock>(baseCamera);
@@ -358,6 +450,8 @@ namespace IngameScript
                 var message = bl.AcceptMessage();
                 ParseMessage(message.Data.ToString());
             }
+
+            SaveToStorage();
 
             if (showShips || showOrders)
             {
@@ -976,6 +1070,52 @@ namespace IngameScript
                 string unloadStatus = unload.Idle ? "Pending" : "On route";
                 sbData.AppendLine($"Order {unload.OrderId} from {unload.From}. {unloadStatus}");
             }
+        }
+
+        void LoadFromStorage()
+        {
+            orders.Clear();
+            unloadRequests.Clear();
+
+            string[] storageLines = Storage.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+
+            int orderCount = ReadInt(storageLines, "Orders");
+            for (int i = 1; i < orderCount; i++)
+            {
+                string orderLine = storageLines[i];
+                if (string.IsNullOrEmpty(orderLine)) continue;
+
+                orders.Add(new Order(orderLine));
+            }
+
+            int reqCount = ReadInt(storageLines, "UnloadRequests");
+            for (int i = 1 + orderCount + 1; i < reqCount; i++)
+            {
+                var reqLine = storageLines[i];
+                if (string.IsNullOrEmpty(reqLine)) continue;
+
+                unloadRequests.Add(new UnloadRequest(reqLine));
+            }
+        }
+        void SaveToStorage()
+        {
+            List<string> parts = new List<string>();
+
+            //Orders
+            parts.Add($"Orders={orders.Count}");
+            foreach (var order in orders)
+            {
+                parts.Add(order.SaveToStorage());
+            }
+
+            //UnloadRequests
+            parts.Add($"UnloadRequests={unloadRequests.Count}");
+            foreach (var req in unloadRequests)
+            {
+                parts.Add(req.SaveToStorage());
+            }
+
+            Storage = string.Join(Environment.NewLine, parts);
         }
     }
 }
