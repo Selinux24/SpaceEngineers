@@ -10,6 +10,7 @@ namespace IngameScript
     {
         #region Constants
         const string shipProgrammableBlock = "HT Automaton Programmable Block Ship";
+        const string shipRemoteControlPilot = "HT Remote Control Pilot";
         const string shipRemoteControlLocking = "HT Remote Control Locking";
         const string shipConnectorA = "HT Connector A";
 
@@ -21,17 +22,24 @@ namespace IngameScript
         const double maxApproachSpeedAprox = 15.0; //Velocidad máxima de aproximación
         const double maxApproachSpeedLocking = 5.0; //Velocidad máxima en el último waypoint
         const double slowdownDistance = 50.0; //Distancia de frenada
+
+        const double arrivalThreshold = 200.0;
         #endregion
 
         #region Blocks
         readonly IMyProgrammableBlock pb;
+        readonly IMyRemoteControl remotePilot;
         readonly IMyRemoteControl remoteLocking;
         readonly IMyShipConnector connectorA;
         readonly List<IMyThrust> thrusters = new List<IMyThrust>();
         readonly List<IMyGyro> gyros = new List<IMyGyro>();
         #endregion
 
+        enum Tasks { NONE, ALIGN, ARRIVAL };
+
         readonly AlignData alignData = new AlignData();
+        readonly ArrivalData arrivalData = new ArrivalData();
+        Tasks currentTask = Tasks.NONE;
 
         T GetBlockWithName<T>(string name) where T : class, IMyTerminalBlock
         {
@@ -43,34 +51,53 @@ namespace IngameScript
 
         public Program()
         {
+            Runtime.UpdateFrequency = UpdateFrequency.None;
+
             LoadFromStorage();
 
             pb = GetBlockWithName<IMyProgrammableBlock>(shipProgrammableBlock);
             if (pb == null)
             {
-                Echo($"Programmable Block {shipProgrammableBlock} no encontrado.");
+                Echo($"Programmable Block {shipProgrammableBlock} not found.");
+                return;
+            }
+
+            remotePilot = GetBlockWithName<IMyRemoteControl>(shipRemoteControlPilot);
+            if (remotePilot == null)
+            {
+                Echo($"Remote Control {shipRemoteControlPilot} not found.");
                 return;
             }
 
             remoteLocking = GetBlockWithName<IMyRemoteControl>(shipRemoteControlLocking);
             if (remoteLocking == null)
             {
-                Echo($"Control remoto de atraque '{shipRemoteControlLocking}' no locallizado.");
+                Echo($"Remote Control '{shipRemoteControlLocking}' not found.");
                 return;
             }
 
             connectorA = GetBlockWithName<IMyShipConnector>(shipConnectorA);
             if (connectorA == null)
             {
-                Echo($"Connector de atraque A '{shipConnectorA}' no locallizado.");
+                Echo($"Connector '{shipConnectorA}' not found.");
                 return;
             }
 
             GridTerminalSystem.GetBlocksOfType(gyros, g => g.CubeGrid == Me.CubeGrid);
-            GridTerminalSystem.GetBlocksOfType(thrusters, t => t.CubeGrid == Me.CubeGrid);
+            if (gyros.Count == 0)
+            {
+                Echo("Grid without gyroscopes.");
+                return;
+            }
 
-            Runtime.UpdateFrequency = UpdateFrequency.None;
-            Echo("Working");
+            GridTerminalSystem.GetBlocksOfType(thrusters, t => t.CubeGrid == Me.CubeGrid);
+            if (thrusters.Count == 0)
+            {
+                Echo("Grid without thrusters.");
+                return;
+            }
+
+            Echo("Working!");
         }
 
         public void Main(string argument, UpdateType updateSource)
@@ -82,89 +109,86 @@ namespace IngameScript
                     DoStop();
                     return;
                 }
-                if (argument.StartsWith("RESET"))
+                if (argument.StartsWith("ALIGN"))
                 {
-                    DoReset();
+                    InitializeAlign(Utils.ReadArgument(argument, "ALIGN"));
+                    return;
+                }
+                if (argument.StartsWith("ARRIVAL"))
+                {
+                    InitializeArrival(Utils.ReadArgument(argument, "ARRIVAL"));
                     return;
                 }
 
-                ParseTerminalMessage(argument);
+                Echo($"Unknown argument: {argument}");
                 return;
             }
 
-            if ((updateSource & UpdateType.Update1) != 0)
-            {
-                DoAlign();
-            }
+            DoArrival();
+            DoAlign();
         }
 
-        void ParseTerminalMessage(string message)
-        {
-            alignData.Clear();
-            SaveToStorage();
-
-            Runtime.UpdateFrequency = UpdateFrequency.Update1;
-            alignData.InitAlignShip(message);
-            SaveToStorage();
-        }
-
-        void DoAlign()
-        {
-            if (!alignData.HasTarget)
-            {
-                Echo("Esperando instrucciones...");
-                return;
-            }
-
-            AlignToVectors(alignData.TargetForward, alignData.TargetUp);
-            NavigateWaypoints();
-        }
         void DoStop()
         {
+            Runtime.UpdateFrequency = UpdateFrequency.None; // Detener comprobaciones
+            currentTask = Tasks.NONE;
             alignData.Clear();
+            arrivalData.Clear();
             SaveToStorage();
             ResetGyros();
             ResetThrust();
-        }
-        void DoReset()
-        {
-            alignData.Clear();
-            SaveToStorage();
-            ResetGyros();
-            ResetThrust();
-            Runtime.UpdateFrequency = UpdateFrequency.None;
-            Echo("Reset completo.");
+            Echo("Stopped.");
         }
 
+        void InitializeAlign(string message)
+        {
+            alignData.Initialize(message);
+            currentTask = Tasks.ALIGN;
+            Runtime.UpdateFrequency = UpdateFrequency.Update1;
+            SaveToStorage();
+        }
+        void DoAlign()
+        {
+            if (currentTask != Tasks.ALIGN)
+            {
+                return;
+            }
+
+            if (!alignData.HasTarget)
+            {
+                Echo("Align target undefined...");
+                return;
+            }
+
+            NavigateWaypoints();
+        }
         void NavigateWaypoints()
         {
             if (alignData.CurrentTarget >= alignData.Waypoints.Count)
             {
-                Runtime.UpdateFrequency = UpdateFrequency.None;
-                Echo("Última posición alcanzada.");
-                if (!string.IsNullOrWhiteSpace(alignData.ReachCommand))
-                {
-                    pb.TryRun(alignData.ReachCommand);
-                    Echo($"Ejecutado {alignData.ReachCommand}");
-                }
+                Echo("Destination reached.");
+                ExcuteAction(alignData.Command);
                 DoStop();
                 return;
             }
+
+            AlignToVectors(alignData.TargetForward, alignData.TargetUp);
 
             var currentPos = connectorA.GetPosition();
             var targetPos = alignData.Waypoints[alignData.CurrentTarget];
             var toTarget = targetPos - currentPos;
             double distance = toTarget.Length();
 
-            Echo($"Progreso: {alignData.CurrentTarget + 1}/{alignData.Waypoints.Count}. Distancia: {distance:F2}m");
-            Echo($"Command en Destino? {!string.IsNullOrWhiteSpace(alignData.ReachCommand)}");
+            Echo($"Distance to destination: {distance:F2}m");
+            Echo($"Progress: {alignData.CurrentTarget + 1}/{alignData.Waypoints.Count}.");
+            Echo($"Has command? {!string.IsNullOrWhiteSpace(alignData.Command)}");
 
             if (distance < arrivalThr)
             {
                 alignData.Next();
                 SaveToStorage();
                 ResetThrust();
-                Echo("Punto alcanzado, pasando al siguiente.");
+                Echo("Waypoint reached. Moving to the next.");
                 return;
             }
 
@@ -212,7 +236,6 @@ namespace IngameScript
                 thruster.ThrustOverridePercentage = 0f;
             }
         }
-
         void AlignToVectors(Vector3D targetForward, Vector3D targetUp)
         {
             var shipMatrix = remoteLocking.WorldMatrix;
@@ -221,15 +244,15 @@ namespace IngameScript
 
             double angleFW = Utils.AngleBetweenVectors(shipForward, targetForward);
             double angleUP = Utils.AngleBetweenVectors(shipUp, targetUp);
-            Echo($"Alineación: {angleFW:F2} | {angleUP:F2}");
+            Echo($"Target angles: {angleFW:F2} | {angleUP:F2}");
 
             if (angleFW <= gyrosThr && angleUP <= gyrosThr)
             {
                 ResetGyros();
-                Echo("Alineado con el objetivo.");
+                Echo("Aligned.");
                 return;
             }
-            Echo("Alineando...");
+            Echo("Aligning...");
 
             if (angleFW > gyrosThr)
             {
@@ -268,6 +291,53 @@ namespace IngameScript
             }
         }
 
+        void InitializeArrival(string message)
+        {
+            arrivalData.Initialize(message);
+            currentTask = Tasks.ARRIVAL;
+            Runtime.UpdateFrequency = UpdateFrequency.Update100;
+            SaveToStorage();
+        }
+        void DoArrival()
+        {
+            if (currentTask != Tasks.ARRIVAL)
+            {
+                return;
+            }
+
+            if (!arrivalData.HasPosition)
+            {
+                Echo("Arrival position undefined...");
+                return;
+            }
+
+            MonitorizeArrival();
+        }
+        void MonitorizeArrival()
+        {
+            double distance = Vector3D.Distance(remotePilot.GetPosition(), arrivalData.TargetPosition);
+            if (distance <= arrivalThreshold)
+            {
+                Echo("Detination reached.");
+                ExcuteAction(arrivalData.Command);
+                DoStop();
+
+                return;
+            }
+
+            Echo($"Distance to destination: {distance:F2}m.");
+            Echo($"Has command? {!string.IsNullOrWhiteSpace(arrivalData.Command)}");
+        }
+
+        void ExcuteAction(string action)
+        {
+            if (!string.IsNullOrWhiteSpace(action))
+            {
+                pb.TryRun(action);
+                Echo($"Executing {action}");
+            }
+        }
+
         void LoadFromStorage()
         {
             string[] storageLines = Storage.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
@@ -277,11 +347,19 @@ namespace IngameScript
             }
 
             Runtime.UpdateFrequency = (UpdateFrequency)Utils.ReadInt(storageLines, "UpdateFrequency");
-            alignData.LoadFromStorage(storageLines);
+            alignData.LoadFromStorage(Utils.ReadString(storageLines, "AlignData"));
+            arrivalData.LoadFromStorage(Utils.ReadString(storageLines, "ArrivalData"));
         }
         void SaveToStorage()
         {
-            Storage = $"UpdateFrequency={(int)Runtime.UpdateFrequency}{Environment.NewLine}" + alignData.SaveToStorage();
+            List<string> parts = new List<string>
+            {
+                $"UpdateFrequency={(int)Runtime.UpdateFrequency}",
+                $"AlignData={alignData.SaveToStorage()}",
+                $"ArrivalData={arrivalData.SaveToStorage()}",
+            };
+
+            Storage = string.Join(Environment.NewLine, parts);
         }
     }
 }
