@@ -23,12 +23,9 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Docs", "Docs", "{2508BBB3-C
 		GD\Doc_Secuencia.txt = GD\Doc_Secuencia.txt
 	EndProjectSection
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Elementos de la solución", "Elementos de la solución", "{D107F4C8-89CC-BEA8-D3D7-CA6B7733353D}"
-	ProjectSection(SolutionItems) = preProject
-		.gitignore = .gitignore
-	EndProjectSection
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Navigator", "Navigator\Navigator.csproj", "{C90AC0BB-F568-68B9-B833-A6BD75B3E5A4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SEMocks", "SEMocks\SEMocks.csproj", "{ABDAB762-7D8C-13B6-C25B-8DA568F445C3}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -64,6 +61,10 @@ Global
 		{C90AC0BB-F568-68B9-B833-A6BD75B3E5A4}.Debug|x64.Build.0 = Debug|x64
 		{C90AC0BB-F568-68B9-B833-A6BD75B3E5A4}.Release|x64.ActiveCfg = Release|x64
 		{C90AC0BB-F568-68B9-B833-A6BD75B3E5A4}.Release|x64.Build.0 = Release|x64
+		{ABDAB762-7D8C-13B6-C25B-8DA568F445C3}.Debug|x64.ActiveCfg = Debug|x64
+		{ABDAB762-7D8C-13B6-C25B-8DA568F445C3}.Debug|x64.Build.0 = Debug|x64
+		{ABDAB762-7D8C-13B6-C25B-8DA568F445C3}.Release|x64.ActiveCfg = Release|x64
+		{ABDAB762-7D8C-13B6-C25B-8DA568F445C3}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
