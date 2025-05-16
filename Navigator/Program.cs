@@ -20,6 +20,11 @@ namespace IngameScript
         // Velocidad máxima de crucero
         const double MaxSpeed = 100.0;
         const double MaxSpeedTrh = 0.95;
+        
+        // TODO: A una distancia del destino, bajar la velocidad de crucero a la mitad
+        // TODO: Las correcciones de trayectoria en el modo de crucero deben hacerse con los propulsores pequeños
+        // TODO: Cuando se quede a un porcentaje de batería, parar y esperar a que se recargue
+        // TODO: Cuando esté en espera de cargarse, al llegar a un porcentaje de batería, continuar el viaje
 
         // Tiempo de encendido de thrusters hasta alineación
         const double ThrustSeconds = 5.0;
