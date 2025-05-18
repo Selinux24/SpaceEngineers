@@ -349,6 +349,7 @@ namespace IngameScript
             Runtime.UpdateFrequency = (UpdateFrequency)Utils.ReadInt(storageLines, "UpdateFrequency");
             alignData.LoadFromStorage(Utils.ReadString(storageLines, "AlignData"));
             arrivalData.LoadFromStorage(Utils.ReadString(storageLines, "ArrivalData"));
+            currentTask = (Tasks)Utils.ReadInt(storageLines, "CurrentTask");
         }
         void SaveToStorage()
         {
@@ -357,6 +358,7 @@ namespace IngameScript
                 $"UpdateFrequency={(int)Runtime.UpdateFrequency}",
                 $"AlignData={alignData.SaveToStorage()}",
                 $"ArrivalData={arrivalData.SaveToStorage()}",
+                $"CurrentTask={(int)currentTask}",
             };
 
             Storage = string.Join(Environment.NewLine, parts);
