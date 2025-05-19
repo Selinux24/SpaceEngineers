@@ -26,8 +26,6 @@ namespace IngameScript
     partial class Program : MyGridProgram
     {
         #region Constants
-        const string NavTag = "NAVIGATE|";
-        const string StopTag = "STOP";
         const string shipRemoteControlNavigator = "HT Remote Control Pilot";
         const string shipCameraNavigator = "HT Camera Pilot";
         const string shipBeaconName = "HT Distress Beacon";
@@ -118,14 +116,14 @@ namespace IngameScript
         {
             if (!string.IsNullOrEmpty(argument))
             {
-                if (argument == StopTag)
+                if (argument == "STOP")
                 {
                     DoStop();
                     return;
                 }
-                if (argument.StartsWith(NavTag))
+                if (argument.StartsWith("NAVIGATE"))
                 {
-                    InitializeNavigation(Utils.ReadArgument(argument, NavTag, '|'));
+                    InitializeNavigation(Utils.ReadArgument(argument, "NAVIGATE", '|'));
                     return;
                 }
 

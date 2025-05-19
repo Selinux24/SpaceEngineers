@@ -14,7 +14,6 @@ namespace IngameScript
         const string channel = "SHIPS_DELIVERY";
         const string shipRemoteControlPilot = "HT Remote Control Pilot";
         const string shipPilotPB = "HT Automaton Programmable Block Pilot";
-        const string shipNavigatorPB = "HT Automaton Programmable Block Navigator";
         const string shipTimerPilot = "HT Automaton Timer Block Pilot";
         const string shipTimerLock = "HT Automaton Timer Block Locking";
         const string shipTimerUnlock = "HT Automaton Timer Block Unlocking";
@@ -29,7 +28,6 @@ namespace IngameScript
         readonly IMyBroadcastListener bl;
         readonly IMyRemoteControl remotePilot;
         readonly IMyProgrammableBlock pbPilot;
-        readonly IMyProgrammableBlock pbNavigator;
         readonly IMyTimerBlock timerPilot;
         readonly IMyTimerBlock timerLock;
         readonly IMyTimerBlock timerUnlock;
@@ -45,94 +43,14 @@ namespace IngameScript
         ShipStatus status = ShipStatus.Idle;
         bool enableLogs = false;
 
-        T GetBlockWithName<T>(string name) where T : class, IMyTerminalBlock
-        {
-            List<T> blocks = new List<T>();
-            GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid);
-
-            return blocks.FirstOrDefault(b => b.CustomName.Contains(name));
-        }
-        void WriteLCDs(string wildcard, string text)
-        {
-            List<IMyTextPanel> lcds = new List<IMyTextPanel>();
-            GridTerminalSystem.GetBlocksOfType(lcds, lcd => lcd.CubeGrid == Me.CubeGrid && lcd.CustomName.Contains(wildcard));
-            foreach (var lcd in lcds)
-            {
-                lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-                lcd.WriteText(text, false);
-            }
-        }
-        void WriteLogLCDs(string text)
-        {
-            if (!enableLogs)
-            {
-                return;
-            }
-
-            sbLog.Insert(0, text + Environment.NewLine);
-
-            var log = sbLog.ToString();
-            string[] logLines = log.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
-
-            foreach (var lcd in logLCDs)
-            {
-                lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-
-                string customData = lcd.CustomData;
-                var blackList = customData.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
-                if (blackList.Length > 0)
-                {
-                    string[] lines = logLines.Where(l => !blackList.Any(b => l.Contains(b))).ToArray();
-                    lcd.WriteText(string.Join(Environment.NewLine, lines));
-                }
-                else
-                {
-                    lcd.WriteText(log, false);
-                }
-            }
-        }
-        void SendIGCMessage(string message)
-        {
-            WriteLogLCDs($"SendIGCMessage: {message}");
-
-            IGC.SendBroadcastMessage(channel, message);
-        }
-        void Align(string forward, string up, string wayPoints, string command)
-        {
-            string message = $"ALIGN|{forward}|{up}|{wayPoints}¬{command}";
-            WriteLogLCDs($"Align: {message}");
-            pbPilot.TryRun(message);
-        }
-        void Arrival(Vector3D position, string command)
-        {
-            string message = $"ARRIVAL|{Utils.VectorToStr(position)}¬{command}";
-            WriteLogLCDs($"Arrival: {message}");
-            pbPilot.TryRun(message);
-        }
-        void Navigator(Vector3D position)
-        {
-            string message = $"NAVIGATE|{Utils.VectorToStr(position)}";
-            WriteLogLCDs($"Navigator: {message}");
-            pbNavigator.TryRun(message);
-        }
-
         public Program()
         {
             shipId = Me.CubeGrid.CustomName;
-
-            LoadFromStorage();
 
             pbPilot = GetBlockWithName<IMyProgrammableBlock>(shipPilotPB);
             if (pbPilot == null)
             {
                 Echo($"Programmable Block '{shipPilotPB}' no localizado.");
-                return;
-            }
-
-            pbNavigator = GetBlockWithName<IMyProgrammableBlock>(shipNavigatorPB);
-            if (pbNavigator == null)
-            {
-                Echo($"Programmable Block '{shipNavigatorPB}' no localizado.");
                 return;
             }
 
@@ -190,8 +108,13 @@ namespace IngameScript
             WriteLCDs("[shipId]", shipId);
 
             bl = IGC.RegisterBroadcastListener(channel);
-            Runtime.UpdateFrequency = UpdateFrequency.Update100; // Ejecuta cada ~1.6s
             Echo($"Listening in channel {channel}");
+
+            Runtime.UpdateFrequency = UpdateFrequency.Update100; // Ejecuta cada ~1.6s
+
+            LoadFromStorage();
+
+            Echo("Working!");
         }
 
         public void Main(string argument, UpdateType updateSource)
@@ -250,7 +173,6 @@ namespace IngameScript
             remotePilot.ClearWaypoints();
 
             pbPilot.TryRun("STOP");
-            pbNavigator.TryRun("STOP");
         }
         /// <summary>
         /// Sec_C_2b - Cuando la nave llega al conector de carga, informa a la base para comenzar la carga
@@ -384,7 +306,7 @@ namespace IngameScript
         /// </summary>
         void CmdRequestStatus(string[] lines)
         {
-            string from = Utils.ReadArgument(lines, "From");
+            string from = Utils.ReadString(lines, "From");
             Vector3D position = remotePilot.GetPosition();
             string message = $"Command=RESPONSE_STATUS|To={from}|From={shipId}|Status={status}|Origin={currentTrip.OrderWarehouse}|OriginPosition={Utils.VectorToStr(currentTrip.OrderWarehouseParking)}|Destination={currentTrip.OrderCustomer}|DestinationPosition={Utils.VectorToStr(currentTrip.OrderCustomerParking)}|Position={Utils.VectorToStr(position)}";
             SendIGCMessage(message);
@@ -396,7 +318,7 @@ namespace IngameScript
         /// </summary>
         void CmdLoadOrder(string[] lines)
         {
-            string to = Utils.ReadArgument(lines, "To");
+            string to = Utils.ReadString(lines, "To");
             if (to != shipId)
             {
                 return;
@@ -406,16 +328,16 @@ namespace IngameScript
 
             currentTrip.SetOrder(
                 Utils.ReadInt(lines, "Order"),
-                Utils.ReadArgument(lines, "Warehouse"),
+                Utils.ReadString(lines, "Warehouse"),
                 Utils.ReadVector(lines, "WarehouseParking"),
-                Utils.ReadArgument(lines, "Customer"),
+                Utils.ReadString(lines, "Customer"),
                 Utils.ReadVector(lines, "CustomerParking"));
 
             currentTrip.SetExchange(
-                Utils.ReadArgument(lines, "Exchange"),
-                Utils.ReadArgument(lines, "Forward"),
-                Utils.ReadArgument(lines, "Up"),
-                Utils.ReadArgument(lines, "WayPoints"));
+                Utils.ReadString(lines, "Exchange"),
+                Utils.ReadVector(lines, "Forward"),
+                Utils.ReadVector(lines, "Up"),
+                Utils.ReadVectorList(lines, "WayPoints"));
 
             currentTrip.NavigateToExchange("ALIGN_LOADING");
 
@@ -429,7 +351,7 @@ namespace IngameScript
         /// </summary>
         void CmdLoaded(string[] lines)
         {
-            string to = Utils.ReadArgument(lines, "To");
+            string to = Utils.ReadString(lines, "To");
             if (to != shipId)
             {
                 return;
@@ -451,7 +373,7 @@ namespace IngameScript
         /// </summary>
         void CmdUnloadOrder(string[] lines)
         {
-            string to = Utils.ReadArgument(lines, "To");
+            string to = Utils.ReadString(lines, "To");
             if (to != shipId)
             {
                 return;
@@ -460,10 +382,10 @@ namespace IngameScript
             status = ShipStatus.ApproachingCustomer;
 
             currentTrip.SetExchange(
-                Utils.ReadArgument(lines, "Exchange"),
-                Utils.ReadArgument(lines, "Forward"),
-                Utils.ReadArgument(lines, "Up"),
-                Utils.ReadArgument(lines, "WayPoints"));
+                Utils.ReadString(lines, "Exchange"),
+                Utils.ReadVector(lines, "Forward"),
+                Utils.ReadVector(lines, "Up"),
+                Utils.ReadVectorList(lines, "WayPoints"));
 
             currentTrip.NavigateToExchange("ALIGN_UNLOADING");
 
@@ -474,7 +396,7 @@ namespace IngameScript
         /// </summary>
         void CmdGotoWarehouse(string[] lines)
         {
-            string to = Utils.ReadArgument(lines, "To");
+            string to = Utils.ReadString(lines, "To");
             if (to != shipId)
             {
                 return;
@@ -483,11 +405,11 @@ namespace IngameScript
             status = ShipStatus.RouteToWarehouse;
 
             currentTrip.SetOrder(
-                int.Parse(Utils.ReadArgument(lines, "Order")),
-                Utils.ReadArgument(lines, "Warehouse"),
-                Utils.StrToVector(Utils.ReadArgument(lines, "WarehouseParking")),
-                Utils.ReadArgument(lines, "Customer"),
-                Utils.StrToVector(Utils.ReadArgument(lines, "CustomerParking")));
+                Utils.ReadInt(lines, "Order"),
+                Utils.ReadString(lines, "Warehouse"),
+                Utils.ReadVector(lines, "WarehouseParking"),
+                Utils.ReadString(lines, "Customer"),
+                Utils.ReadVector(lines, "CustomerParking"));
 
             StartCruising(currentTrip.OrderWarehouseParking, "ARRIVAL_WAITING");
         }
@@ -499,7 +421,7 @@ namespace IngameScript
         {
             //Obtener la distancia al primer punto de aproximación
             var shipPosition = remotePilot.GetPosition();
-            var wp = Utils.StrToVectorList(currentTrip.Waypoints).First();
+            var wp = currentTrip.Waypoints[0];
             double distance = Vector3D.Distance(shipPosition, wp);
             if (distance > 200)
             {
@@ -563,15 +485,99 @@ namespace IngameScript
             Arrival(destination, onArrival);
         }
 
+        T GetBlockWithName<T>(string name) where T : class, IMyTerminalBlock
+        {
+            List<T> blocks = new List<T>();
+            GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid);
+
+            return blocks.FirstOrDefault(b => b.CustomName.Contains(name));
+        }
+        void WriteLCDs(string wildcard, string text)
+        {
+            List<IMyTextPanel> lcds = new List<IMyTextPanel>();
+            GridTerminalSystem.GetBlocksOfType(lcds, lcd => lcd.CubeGrid == Me.CubeGrid && lcd.CustomName.Contains(wildcard));
+            foreach (var lcd in lcds)
+            {
+                lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                lcd.WriteText(text, false);
+            }
+        }
+        void WriteLogLCDs(string text)
+        {
+            if (!enableLogs)
+            {
+                return;
+            }
+
+            sbLog.Insert(0, text + Environment.NewLine);
+
+            var log = sbLog.ToString();
+            string[] logLines = log.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (var lcd in logLCDs)
+            {
+                lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+
+                string customData = lcd.CustomData;
+                var blackList = customData.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+                if (blackList.Length > 0)
+                {
+                    string[] lines = logLines.Where(l => !blackList.Any(b => l.Contains(b))).ToArray();
+                    lcd.WriteText(string.Join(Environment.NewLine, lines));
+                }
+                else
+                {
+                    lcd.WriteText(log, false);
+                }
+            }
+        }
+        void SendIGCMessage(string message)
+        {
+            WriteLogLCDs($"SendIGCMessage: {message}");
+
+            IGC.SendBroadcastMessage(channel, message);
+        }
+        void Align(Vector3D forward, Vector3D up, List<Vector3D> wayPoints, string command)
+        {
+            string message = $"ALIGN|{Utils.VectorToStr(forward)}|{Utils.VectorToStr(up)}|{Utils.VectorListToStr(wayPoints)}¬{command}";
+            WriteLogLCDs($"Align: {message}");
+            pbPilot.TryRun(message);
+        }
+        void Arrival(Vector3D position, string command)
+        {
+            string message = $"ARRIVAL|{Utils.VectorToStr(position)}¬{command}";
+            WriteLogLCDs($"Arrival: {message}");
+            pbPilot.TryRun(message);
+        }
+        void Navigator(Vector3D position)
+        {
+            string message = $"NAVIGATE|{Utils.VectorToStr(position)}";
+            WriteLogLCDs($"Navigator: {message}");
+            pbPilot.TryRun(message);
+        }
+
         void LoadFromStorage()
         {
             string[] storageLines = Storage.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+            if (storageLines.Length == 0)
+            {
+                return;
+            }
+
+            Runtime.UpdateFrequency = (UpdateFrequency)Utils.ReadInt(storageLines, "UpdateFrequency");
             status = (ShipStatus)Utils.ReadInt(storageLines, "Status");
-            currentTrip.LoadFromStore(storageLines);
+            currentTrip.LoadFromStorage(storageLines);
         }
         void SaveToStorage()
         {
-            Storage = $"Status={(int)status}{Environment.NewLine}" + currentTrip.SaveToStore();
+            List<string> parts = new List<string>
+            {
+                $"UpdateFrequency={(int)Runtime.UpdateFrequency}",
+                $"Status={(int)status}{Environment.NewLine}",
+                currentTrip.SaveToStorage(),
+            };
+
+            Storage = string.Join(Environment.NewLine, parts);
         }
     }
 }

@@ -104,13 +104,6 @@ namespace IngameScript
             return StrToVectorList(value);
         }
 
-        public static string ReverseString(string str, char sep = VariableSep)
-        {
-            string[] parts = str.Split(sep);
-            Array.Reverse(parts);
-            return string.Join($"{sep}", parts);
-        }
-
         public static double AngleBetweenVectors(Vector3D v1, Vector3D v2)
         {
             v1.Normalize();
@@ -133,5 +126,6 @@ namespace IngameScript
         {
             return Math.Abs(v.X) < thr && Math.Abs(v.Y) < thr && Math.Abs(v.Z) < thr;
         }
+
     }
 }
