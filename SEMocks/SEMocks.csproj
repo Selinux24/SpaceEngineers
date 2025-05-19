@@ -6,7 +6,7 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <Configurations>Release;Debug</Configurations>
     <Platforms>x64</Platforms>
-    <RootNamespace>VRageMath</RootNamespace>
+    <RootNamespace>IngameScript</RootNamespace>
   </PropertyGroup>
 
 </Project>

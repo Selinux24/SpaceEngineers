@@ -5,21 +5,31 @@ using VRageMath;
 
 namespace IngameScript
 {
-    static class Utils
+    public static class Utils
     {
-        public static string ReadArgument(string argument, string command)
+        const char ArgumentSep = '=';
+        const char VariableSep = ';';
+        const char VariablePartSep = ':';
+        const char AttributeSep = '=';
+
+        public static string ReadArgument(string[] arguments, string command, char sep = ArgumentSep)
         {
-            string cmdToken = $"{command}|";
+            string cmdToken = $"{command}{sep}";
+            return arguments.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";
+        }
+        public static string ReadArgument(string argument, string command, char sep = ArgumentSep)
+        {
+            string cmdToken = $"{command}{sep}";
             return argument.StartsWith(cmdToken) ? argument.Replace(cmdToken, "") : "";
         }
 
         public static string VectorToStr(Vector3D v)
         {
-            return $"{v.X}:{v.Y}:{v.Z}";
+            return $"{v.X}{VariablePartSep}{v.Y}{VariablePartSep}{v.Z}";
         }
         public static Vector3D StrToVector(string input)
         {
-            var trimmed = input.Split(':');
+            var trimmed = input.Split(VariablePartSep);
             return new Vector3D(
                 double.Parse(trimmed[0]),
                 double.Parse(trimmed[1]),
@@ -28,29 +38,33 @@ namespace IngameScript
         }
         public static List<Vector3D> StrToVectorList(string data)
         {
-            List<Vector3D> wp = new List<Vector3D>();
+            List<Vector3D> res = new List<Vector3D>();
 
             if (string.IsNullOrEmpty(data))
             {
-                return wp;
+                return res;
             }
 
-            string[] points = data.Split(';');
+            string[] points = data.Split(VariableSep);
             for (int i = 0; i < points.Length; i++)
             {
-                wp.Add(StrToVector(points[i]));
+                res.Add(StrToVector(points[i]));
             }
 
-            return wp;
+            return res;
         }
         public static string VectorListToStr(List<Vector3D> list)
         {
-            return string.Join(";", list.Select(VectorToStr));
+            return string.Join($"{VariableSep}", list.Select(VectorToStr));
+        }
+        public static int StrToInt(string s)
+        {
+            return int.Parse(s);
         }
 
         public static string ReadString(string[] lines, string name, string defaultValue = null)
         {
-            string cmdToken = $"{name}=";
+            string cmdToken = $"{name}{AttributeSep}";
             string value = lines.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";
             if (string.IsNullOrEmpty(value))
             {
@@ -90,6 +104,13 @@ namespace IngameScript
             return StrToVectorList(value);
         }
 
+        public static string ReverseString(string str, char sep = VariableSep)
+        {
+            string[] parts = str.Split(sep);
+            Array.Reverse(parts);
+            return string.Join($"{sep}", parts);
+        }
+
         public static double AngleBetweenVectors(Vector3D v1, Vector3D v2)
         {
             v1.Normalize();
@@ -97,6 +118,20 @@ namespace IngameScript
             double dot = Vector3D.Dot(v1, v2);
             dot = MathHelper.Clamp(dot, -1.0, 1.0);
             return Math.Acos(dot);
+        }
+        public static Vector3D CalculateThrustForce(Vector3D toTarget, double desiredSpeed, Vector3D currentVelocity, double mass)
+        {
+            var desiredDirection = Vector3D.Normalize(toTarget);
+
+            var desiredVelocity = desiredDirection * desiredSpeed;
+            var velocityError = desiredVelocity - currentVelocity;
+
+            return velocityError * mass * 0.5;  // Ganancia ajustable.
+        }
+
+        public static bool IsZero(Vector3D v, double thr)
+        {
+            return Math.Abs(v.X) < thr && Math.Abs(v.Y) < thr && Math.Abs(v.Z) < thr;
         }
     }
 }

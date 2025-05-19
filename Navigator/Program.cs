@@ -6,13 +6,31 @@ using VRageMath;
 
 namespace IngameScript
 {
+    /// <summary>
+    /// Fase1 - Encarar al destino
+    /// Fase2 - Acelerar hasta velocidad de crucero
+    /// Fase3 - Mantener velocidad de crucero con thrusters apagados
+    /// Fase4 - Frenado al llegar al destino
+    /// Fase5 - Aviso de llegada
+    ///
+    /// Con la detección de un obstáculo, se activa el modo de esquivar.
+    /// Fase1 - Localizar el obstáculo y obtener información de radio y distancia al obstáculo
+    /// Fase2 - Frenar
+    /// Fase3 - Calcular tres puntos de ruta de esquiva
+    ///     Punto A: Desde el punto actual de la nave, con el vector UP de la nave multiplicado por el radio del obstáculo + margen de seguridad
+    ///     Punto B: Desde el punto A, con el vector FORWARD de la nave multiplicado por la distancia al obstáculo* 2
+    ///     Punto C: Desde el punto B, con el vector DOWN de la nave multiplicado por el radio del obstáculo + margen de seguridad
+    /// Fase4 - Desplazarse siguiendo los puntos sin girar
+    /// Fase5 - Aceleración
+    /// </summary>
     partial class Program : MyGridProgram
     {
-        const string NavTag = "NAV|";
+        #region Constants
+        const string NavTag = "NAVIGATE|";
         const string StopTag = "STOP";
-        const string RemoteName = "HT Remote Control Pilot";
-        const string CameraName = "HT Camera Pilot";
-        const string BeaconName = "HT Distress Beacon";
+        const string shipRemoteControlNavigator = "HT Remote Control Pilot";
+        const string shipCameraNavigator = "HT Camera Pilot";
+        const string shipBeaconName = "HT Distress Beacon";
 
         //Velocidad de los giroscopios
         const double GyrosSpeed = 5f;
@@ -20,7 +38,7 @@ namespace IngameScript
         // Velocidad máxima de crucero
         const double MaxSpeed = 100.0;
         const double MaxSpeedTrh = 0.95;
-        
+
         // TODO: A una distancia del destino, bajar la velocidad de crucero a la mitad
         // TODO: Las correcciones de trayectoria en el modo de crucero deben hacerse con los propulsores pequeños
         // TODO: Cuando se quede a un porcentaje de batería, parar y esperar a que se recargue
@@ -40,117 +58,107 @@ namespace IngameScript
         const double CollisionDetectRange = 2500.0;
         const double EvadingWaypointDistance = 100.0;
         const double EvadingMaxSpeed = 19.5;
+        #endregion
 
-        /*
-        Fase1 - Encarar al destino
-        Fase2 - Acelerar hasta velocidad de crucero
-        Fase3 - Mantener velocidad de crucero con thrusters apagados
-        Fase4 - Frenado al llegar al destino
-        Fase5 - Aviso de llegada
-
-        Con la detección de un obstáculo, se activa el modo de esquivar.
-        Fase1 - Localizar el obstáculo y obtener información de radio y distancia al obstáculo
-        Fase2 - Frenar
-        Fase3 - Calcular tres puntos de ruta de esquiva
-            Punto A: Desde el punto actual de la nave, con el vector UP de la nave multiplicado por el radio del obstáculo + margen de seguridad
-            Punto B: Desde el punto A, con el vector FORWARD de la nave multiplicado por la distancia al obstáculo * 2
-            Punto C: Desde el punto B, con el vector DOWN de la nave multiplicado por el radio del obstáculo + margen de seguridad
-        Fase4 - Desplazarse siguiendo los puntos sin girar
-        Fase5 - Aceleración
-         */
-
-        enum NavState
-        {
-            Idle, Locating, Accelerating, Braking, Cruising, Avoiding, Distress
-        }
-
-        readonly IMyRemoteControl remote;
-        readonly IMyCameraBlock camera;
+        #region Blocks
+        readonly IMyRemoteControl remoteNavigator;
+        readonly IMyCameraBlock cameraNavigator;
+        readonly IMyBeacon beacon;
         readonly List<IMyThrust> thrusters;
         readonly List<IMyGyro> gyros;
-        readonly IMyBeacon beacon;
+        #endregion
 
-        NavState currentState = NavState.Idle;
-        Vector3D destination;
-        bool hasTarget = false;
-        bool thrusting = false;
-        readonly List<Vector3D> evadingPoints = new List<Vector3D>();
-
-        MyDetectedEntityInfo lastHit;
-        Vector3D toTarget;
-        Vector3D toTargetN;
-        DateTime alignThrustStart = DateTime.Now;
+        readonly NavigationData navigationData = new NavigationData();
 
         public Program()
         {
-            Runtime.UpdateFrequency = UpdateFrequency.Update1;
+            Runtime.UpdateFrequency = UpdateFrequency.None;
 
-            remote = GetBlockWithName<IMyRemoteControl>(RemoteName);
-            camera = GetBlockWithName<IMyCameraBlock>(CameraName);
-            beacon = GetBlockWithName<IMyBeacon>(BeaconName);
-            thrusters = GetBlocksOfType<IMyThrust>();
+            remoteNavigator = GetBlockWithName<IMyRemoteControl>(shipRemoteControlNavigator);
+            if (remoteNavigator == null)
+            {
+                Echo($"Remote Control {shipRemoteControlNavigator} not found.");
+                return;
+            }
+
+            cameraNavigator = GetBlockWithName<IMyCameraBlock>(shipCameraNavigator);
+            if (cameraNavigator == null)
+            {
+                Echo($"Camera {shipCameraNavigator} not found.");
+                return;
+            }
+
+            beacon = GetBlockWithName<IMyBeacon>(shipBeaconName);
+            if (beacon == null)
+            {
+                Echo($"Beacon {shipBeaconName} not found.");
+                return;
+            }
+
             gyros = GetBlocksOfType<IMyGyro>();
-
-            LoadState();
-        }
-
-        void LoadState()
-        {
-            if (Storage.Length == 0) return;
-
-            var parts = Storage.Split('|');
-            if (parts.Length >= 6)
+            if (gyros.Count == 0)
             {
-                currentState = (NavState)StrToInt(parts[0]);
-                destination = StrToVec(parts[1]);
-                hasTarget = StrToInt(parts[2]) == 1;
-                thrusting = StrToInt(parts[3]) == 1;
-                int evadingCount = StrToInt(parts[4]);
-                evadingPoints.Clear();
-                for (int i = 0; i < evadingCount; i++)
-                {
-                    evadingPoints.Add(StrToVec(parts[5 + i]));
-                }
-            }
-        }
-        void SaveState()
-        {
-            var parts = new List<string>
-            {
-                $"{(int)currentState}",
-                $"{VecToStr(destination)}",
-                $"{(hasTarget?1:0)}",
-                $"{(thrusting?1:0)}",
-            };
-            if (evadingPoints.Count > 0)
-            {
-                parts.Add($"{evadingPoints.Count}");
-                foreach (var p in evadingPoints)
-                {
-                    parts.Add($"{VecToStr(p)}");
-                }
+                Echo("Grid without gyroscopes.");
+                return;
             }
 
-            Storage = string.Join("|", parts);
+            thrusters = GetBlocksOfType<IMyThrust>();
+            if (thrusters.Count == 0)
+            {
+                Echo("Grid without thrusters.");
+                return;
+            }
+
+            LoadFromStorage();
+
+            Runtime.UpdateFrequency = UpdateFrequency.Update1;
         }
 
         public void Main(string argument, UpdateType updateSource)
         {
-            if (argument.StartsWith(NavTag))
+            if (!string.IsNullOrEmpty(argument))
             {
-                StartNavigation(argument.Substring(NavTag.Length));
+                if (argument == StopTag)
+                {
+                    DoStop();
+                    return;
+                }
+                if (argument.StartsWith(NavTag))
+                {
+                    InitializeNavigation(Utils.ReadArgument(argument, NavTag, '|'));
+                    return;
+                }
+
+                Echo($"Unknown argument: {argument}");
                 return;
             }
 
-            if (argument == StopTag)
-            {
-                Stop();
-                return;
-            }
+            DoNavigation();
+        }
 
-            Echo($"State {currentState}");
+        void DoStop()
+        {
+            Runtime.UpdateFrequency = UpdateFrequency.None;
+            navigationData.Clear();
+            SaveToStorage();
+            ResetGyros();
+            ResetThrust();
+            BroadcastStatus("Navigation stopped.");
+        }
 
-            if (!hasTarget || currentState == NavState.Idle)
+        #region NAVIGATOR
+        void InitializeNavigation(string message)
+        {
+            navigationData.Initialize(message);
+            Runtime.UpdateFrequency = UpdateFrequency.Update1;
+            SaveToStorage();
+            BroadcastStatus("Starting navigation.");
+        }
+        void DoNavigation()
+        {
+            Echo($"State {navigationData.CurrentState}");
+
+            if (!navigationData.HasTarget || navigationData.CurrentState == NavState.Idle)
             {
                 /*
                 IsObstacleAhead();
@@ -179,20 +187,12 @@ namespace IngameScript
                 return;
             }
 
-            toTarget = destination - camera.GetPosition();
-            toTargetN = Vector3D.Normalize(toTarget);
+            navigationData.UpdatePosition(cameraNavigator.GetPosition());
 
-            Echo($"To target: {toTarget.Length():F2}m.");
-            //Echo($"T: {VecToStr(toTargetN)}");
-            //Echo($"S: {VecToStr(remote.WorldMatrix.Forward)}");
+            Echo($"To target: {navigationData.DistanceToTarget:F2}m.");
+            Echo(navigationData.PrintObstacle());
 
-            //Echo($"HIT {VecToStr(lastHit.HitPosition ?? Vector3D.Zero)}");
-            if (!lastHit.IsEmpty())
-            {
-                Echo($"Obstacle detected. {lastHit.Name} - Type {lastHit.Type}");
-            }
-
-            switch (currentState)
+            switch (navigationData.CurrentState)
             {
                 case NavState.Distress:
                     Distress();
@@ -216,50 +216,21 @@ namespace IngameScript
                     break;
             }
 
-            SaveState();
+            SaveToStorage();
         }
-
-        void StartNavigation(string navParams)
-        {
-            destination = StrToVec(navParams);
-            hasTarget = true;
-            evadingPoints.Clear();
-            currentState = NavState.Locating;
-            thrusting = false;
-            evadingPoints.Clear();
-            lastHit = new MyDetectedEntityInfo();
-            BroadcastStatus("Starting navigation.");
-            SaveState();
-        }
-        void Stop()
-        {
-            destination = Vector3D.Zero;
-            hasTarget = false;
-            evadingPoints.Clear();
-            currentState = NavState.Idle;
-            thrusting = false;
-            evadingPoints.Clear();
-            lastHit = new MyDetectedEntityInfo();
-            BroadcastStatus("Navigation stopped.");
-            SaveState();
-        }
-
-        // === ESTADOS ===
-
         void Distress()
         {
             if (beacon != null) beacon.Enabled = true;
-            BroadcastStatus($"DISTRESS: Engines damaged!, waiting in position {VecToStr(remote.GetPosition())}");
+            BroadcastStatus($"DISTRESS: Engines damaged!, waiting in position {Utils.VectorToStr(remoteNavigator.GetPosition())}");
             ResetThrust();
             ResetGyros();
         }
-
         void Locate()
         {
-            if (AlignToDirection(remote.WorldMatrix.Forward, AlignThr))
+            if (AlignToDirection(remoteNavigator.WorldMatrix.Forward, AlignThr))
             {
                 BroadcastStatus("Destination located. Initializing acceleration.");
-                currentState = NavState.Accelerating;
+                navigationData.CurrentState = NavState.Accelerating;
 
                 return;
             }
@@ -268,26 +239,26 @@ namespace IngameScript
         }
         void Accelerate()
         {
-            if (IsObstacleAhead())
+            if (navigationData.IsObstacleAhead(cameraNavigator, CollisionDetectRange))
             {
                 BroadcastStatus("Obstacle detected. Avoiding...");
-                currentState = NavState.Avoiding;
+                navigationData.CurrentState = NavState.Avoiding;
                 return;
             }
 
-            if (toTarget.Length() < ToTargetBrakingDistance)
+            if (navigationData.DistanceToTarget < ToTargetBrakingDistance)
             {
                 BroadcastStatus("Destination reached. Braking.");
-                currentState = NavState.Braking;
+                navigationData.CurrentState = NavState.Braking;
 
                 return;
             }
 
-            var shipVelocity = remote.GetShipVelocities().LinearVelocity.Length();
+            var shipVelocity = remoteNavigator.GetShipVelocities().LinearVelocity.Length();
             if (shipVelocity >= MaxSpeed * MaxSpeedTrh)
             {
                 BroadcastStatus("Reached cruise speed. Deactivating thrusters.");
-                currentState = NavState.Cruising;
+                navigationData.CurrentState = NavState.Cruising;
                 return;
             }
 
@@ -296,47 +267,47 @@ namespace IngameScript
         }
         void Cruise()
         {
-            if (IsObstacleAhead())
+            if (navigationData.IsObstacleAhead(cameraNavigator, CollisionDetectRange))
             {
                 BroadcastStatus("Obstacle detected. Avoiding...");
-                currentState = NavState.Avoiding;
+                navigationData.CurrentState = NavState.Avoiding;
 
                 return;
             }
 
-            if (toTarget.Length() < ToTargetBrakingDistance)
+            if (navigationData.DistanceToTarget < ToTargetBrakingDistance)
             {
                 BroadcastStatus("Destination reached. Braking.");
-                currentState = NavState.Braking;
+                navigationData.CurrentState = NavState.Braking;
 
                 return;
             }
 
             // Mantener velocidad
-            if (!AlignToDirection(remote.WorldMatrix.Forward, CruiseAlignThr))
+            if (!AlignToDirection(remoteNavigator.WorldMatrix.Forward, CruiseAlignThr))
             {
                 // Encender los propulsores hasta alinear de nuevo el vector velocidad con el vector hasta el objetivo
                 ThrustToTarget(MaxSpeed);
-                alignThrustStart = DateTime.Now;
-                thrusting = true;
+                navigationData.AlignThrustStart = DateTime.Now;
+                navigationData.Thrusting = true;
 
                 return;
             }
 
-            if (thrusting)
+            if (navigationData.Thrusting)
             {
                 // Propulsores encendidos para recuperar la alineación
-                if ((DateTime.Now - alignThrustStart).TotalSeconds > ThrustSeconds)
+                if ((DateTime.Now - navigationData.AlignThrustStart).TotalSeconds > ThrustSeconds)
                 {
                     // Tiempo de alineación consumido. Desactivar propulsores
                     EnterCruising();
-                    thrusting = false;
+                    navigationData.Thrusting = false;
                 }
 
                 return;
             }
 
-            var shipVelocity = remote.GetShipVelocities().LinearVelocity.Length();
+            var shipVelocity = remoteNavigator.GetShipVelocities().LinearVelocity.Length();
             if (shipVelocity > MaxSpeed)
             {
                 // Velocidad máxima superada. Encender propulsores en neutro para frenar
@@ -361,85 +332,58 @@ namespace IngameScript
             ResetThrust();
             ResetGyros();
 
-            var shipVelocity = remote.GetShipVelocities().LinearVelocity.Length();
+            var shipVelocity = remoteNavigator.GetShipVelocities().LinearVelocity.Length();
             if (shipVelocity <= 0.1)
             {
                 BroadcastStatus("Destination reached.");
-                currentState = NavState.Idle;
+                navigationData.CurrentState = NavState.Idle;
             }
         }
-
         void Avoid()
         {
-            if (toTarget.Length() < ToTargetBrakingDistance)
+            if (navigationData.DistanceToTarget < ToTargetBrakingDistance)
             {
                 BroadcastStatus("Destination reached. Braking.");
-                currentState = NavState.Braking;
+                navigationData.CurrentState = NavState.Braking;
 
                 return;
             }
 
             // Calcular los puntos de evasión
-            if (!CalculateEvadingWaypoints())
+            if (!navigationData.CalculateEvadingWaypoints(cameraNavigator))
             {
                 //No se puede calcular un punto de evasión
-                currentState = NavState.Braking;
+                navigationData.CurrentState = NavState.Braking;
 
                 return;
             }
 
             // Navegar entre los puntos de evasión
-            if (evadingPoints.Count > 0)
+            if (navigationData.EvadingPoints.Count > 0)
             {
-                NavigateTo(evadingPoints[0], EvadingMaxSpeed);
+                NavigateTo(navigationData.EvadingPoints[0], EvadingMaxSpeed);
 
-                if (evadingPoints.Count == 0)
+                if (navigationData.EvadingPoints.Count == 0)
                 {
                     // Limpiar la información del obstáculo
-                    lastHit = new MyDetectedEntityInfo();
+                    navigationData.ClearObstacle();
 
                     ResetThrust();
 
                     // Volver a navegación cuando se alcance el último punto de navegación
-                    currentState = NavState.Locating;
+                    navigationData.CurrentState = NavState.Locating;
                 }
 
                 return;
             }
         }
-        bool CalculateEvadingWaypoints()
-        {
-            if (evadingPoints.Count > 0)
-            {
-                // Ya se han calculado los puntos de evasión
-                return true;
-            }
-
-            if (lastHit.IsEmpty())
-            {
-                return false;
-            }
-
-            var obstacleCenter = lastHit.Position;
-            var obstacleSize = Math.Max(lastHit.BoundingBox.Extents.X, Math.Max(lastHit.BoundingBox.Extents.Y, lastHit.BoundingBox.Extents.Z));
-
-            //Punto sobre el obstáculo desde el punto de vista de la nave
-            var p1 = obstacleCenter + (camera.WorldMatrix.Up * obstacleSize);
-            evadingPoints.Add(p1);
-
-            //Punto al otro lado del obstáculo desde el punto de vista de la nave
-            var p2 = obstacleCenter + (camera.WorldMatrix.Forward * obstacleSize);
-            evadingPoints.Add(p2);
-
-            return true;
-        }
         void NavigateTo(Vector3D wayPoint, double maxSpeed)
         {
-            var d = Vector3D.Distance(wayPoint, camera.GetPosition());
+            var d = Vector3D.Distance(wayPoint, cameraNavigator.GetPosition());
             if (d <= EvadingWaypointDistance)
             {
                 // Waypoint alcanzado
-                evadingPoints.RemoveAt(0);
+                navigationData.EvadingPoints.RemoveAt(0);
 
                 return;
             }
@@ -449,8 +393,22 @@ namespace IngameScript
 
             ThrustToPosition(wayPoint, maxSpeed);
         }
+        #endregion
 
-        // === UTILIDAD ===
+        #region UTILITY
+        T GetBlockWithName<T>(string name) where T : class, IMyTerminalBlock
+        {
+            List<T> blocks = new List<T>();
+            GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid);
+
+            return blocks.FirstOrDefault(b => b.CustomName == name);
+        }
+        List<T> GetBlocksOfType<T>() where T : class, IMyTerminalBlock
+        {
+            var blocks = new List<T>();
+            GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid);
+            return blocks.ToList();
+        }
 
         void BroadcastStatus(string msg)
         {
@@ -460,29 +418,22 @@ namespace IngameScript
 
         void ThrustToTarget(double maxSpeed)
         {
-            var force = CalculateThrustForce(toTargetN, maxSpeed);
+            var currentVelocity = remoteNavigator.GetShipVelocities().LinearVelocity;
+            double mass = remoteNavigator.CalculateShipMass().PhysicalMass;
+            var force = Utils.CalculateThrustForce(navigationData.DirectionToTarget, maxSpeed, currentVelocity, mass);
             ApplyThrust(force);
         }
         void ThrustToPosition(Vector3D position, double maxSpeed)
         {
             // Vector normalizado desde la cámara al objetivo
-            var v = Vector3D.Normalize(position - camera.GetPosition());
+            var toTarget = Vector3D.Normalize(position - cameraNavigator.GetPosition());
+            var currentVelocity = remoteNavigator.GetShipVelocities().LinearVelocity;
+            double mass = remoteNavigator.CalculateShipMass().PhysicalMass;
 
-            var force = CalculateThrustForce(v, maxSpeed);
+            var force = Utils.CalculateThrustForce(toTarget, maxSpeed, currentVelocity, mass);
             ApplyThrust(force);
         }
 
-        Vector3D CalculateThrustForce(Vector3D toTarget, double desiredSpeed)
-        {
-            var desiredDirection = Vector3D.Normalize(toTarget);
-            var currentVelocity = remote.GetShipVelocities().LinearVelocity;
-
-            var desiredVelocity = desiredDirection * desiredSpeed;
-            var velocityError = desiredVelocity - currentVelocity;
-
-            double mass = remote.CalculateShipMass().PhysicalMass;
-            return velocityError * mass * 0.5;  // Ganancia ajustable.
-        }
         void ApplyThrust(Vector3D force)
         {
             foreach (var t in thrusters)
@@ -507,16 +458,17 @@ namespace IngameScript
             foreach (var t in thrusters)
             {
                 t.Enabled = false;
+                t.ThrustOverridePercentage = 0;
             }
         }
 
         bool AlignToDirection(Vector3D direction, double thr)
         {
-            double angle = AngleBetweenVectors(direction, toTargetN);
+            double angle = Utils.AngleBetweenVectors(direction, navigationData.DirectionToTarget);
             Echo($"Alineación: {angle:F4}");
 
-            var rotationAxis = Vector3D.Cross(direction, toTargetN);
-            if (IsZero(rotationAxis, thr))
+            var rotationAxis = Vector3D.Cross(direction, navigationData.DirectionToTarget);
+            if (Utils.IsZero(rotationAxis, thr))
             {
                 ResetGyros();
                 Echo("Alineado con el objetivo.");
@@ -527,10 +479,6 @@ namespace IngameScript
             ApplyGyroOverride(rotationAxis);
 
             return false;
-        }
-        static bool IsZero(Vector3D v, double thr)
-        {
-            return Math.Abs(v.X) < thr && Math.Abs(v.Y) < thr && Math.Abs(v.Z) < thr;
         }
         void ApplyGyroOverride(Vector3D axis)
         {
@@ -562,52 +510,27 @@ namespace IngameScript
             ResetGyros();
         }
 
-        bool IsObstacleAhead()
+        void LoadFromStorage()
         {
-            camera.EnableRaycast = true;
-            if (camera.CanScan(CollisionDetectRange))
+            string[] storageLines = Storage.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+            if (storageLines.Length == 0)
             {
-                lastHit = camera.Raycast(CollisionDetectRange);
-                return !lastHit.IsEmpty() && Vector3D.Distance(lastHit.HitPosition.Value, camera.GetPosition()) <= CollisionDetectRange;
+                return;
             }
 
-            return false;
+            Runtime.UpdateFrequency = (UpdateFrequency)Utils.ReadInt(storageLines, "UpdateFrequency");
+            navigationData.LoadFromStorage(Utils.ReadString(storageLines, "NavigationData"));
         }
+        void SaveToStorage()
+        {
+            List<string> parts = new List<string>
+            {
+                $"UpdateFrequency={(int)Runtime.UpdateFrequency}",
+                $"NavigationData={navigationData.SaveToStorage()}",
+            };
 
-        static double AngleBetweenVectors(Vector3D v1, Vector3D v2)
-        {
-            v1.Normalize();
-            v2.Normalize();
-            double dot = Vector3D.Dot(v1, v2);
-            dot = MathHelper.Clamp(dot, -1.0, 1.0);
-            return Math.Acos(dot);
+            Storage = string.Join(Environment.NewLine, parts);
         }
-        static int StrToInt(string s)
-        {
-            return int.Parse(s);
-        }
-        static Vector3D StrToVec(string s)
-        {
-            var nums = s.Split(':');
-            if (nums.Length != 3) throw new Exception($"{s} is not a valid vector => x:y:z");
-            return new Vector3D(double.Parse(nums[0]), double.Parse(nums[1]), double.Parse(nums[2]));
-        }
-        static string VecToStr(Vector3D v)
-        {
-            return $"{v.X:F2}:{v.Y:F2}:{v.Z:F2}";
-        }
-        T GetBlockWithName<T>(string name) where T : class, IMyTerminalBlock
-        {
-            List<T> blocks = new List<T>();
-            GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid);
-
-            return blocks.FirstOrDefault(b => b.CustomName == name);
-        }
-        List<T> GetBlocksOfType<T>() where T : class, IMyTerminalBlock
-        {
-            var blocks = new List<T>();
-            GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid);
-            return blocks.ToList();
-        }
+        #endregion
     }
 }

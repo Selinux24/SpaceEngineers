@@ -10,10 +10,10 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
+        #region Constants
         const string channel = "SHIPS_DELIVERY";
         const string shipRemoteControlPilot = "HT Remote Control Pilot";
-        const string shipArrivalPB = "HT Automaton Programmable Block Arrival";
-        const string shipAlignPB = "HT Automaton Programmable Block Align";
+        const string shipPilotPB = "HT Automaton Programmable Block Pilot";
         const string shipNavigatorPB = "HT Automaton Programmable Block Navigator";
         const string shipTimerPilot = "HT Automaton Timer Block Pilot";
         const string shipTimerLock = "HT Automaton Timer Block Locking";
@@ -23,13 +23,13 @@ namespace IngameScript
         const string shipTimerWaiting = "HT Automaton Timer Block Waiting";
         const string shipLogLCDs = "[DELIVERY_LOG]";
         const int approachVelocity = 15;
+        #endregion
 
-        readonly string shipId;
+        #region Blocks
         readonly IMyBroadcastListener bl;
         readonly IMyRemoteControl remotePilot;
-        readonly IMyProgrammableBlock arrivalPB;
-        readonly IMyProgrammableBlock alignPB;
-        readonly IMyProgrammableBlock navigatorPB;
+        readonly IMyProgrammableBlock pbPilot;
+        readonly IMyProgrammableBlock pbNavigator;
         readonly IMyTimerBlock timerPilot;
         readonly IMyTimerBlock timerLock;
         readonly IMyTimerBlock timerUnlock;
@@ -37,171 +37,13 @@ namespace IngameScript
         readonly IMyTimerBlock timerUnload;
         readonly IMyTimerBlock timerWaiting;
         readonly List<IMyTextPanel> logLCDs = new List<IMyTextPanel>();
-        readonly StringBuilder sbLog = new StringBuilder();
+        #endregion
 
+        readonly string shipId;
         readonly TripData currentTrip = new TripData();
+        readonly StringBuilder sbLog = new StringBuilder();
         ShipStatus status = ShipStatus.Idle;
         bool enableLogs = false;
-
-        #region Helper classes
-        enum ShipStatus
-        {
-            Unknown,
-            Idle,
-
-            ApproachingWarehouse,
-            Loading,
-            RouteToCustomer,
-
-            WaitingForUnload,
-
-            ApproachingCustomer,
-            Unloading,
-            RouteToWarehouse,
-        }
-        class TripData
-        {
-            public int OrderId;
-            public string OrderWarehouse;
-            public Vector3D OrderWarehouseParking;
-            public string OrderCustomer;
-            public Vector3D OrderCustomerParking;
-
-            public string ExchangeName;
-            public string ExchangeForward;
-            public string ExchangeUp;
-            public string ExchangeApproachingWaypoints;
-            public string ExchangeDepartingWaypoints;
-
-            public string AlignFwd;
-            public string AlignUp;
-            public string Waypoints;
-            public string OnLastWaypoint;
-
-            public string DestinationName;
-            public Vector3D DestinationPosition;
-            public string OnDestinationArrival;
-
-            public void LoadFromStore(string[] lines)
-            {
-                OrderId = ReadInt(lines, "OrderId", -1);
-                OrderWarehouse = ReadString(lines, "OrderWarehouse");
-                OrderWarehouseParking = StrToVector(ReadString(lines, "OrderWarehouseParking"));
-                OrderCustomer = ReadString(lines, "OrderCustomer");
-                OrderCustomerParking = StrToVector(ReadString(lines, "OrderCustomerParking"));
-
-                ExchangeName = ReadString(lines, "ExchangeName");
-                ExchangeForward = ReadString(lines, "ExchangeForward");
-                ExchangeUp = ReadString(lines, "ExchangeUp");
-                ExchangeApproachingWaypoints = ReadString(lines, "ExchangeApproachingWaypoints");
-                ExchangeDepartingWaypoints = ReadString(lines, "ExchangeDepartingWaypoints");
-
-                AlignFwd = ReadString(lines, "AlignFwd");
-                AlignUp = ReadString(lines, "AlignUp");
-                Waypoints = ReadString(lines, "Waypoints");
-                OnLastWaypoint = ReadString(lines, "OnLastWaypoint");
-
-                DestinationName = ReadString(lines, "DestinationName");
-                DestinationPosition = StrToVector(ReadString(lines, "DestinationPosition"));
-                OnDestinationArrival = ReadString(lines, "OnDestinationArrival");
-            }
-            public string SaveToStore()
-            {
-                Dictionary<string, string> datos = new Dictionary<string, string>();
-
-                datos["OrderId"] = OrderId.ToString();
-                datos["OrderWarehouse"] = OrderWarehouse;
-                datos["OrderWarehouseParking"] = VectorToStr(OrderWarehouseParking);
-                datos["OrderCustomer"] = OrderCustomer;
-                datos["OrderCustomerParking"] = VectorToStr(OrderCustomerParking);
-
-                datos["ExchangeName"] = ExchangeName;
-                datos["ExchangeForward"] = ExchangeForward;
-                datos["ExchangeUp"] = ExchangeUp;
-                datos["ExchangeApproachingWaypoints"] = ExchangeApproachingWaypoints;
-                datos["ExchangeDepartingWaypoints"] = ExchangeDepartingWaypoints;
-
-                datos["AlignFwd"] = AlignFwd;
-                datos["AlignUp"] = AlignUp;
-                datos["Waypoints"] = Waypoints;
-                datos["OnLastWaypoint"] = OnLastWaypoint;
-
-                datos["DestinationName"] = DestinationName;
-                datos["DestinationPosition"] = VectorToStr(DestinationPosition);
-                datos["OnDestinationArrival"] = OnDestinationArrival;
-
-                var lineas = new List<string>();
-                foreach (var kvp in datos)
-                {
-                    lineas.Add($"{kvp.Key}={kvp.Value}");
-                }
-
-                return string.Join(Environment.NewLine, lineas);
-            }
-
-            public void SetOrder(int orderId, string warehouse, Vector3D warehouseParking, string customer, Vector3D customerParking)
-            {
-                OrderId = orderId;
-                OrderWarehouse = warehouse;
-                OrderWarehouseParking = warehouseParking;
-                OrderCustomer = customer;
-                OrderCustomerParking = customerParking;
-            }
-            public void ClearOrder()
-            {
-                OrderId = -1;
-                OrderWarehouse = null;
-                OrderWarehouseParking = new Vector3D();
-                OrderCustomer = null;
-                OrderCustomerParking = new Vector3D();
-            }
-
-            public void SetExchange(string name, string forward, string up, string waypoints)
-            {
-                ExchangeName = name;
-                ExchangeForward = forward;
-                ExchangeUp = up;
-                ExchangeApproachingWaypoints = waypoints;
-                ExchangeDepartingWaypoints = ReverseString(waypoints);
-            }
-            public void ClearExchange()
-            {
-                ExchangeName = null;
-                ExchangeForward = null;
-                ExchangeUp = null;
-                ExchangeApproachingWaypoints = null;
-                ExchangeDepartingWaypoints = null;
-            }
-
-            public void NavigateFromExchange(string onLastWaypoint)
-            {
-                AlignFwd = ExchangeForward;
-                AlignUp = ExchangeUp;
-                Waypoints = ExchangeDepartingWaypoints;
-                OnLastWaypoint = onLastWaypoint;
-            }
-            public void NavigateToExchange(string onLastWaypoint)
-            {
-                AlignFwd = ExchangeForward;
-                AlignUp = ExchangeUp;
-                Waypoints = ExchangeApproachingWaypoints;
-                OnLastWaypoint = onLastWaypoint;
-            }
-            public void NavigateToWarehouse(string onDestinationArrival)
-            {
-                DestinationName = OrderWarehouse;
-                DestinationPosition = OrderWarehouseParking;
-                OnDestinationArrival = onDestinationArrival;
-            }
-            public void NavigateToCustomer(string onDestinationArrival)
-            {
-
-                DestinationName = OrderCustomer;
-                DestinationPosition = OrderCustomerParking;
-                OnDestinationArrival = onDestinationArrival;
-            }
-        }
-        #endregion
 
         T GetBlockWithName<T>(string name) where T : class, IMyTerminalBlock
         {
@@ -209,77 +51,6 @@ namespace IngameScript
             GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid);
 
             return blocks.FirstOrDefault(b => b.CustomName.Contains(name));
-        }
-        static string ReadArgument(string[] lines, string command)
-        {
-            string cmdToken = $"{command}=";
-            return lines.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";
-        }
-        static string ReadString(string[] lines, string name, string defaultValue = null)
-        {
-            string cmdToken = $"{name}=";
-            string value = lines.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";
-            if (string.IsNullOrEmpty(value))
-            {
-                return defaultValue;
-            }
-
-            return value;
-        }
-        static int ReadInt(string[] lines, string name, int defaultValue = 0)
-        {
-            string cmdToken = $"{name}=";
-            string value = lines.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";
-            if (string.IsNullOrEmpty(value))
-            {
-                return defaultValue;
-            }
-
-            return int.Parse(value);
-        }
-        static ShipStatus ReadShipStatus(string[] lines, string name, ShipStatus defaultValue = ShipStatus.Unknown)
-        {
-            return (ShipStatus)ReadInt(lines, name, (int)defaultValue);
-        }
-        static string ReverseString(string str)
-        {
-            string[] parts = str.Split(';');
-            Array.Reverse(parts);
-            return string.Join(";", parts);
-        }
-        static string VectorToStr(Vector3D v)
-        {
-            return $"{v.X}:{v.Y}:{v.Z}";
-        }
-        static Vector3D StrToVector(string str)
-        {
-            if (string.IsNullOrEmpty(str))
-            {
-                return new Vector3D();
-            }
-            string[] coords = str.Split(':');
-            if (coords.Length != 3)
-            {
-                return new Vector3D();
-            }
-            return new Vector3D(double.Parse(coords[0]), double.Parse(coords[1]), double.Parse(coords[2]));
-        }
-        static List<Vector3D> ParseWaypoints(string data)
-        {
-            List<Vector3D> wp = new List<Vector3D>();
-
-            if (string.IsNullOrEmpty(data))
-            {
-                return wp;
-            }
-
-            string[] points = data.Split(';');
-            for (int i = 0; i < points.Length; i++)
-            {
-                wp.Add(StrToVector(points[i]));
-            }
-
-            return wp;
         }
         void WriteLCDs(string wildcard, string text)
         {
@@ -328,21 +99,21 @@ namespace IngameScript
         }
         void Align(string forward, string up, string wayPoints, string command)
         {
-            string message = $"{forward}|{up}|{wayPoints}¬{command}";
+            string message = $"ALIGN|{forward}|{up}|{wayPoints}¬{command}";
             WriteLogLCDs($"Align: {message}");
-            alignPB.TryRun(message);
+            pbPilot.TryRun(message);
         }
         void Arrival(Vector3D position, string command)
         {
-            string message = $"{VectorToStr(position)}¬{command}";
+            string message = $"ARRIVAL|{Utils.VectorToStr(position)}¬{command}";
             WriteLogLCDs($"Arrival: {message}");
-            arrivalPB.TryRun(message);
+            pbPilot.TryRun(message);
         }
         void Navigator(Vector3D position)
         {
-            string message = $"NAV|{VectorToStr(position)}";
+            string message = $"NAVIGATE|{Utils.VectorToStr(position)}";
             WriteLogLCDs($"Navigator: {message}");
-            navigatorPB.TryRun(message);
+            pbNavigator.TryRun(message);
         }
 
         public Program()
@@ -351,22 +122,15 @@ namespace IngameScript
 
             LoadFromStorage();
 
-            arrivalPB = GetBlockWithName<IMyProgrammableBlock>(shipArrivalPB);
-            if (arrivalPB == null)
+            pbPilot = GetBlockWithName<IMyProgrammableBlock>(shipPilotPB);
+            if (pbPilot == null)
             {
-                Echo($"Programmable Block '{shipArrivalPB}' no localizado.");
+                Echo($"Programmable Block '{shipPilotPB}' no localizado.");
                 return;
             }
 
-            alignPB = GetBlockWithName<IMyProgrammableBlock>(shipAlignPB);
-            if (alignPB == null)
-            {
-                Echo($"Programmable Block '{shipAlignPB}' no localizado.");
-                return;
-            }
-
-            navigatorPB = GetBlockWithName<IMyProgrammableBlock>(shipNavigatorPB);
-            if (navigatorPB == null)
+            pbNavigator = GetBlockWithName<IMyProgrammableBlock>(shipNavigatorPB);
+            if (pbNavigator == null)
             {
                 Echo($"Programmable Block '{shipNavigatorPB}' no localizado.");
                 return;
@@ -436,8 +200,8 @@ namespace IngameScript
             if (currentTrip.OrderId > 0)
             {
                 Echo($"Pedido: {currentTrip.OrderId}");
-                Echo($"Carga: {currentTrip.OrderWarehouse} -> {VectorToStr(currentTrip.OrderWarehouseParking)}");
-                Echo($"Descarga: {currentTrip.OrderCustomer} -> {VectorToStr(currentTrip.OrderCustomerParking)}");
+                Echo($"Carga: {currentTrip.OrderWarehouse} -> {Utils.VectorToStr(currentTrip.OrderWarehouseParking)}");
+                Echo($"Descarga: {currentTrip.OrderCustomer} -> {Utils.VectorToStr(currentTrip.OrderCustomerParking)}");
             }
 
             SaveToStorage();
@@ -485,9 +249,8 @@ namespace IngameScript
             remotePilot.SetAutoPilotEnabled(false);
             remotePilot.ClearWaypoints();
 
-            arrivalPB.TryRun("STOP");
-            alignPB.TryRun("STOP");
-            navigatorPB.TryRun("STOP");
+            pbPilot.TryRun("STOP");
+            pbNavigator.TryRun("STOP");
         }
         /// <summary>
         /// Sec_C_2b - Cuando la nave llega al conector de carga, informa a la base para comenzar la carga
@@ -607,7 +370,7 @@ namespace IngameScript
             Echo($"Mensaje recibido: {signal}");
             string[] lines = signal.Split('|');
 
-            string command = ReadArgument(lines, "Command");
+            string command = Utils.ReadArgument(lines, "Command");
             if (command == "REQUEST_STATUS") CmdRequestStatus(lines);
             else if (command == "LOAD_ORDER") CmdLoadOrder(lines);
             else if (command == "LOADED") CmdLoaded(lines);
@@ -621,9 +384,9 @@ namespace IngameScript
         /// </summary>
         void CmdRequestStatus(string[] lines)
         {
-            string from = ReadArgument(lines, "From");
+            string from = Utils.ReadArgument(lines, "From");
             Vector3D position = remotePilot.GetPosition();
-            string message = $"Command=RESPONSE_STATUS|To={from}|From={shipId}|Status={status}|Origin={currentTrip.OrderWarehouse}|OriginPosition={VectorToStr(currentTrip.OrderWarehouseParking)}|Destination={currentTrip.OrderCustomer}|DestinationPosition={VectorToStr(currentTrip.OrderCustomerParking)}|Position={VectorToStr(position)}";
+            string message = $"Command=RESPONSE_STATUS|To={from}|From={shipId}|Status={status}|Origin={currentTrip.OrderWarehouse}|OriginPosition={Utils.VectorToStr(currentTrip.OrderWarehouseParking)}|Destination={currentTrip.OrderCustomer}|DestinationPosition={Utils.VectorToStr(currentTrip.OrderCustomerParking)}|Position={Utils.VectorToStr(position)}";
             SendIGCMessage(message);
         }
         /// <summary>
@@ -633,7 +396,7 @@ namespace IngameScript
         /// </summary>
         void CmdLoadOrder(string[] lines)
         {
-            string to = ReadArgument(lines, "To");
+            string to = Utils.ReadArgument(lines, "To");
             if (to != shipId)
             {
                 return;
@@ -642,17 +405,17 @@ namespace IngameScript
             status = ShipStatus.ApproachingWarehouse;
 
             currentTrip.SetOrder(
-                int.Parse(ReadArgument(lines, "Order")),
-                ReadArgument(lines, "Warehouse"),
-                StrToVector(ReadArgument(lines, "WarehouseParking")),
-                ReadArgument(lines, "Customer"),
-                StrToVector(ReadArgument(lines, "CustomerParking")));
+                Utils.ReadInt(lines, "Order"),
+                Utils.ReadArgument(lines, "Warehouse"),
+                Utils.ReadVector(lines, "WarehouseParking"),
+                Utils.ReadArgument(lines, "Customer"),
+                Utils.ReadVector(lines, "CustomerParking"));
 
             currentTrip.SetExchange(
-                ReadArgument(lines, "Exchange"),
-                ReadArgument(lines, "Forward"),
-                ReadArgument(lines, "Up"),
-                ReadArgument(lines, "WayPoints"));
+                Utils.ReadArgument(lines, "Exchange"),
+                Utils.ReadArgument(lines, "Forward"),
+                Utils.ReadArgument(lines, "Up"),
+                Utils.ReadArgument(lines, "WayPoints"));
 
             currentTrip.NavigateToExchange("ALIGN_LOADING");
 
@@ -666,7 +429,7 @@ namespace IngameScript
         /// </summary>
         void CmdLoaded(string[] lines)
         {
-            string to = ReadArgument(lines, "To");
+            string to = Utils.ReadArgument(lines, "To");
             if (to != shipId)
             {
                 return;
@@ -688,7 +451,7 @@ namespace IngameScript
         /// </summary>
         void CmdUnloadOrder(string[] lines)
         {
-            string to = ReadArgument(lines, "To");
+            string to = Utils.ReadArgument(lines, "To");
             if (to != shipId)
             {
                 return;
@@ -697,10 +460,10 @@ namespace IngameScript
             status = ShipStatus.ApproachingCustomer;
 
             currentTrip.SetExchange(
-                ReadArgument(lines, "Exchange"),
-                ReadArgument(lines, "Forward"),
-                ReadArgument(lines, "Up"),
-                ReadArgument(lines, "WayPoints"));
+                Utils.ReadArgument(lines, "Exchange"),
+                Utils.ReadArgument(lines, "Forward"),
+                Utils.ReadArgument(lines, "Up"),
+                Utils.ReadArgument(lines, "WayPoints"));
 
             currentTrip.NavigateToExchange("ALIGN_UNLOADING");
 
@@ -711,7 +474,7 @@ namespace IngameScript
         /// </summary>
         void CmdGotoWarehouse(string[] lines)
         {
-            string to = ReadArgument(lines, "To");
+            string to = Utils.ReadArgument(lines, "To");
             if (to != shipId)
             {
                 return;
@@ -720,15 +483,15 @@ namespace IngameScript
             status = ShipStatus.RouteToWarehouse;
 
             currentTrip.SetOrder(
-                int.Parse(ReadArgument(lines, "Order")),
-                ReadArgument(lines, "Warehouse"),
-                StrToVector(ReadArgument(lines, "WarehouseParking")),
-                ReadArgument(lines, "Customer"),
-                StrToVector(ReadArgument(lines, "CustomerParking")));
+                int.Parse(Utils.ReadArgument(lines, "Order")),
+                Utils.ReadArgument(lines, "Warehouse"),
+                Utils.StrToVector(Utils.ReadArgument(lines, "WarehouseParking")),
+                Utils.ReadArgument(lines, "Customer"),
+                Utils.StrToVector(Utils.ReadArgument(lines, "CustomerParking")));
 
             StartCruising(currentTrip.OrderWarehouseParking, "ARRIVAL_WAITING");
         }
-        
+
         /// <summary>
         /// Realiza la maniobra de aproximación desde cualquier posición
         /// </summary>
@@ -736,7 +499,7 @@ namespace IngameScript
         {
             //Obtener la distancia al primer punto de aproximación
             var shipPosition = remotePilot.GetPosition();
-            var wp = ParseWaypoints(currentTrip.Waypoints).First();
+            var wp = Utils.StrToVectorList(currentTrip.Waypoints).First();
             double distance = Vector3D.Distance(shipPosition, wp);
             if (distance > 200)
             {
@@ -803,7 +566,7 @@ namespace IngameScript
         void LoadFromStorage()
         {
             string[] storageLines = Storage.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
-            status = ReadShipStatus(storageLines, "Status", ShipStatus.Idle);
+            status = (ShipStatus)Utils.ReadInt(storageLines, "Status");
             currentTrip.LoadFromStore(storageLines);
         }
         void SaveToStorage()

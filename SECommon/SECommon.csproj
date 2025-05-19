@@ -6,7 +6,7 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <Configurations>Release;Debug</Configurations>
     <Platforms>x64</Platforms>
-    <RootNamespace>IngameScript</RootNamespace>
+    <RootNamespace>VRageMath</RootNamespace>
   </PropertyGroup>
 
   <!--
@@ -21,15 +21,10 @@
     </PackageReference>
     <PackageReference Include="Mal.Mdk2.References" Version="2.2.4" />
   </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\..\SECommon\SECommon.csproj" />
-  </ItemGroup>
   -->
 
   <ItemGroup>
-    <ProjectReference Include="..\..\SEMocks\SEMocks.csproj" />
-    <ProjectReference Include="..\..\SECommon\SECommon.csproj" />
+    <ProjectReference Include="..\SEMocks\SEMocks.csproj" />
   </ItemGroup>
 
 </Project>

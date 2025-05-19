@@ -29,6 +29,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SEMocks", "SEMocks\SEMocks.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ship", "GD\Ship\Ship.csproj", "{49399A38-1BEC-068C-3B42-BEFB77D927BF}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SECommon", "SECommon\SECommon.csproj", "{8179FB8F-5628-7C48-8CE9-256C7F6AE73A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -71,6 +73,10 @@ Global
 		{49399A38-1BEC-068C-3B42-BEFB77D927BF}.Debug|x64.Build.0 = Debug|x64
 		{49399A38-1BEC-068C-3B42-BEFB77D927BF}.Release|x64.ActiveCfg = Release|x64
 		{49399A38-1BEC-068C-3B42-BEFB77D927BF}.Release|x64.Build.0 = Release|x64
+		{8179FB8F-5628-7C48-8CE9-256C7F6AE73A}.Debug|x64.ActiveCfg = Debug|x64
+		{8179FB8F-5628-7C48-8CE9-256C7F6AE73A}.Debug|x64.Build.0 = Debug|x64
+		{8179FB8F-5628-7C48-8CE9-256C7F6AE73A}.Release|x64.ActiveCfg = Release|x64
+		{8179FB8F-5628-7C48-8CE9-256C7F6AE73A}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
