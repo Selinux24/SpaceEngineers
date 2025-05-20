@@ -539,7 +539,7 @@ namespace IngameScript
         }
         void Align(Vector3D forward, Vector3D up, List<Vector3D> wayPoints, string command)
         {
-            string message = $"ALIGN|{Utils.VectorToStr(forward)}|{Utils.VectorToStr(up)}|{Utils.VectorListToStr(wayPoints)}¬{command}";
+            string message = $"ALIGN|{Utils.VectorToStr(forward)}¬{Utils.VectorToStr(up)}¬{Utils.VectorListToStr(wayPoints)}¬{command}";
             WriteLogLCDs($"Align: {message}");
             pbPilot.TryRun(message);
         }
@@ -564,7 +564,6 @@ namespace IngameScript
                 return;
             }
 
-            Runtime.UpdateFrequency = (UpdateFrequency)Utils.ReadInt(storageLines, "UpdateFrequency");
             status = (ShipStatus)Utils.ReadInt(storageLines, "Status");
             currentTrip.LoadFromStorage(storageLines);
         }
@@ -572,7 +571,6 @@ namespace IngameScript
         {
             List<string> parts = new List<string>
             {
-                $"UpdateFrequency={(int)Runtime.UpdateFrequency}",
                 $"Status={(int)status}{Environment.NewLine}",
                 currentTrip.SaveToStorage(),
             };

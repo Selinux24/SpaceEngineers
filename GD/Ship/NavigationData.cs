@@ -19,9 +19,9 @@ namespace IngameScript
 
         private MyDetectedEntityInfo lastHit;
 
-        public void Initialize(string message)
+        public void Initialize(string data)
         {
-            Destination = Utils.StrToVector(message);
+            Destination = Utils.StrToVector(data);
             HasTarget = true;
             EvadingPoints.Clear();
             CurrentState = NavState.Locating;

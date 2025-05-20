@@ -9,7 +9,6 @@
     <RootNamespace>IngameScript</RootNamespace>
   </PropertyGroup>
 
-  <!--
   <ItemGroup>
     <PackageReference Include="Mal.Mdk2.PbAnalyzers" Version="2.1.13">
       <PrivateAssets>all</PrivateAssets>
@@ -22,14 +21,10 @@
     <PackageReference Include="Mal.Mdk2.References" Version="2.2.4" />
   </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\..\SECommon\SECommon.csproj" />
+  <!--
+ <ItemGroup>
+    <ProjectReference Include="..\..\SEMocks\SEMocks.csproj" />
   </ItemGroup>
   -->
-
-  <ItemGroup>
-    <ProjectReference Include="..\..\SEMocks\SEMocks.csproj" />
-    <ProjectReference Include="..\..\SECommon\SECommon.csproj" />
-  </ItemGroup>
 
 </Project>

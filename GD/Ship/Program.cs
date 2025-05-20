@@ -49,6 +49,10 @@ namespace IngameScript
         const double CollisionDetectRange = 2500.0;
         const double EvadingWaypointDistance = 100.0;
         const double EvadingMaxSpeed = 19.5;
+
+        const int ArrivalTicks = 100;
+        const int AlignTicks = 1;
+        const int NavigationTicks = 1;
         #endregion
 
         #region Blocks
@@ -71,9 +75,17 @@ namespace IngameScript
         readonly ArrivalData arrivalData = new ArrivalData();
         readonly NavigationData navigationData = new NavigationData();
 
+        int alignTickCount = 0;
+        int arrivalTickCount = 0;
+        int navigationTickCount = 0;
+
+        string alignStateMsg;
+        string arrivalStateMsg;
+        string navigationStateMsg;
+
         public Program()
         {
-            Runtime.UpdateFrequency = UpdateFrequency.None;
+            Runtime.UpdateFrequency = UpdateFrequency.Update1;
 
             pb = GetBlockWithName<IMyProgrammableBlock>(shipProgrammableBlock);
             if (pb == null)
@@ -176,7 +188,6 @@ namespace IngameScript
         #region STOP
         void DoStop()
         {
-            Runtime.UpdateFrequency = UpdateFrequency.None; // Detener comprobaciones
             alignData.Clear();
             arrivalData.Clear();
             navigationData.Clear();
@@ -191,7 +202,6 @@ namespace IngameScript
         void InitializeAlign(string message)
         {
             alignData.Initialize(message);
-            Runtime.UpdateFrequency = UpdateFrequency.Update1;
             SaveToStorage();
         }
         void DoAlign()
@@ -202,9 +212,21 @@ namespace IngameScript
                 return;
             }
 
+            if (!string.IsNullOrWhiteSpace(alignStateMsg)) Echo(alignStateMsg);
+
+            if (++alignTickCount < AlignTicks)
+            {
+                return;
+            }
+            alignTickCount = 0;
+
+            MonitorizeAlign();
+        }
+        void MonitorizeAlign()
+        {
             if (alignData.CurrentTarget >= alignData.Waypoints.Count)
             {
-                Echo("Destination reached.");
+                alignStateMsg = "Destination reached.";
                 ExcuteAction(alignData.Command);
                 DoStop();
                 return;
@@ -233,7 +255,7 @@ namespace IngameScript
                 alignData.Next();
                 SaveToStorage();
                 ResetThrust();
-                Echo("Waypoint reached. Moving to the next.");
+                alignStateMsg = "Waypoint reached. Moving to the next.";
                 return;
             }
 
@@ -248,7 +270,6 @@ namespace IngameScript
         void InitializeArrival(string message)
         {
             arrivalData.Initialize(message);
-            Runtime.UpdateFrequency = UpdateFrequency.Update100;
             SaveToStorage();
         }
         void DoArrival()
@@ -259,6 +280,14 @@ namespace IngameScript
                 return;
             }
 
+            if (!string.IsNullOrWhiteSpace(arrivalStateMsg)) Echo(arrivalStateMsg);
+
+            if (++arrivalTickCount < ArrivalTicks)
+            {
+                return;
+            }
+            arrivalTickCount = 0;
+
             MonitorizeArrival();
         }
         void MonitorizeArrival()
@@ -266,15 +295,14 @@ namespace IngameScript
             double distance = Vector3D.Distance(remoteArrival.GetPosition(), arrivalData.TargetPosition);
             if (distance <= arrivalThreshold)
             {
-                Echo("Detination reached.");
+                arrivalStateMsg = "Destination reached.";
                 ExcuteAction(arrivalData.Command);
                 DoStop();
 
                 return;
             }
 
-            Echo($"Distance to destination: {distance:F2}m.");
-            Echo($"Has command? {!string.IsNullOrWhiteSpace(arrivalData.Command)}");
+            arrivalStateMsg = $"Distance to destination: {distance:F2}m.";
         }
         #endregion
 
@@ -282,44 +310,32 @@ namespace IngameScript
         void InitializeNavigation(string message)
         {
             navigationData.Initialize(message);
-            Runtime.UpdateFrequency = UpdateFrequency.Update1;
             SaveToStorage();
             BroadcastStatus("Starting navigation.");
         }
         void DoNavigation()
         {
-            Echo($"State {navigationData.CurrentState}");
-
-            if (!navigationData.HasTarget || navigationData.CurrentState == NavState.Idle)
+            if (!navigationData.HasTarget)
             {
-                /*
-                IsObstacleAhead();
-                if (!lastHit.IsEmpty())
-                {
-                    evadingPoints.Clear();
-                    if (CalculateEvadingWaypoints())
-                    {
-                        Echo($"Obstacle center {lastHit.Position}");
-                        Echo($"Navigating to waypoint {VecToStr(evadingPoints[0])}");
-                        Echo($"Current position {VecToStr(camera.GetPosition())}");
-                        Echo($"Distance to waypoint {Vector3D.Distance(evadingPoints[0], camera.GetPosition()):F2}m.");
-
-                        // Mostrar en formato GPS
-                        Echo($"GPS:Ship:{camera.GetPosition().X:F2}:{camera.GetPosition().Y:F2}:{camera.GetPosition().Z:F2}:#FFAAFF");
-                        Echo($"GPS:Obstacle:{lastHit.Position.X:F2}:{lastHit.Position.Y:F2}:{lastHit.Position.Z:F2}:#FFAAFF");
-                        for (int i = 0; i < evadingPoints.Count; i++)
-                        {
-                            var wp = evadingPoints[i];
-                            Echo($"GPS:WP_{i}:{wp.X:F2}:{wp.Y:F2}:{wp.Z:F2}:#FFAAFF");
-                        }
-                    }
-                }
-                */
                 Echo("Waiting for position...");
                 return;
             }
 
+            if (!string.IsNullOrWhiteSpace(navigationStateMsg)) Echo(navigationStateMsg);
+
+            if (++navigationTickCount < NavigationTicks)
+            {
+                return;
+            }
+            navigationTickCount = 0;
+
+            MonitorizeNavigation();
+        }
+        void MonitorizeNavigation()
+        {
             navigationData.UpdatePosition(cameraNavigator.GetPosition());
+
+            navigationStateMsg = $"Navigation state {navigationData.CurrentState}";
 
             Echo($"To target: {navigationData.DistanceToTarget:F2}m.");
             Echo(navigationData.PrintObstacle());
@@ -690,7 +706,6 @@ namespace IngameScript
                 return;
             }
 
-            Runtime.UpdateFrequency = (UpdateFrequency)Utils.ReadInt(storageLines, "UpdateFrequency");
             alignData.LoadFromStorage(Utils.ReadString(storageLines, "AlignData"));
             arrivalData.LoadFromStorage(Utils.ReadString(storageLines, "ArrivalData"));
         }
@@ -698,7 +713,6 @@ namespace IngameScript
         {
             List<string> parts = new List<string>
             {
-                $"UpdateFrequency={(int)Runtime.UpdateFrequency}",
                 $"AlignData={alignData.SaveToStorage()}",
                 $"ArrivalData={arrivalData.SaveToStorage()}",
             };

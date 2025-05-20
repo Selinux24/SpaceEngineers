@@ -23,18 +23,15 @@ namespace IngameScript
             Clear();
 
             var parts = data.Split('¬');
-            if (parts.Length != 2) return;
 
-            var coords = parts[0].Split('|');
-            if (coords.Length != 3) return;
-
-            TargetForward = -Vector3D.Normalize(Utils.StrToVector(coords[0]));
-            TargetUp = Vector3D.Normalize(Utils.StrToVector(coords[1]));
-            Waypoints = Utils.StrToVectorList(coords[2]);
-
-            Command = parts[1];
-
+            if (parts.Length < 3) return;
+            TargetForward = -Vector3D.Normalize(Utils.StrToVector(parts[0]));
+            TargetUp = Vector3D.Normalize(Utils.StrToVector(parts[1]));
+            Waypoints = Utils.StrToVectorList(parts[2]);
             HasTarget = true;
+
+            if (parts.Length < 4) return;
+            Command = parts[3];
         }
         public void Clear()
         {

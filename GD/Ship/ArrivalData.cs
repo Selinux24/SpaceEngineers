@@ -14,11 +14,13 @@ namespace IngameScript
             Clear();
 
             var parts = data.Split('¬');
-            if (parts.Length != 2) return;
 
+            if (parts.Length < 1) return;
             TargetPosition = Utils.StrToVector(parts[0]);
-            Command = parts[1];
             HasPosition = true;
+
+            if (parts.Length < 2) return;
+            Command = parts[1];
         }
         public void Clear()
         {
