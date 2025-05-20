@@ -34,6 +34,7 @@ namespace IngameScript
         const string ShipRemoteControlAlign = "HT Remote Control Locking";
         const string ShipConnectorA = "HT Connector A";
         const string ShipBeaconName = "HT Distress Beacon";
+        const string ShipAntennaName = "HT Compact Antenna";
         const string ShipLogLCDs = "[DELIVERY_LOG]";
 
         const double GyrosThr = 0.001; //Precisión de alineación
@@ -42,7 +43,7 @@ namespace IngameScript
         const double ExchangeMaxApproachingSpeed = 15; // Velocidad máxima de aproximación al conector
         const double ExchangeDistanceThr = 200.0; //Precisión de aproximación al primer punto del conector
         const double ExchangeWaypointDistanceThr = 0.5; //Precisión de aproximación entre waypoints
-        
+
         const double CruisingMaxSpeed = 100.0; // Velocidad máxima de crucero
         const double CruisingMaxSpeedThr = 0.95;
         const double CruisingMaxAccelerationSpeed = 19.5; // Velocidad máxima de crucero cerca de la base
@@ -78,6 +79,7 @@ namespace IngameScript
         readonly IMyRemoteControl remoteAlign;
         readonly IMyShipConnector connectorA;
 
+        readonly IMyRadioAntenna antenna;
         readonly IMyBeacon beacon;
 
         readonly List<IMyThrust> thrusters = new List<IMyThrust>();
@@ -173,6 +175,12 @@ namespace IngameScript
                 return;
             }
 
+            antenna = GetBlockWithName<IMyRadioAntenna>(ShipAntennaName);
+            if (antenna == null)
+            {
+                Echo($"Antenna {ShipAntennaName} not found.");
+                return;
+            }
             beacon = GetBlockWithName<IMyBeacon>(ShipBeaconName);
             if (beacon == null)
             {
@@ -209,7 +217,7 @@ namespace IngameScript
         {
             SaveToStorage();
         }
-        
+
         public void Main(string argument, UpdateType updateSource)
         {
             if (!string.IsNullOrEmpty(argument))
@@ -513,6 +521,11 @@ namespace IngameScript
             ResetThrust();
             ResetGyros();
 
+            if (!antenna.Enabled)
+            {
+                antenna.Enabled = true;
+            }
+
             var shipVelocity = remotePilot.GetShipVelocities().LinearVelocity.Length();
             if (shipVelocity <= 0.1)
             {
@@ -577,6 +590,8 @@ namespace IngameScript
         }
         void EnterCruising()
         {
+            antenna.Enabled = false;
+
             ResetThrust();
             StopThrust();
             ResetGyros();
