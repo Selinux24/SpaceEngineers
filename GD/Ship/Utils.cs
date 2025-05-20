@@ -62,7 +62,7 @@ namespace IngameScript
             return int.Parse(s);
         }
 
-        public static string ReadString(string[] lines, string name, string defaultValue = null)
+        public static string ReadString(string[] lines, string name, string defaultValue = "")
         {
             string cmdToken = $"{name}{AttributeSep}";
             string value = lines.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";

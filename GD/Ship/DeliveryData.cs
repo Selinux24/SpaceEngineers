@@ -3,7 +3,7 @@ using VRageMath;
 
 namespace IngameScript
 {
-    class TripData
+    class DeliveryData
     {
         public int OrderId;
         public string OrderWarehouse;

@@ -89,9 +89,9 @@ namespace IngameScript
         #endregion
 
         readonly string shipId;
-        ShipStatus status = ShipStatus.Idle;
 
-        readonly TripData currentTrip = new TripData();
+        ShipStatus status = ShipStatus.Idle;
+        readonly DeliveryData deliveryData = new DeliveryData();
         readonly AlignData alignData = new AlignData();
         readonly ArrivalData arrivalData = new ArrivalData();
         readonly NavigationData navigationData = new NavigationData();
@@ -228,11 +228,11 @@ namespace IngameScript
             }
 
             Echo($"Estado: {status}");
-            if (currentTrip.OrderId > 0)
+            if (deliveryData.OrderId > 0)
             {
-                Echo($"Pedido: {currentTrip.OrderId}");
-                Echo($"Carga: {currentTrip.OrderWarehouse} -> {Utils.VectorToStr(currentTrip.OrderWarehouseParking)}");
-                Echo($"Descarga: {currentTrip.OrderCustomer} -> {Utils.VectorToStr(currentTrip.OrderCustomerParking)}");
+                Echo($"Pedido: {deliveryData.OrderId}");
+                Echo($"Carga: {deliveryData.OrderWarehouse} -> {Utils.VectorToStr(deliveryData.OrderWarehouseParking)}");
+                Echo($"Descarga: {deliveryData.OrderCustomer} -> {Utils.VectorToStr(deliveryData.OrderCustomerParking)}");
             }
 
             DoArrival();
@@ -268,6 +268,11 @@ namespace IngameScript
                 alignData.Clear();
                 ResetGyros();
                 ResetThrust();
+                return;
+            }
+
+            if (connectorA.Status == MyShipConnectorStatus.Connected)
+            {
                 return;
             }
 
@@ -581,14 +586,17 @@ namespace IngameScript
             WriteLogLCDs($"ParseTerminalMessage: {argument}");
 
             if (argument == "RESET") Reset();
+            else if (argument == "NAVIGATE_TO_WAREHOUSE") NavigateToWarehouse();
+            else if (argument == "START_LOADING") StartLoading();
+
+            else if (argument == "NAVIGATE_TO_CUSTOMER") NavigateToCustomer();
+            else if (argument == "REQUEST_UNLOAD_TO_CUSTOMER") RequestUnloadToCustomer();
+            else if (argument == "START_UNLOADING") StartUnloading();
             else if (argument == "UNLOAD_FINISHED") UnloadFinished();
-            else if (argument == "ALIGN_LOADING") AlignLoading();
-            else if (argument == "ALIGN_REQUEST_UNLOAD") AlignRequestUnload();
-            else if (argument == "ALIGN_UNLOADING") AlignUnloading();
-            else if (argument == "ALIGN_UNLOADED") AlignUnloaded();
-            else if (argument == "ARRIVAL_WAITING") ArrivalWainting();
-            else if (argument == "ARRIVAL_REQUEST_UNLOAD") ArrivalRequestUnload();
-            else if (argument == "DO_TRIP_WAYPOINTS") DoTripWaypoints();
+
+            else if (argument == "WAITING_IN_WAREHOUSE") WaintingInWarehouse();
+
+            else if (argument == "START_APPROACH") StartApproach();
             else if (argument == "ENABLE_LOGS") EnableLogs();
         }
         /// <summary>
@@ -600,7 +608,7 @@ namespace IngameScript
 
             status = ShipStatus.Idle;
 
-            currentTrip.Clear();
+            deliveryData.Clear();
             alignData.Clear();
             arrivalData.Clear();
             navigationData.Clear();
@@ -614,12 +622,12 @@ namespace IngameScript
         }
         /// <summary>
         /// Sec_C_2b - Cuando la nave llega al conector de carga, informa a la base para comenzar la carga
-        /// Request  : ALIGN_LOADING
+        /// Request  : START_LOADING
         /// Execute  : LOADING
         /// </summary>
-        void AlignLoading()
+        void StartLoading()
         {
-            string message = $"Command=LOADING|To={currentTrip.OrderWarehouse}|From={shipId}|Order={currentTrip.OrderId}|Exchange={currentTrip.ExchangeName}";
+            string message = $"Command=LOADING|To={deliveryData.OrderWarehouse}|From={shipId}|Order={deliveryData.OrderId}|Exchange={deliveryData.ExchangeName}";
             SendIGCMessage(message);
 
             //Atraque
@@ -632,34 +640,34 @@ namespace IngameScript
         }
         /// <summary>
         /// Sec_C_4b - NAVEX llega al último waypoint de la salida del conector y activa el piloto automático
-        /// Request:  ALIGN_REQUEST_UNLOAD
+        /// Request:  NAVIGATE_TO_CUSTOMER
         /// </summary>
-        void AlignRequestUnload()
+        void NavigateToCustomer()
         {
-            timerPilot.ApplyAction("Start");
+            StartCruising(deliveryData.DestinationPosition, deliveryData.OnDestinationArrival);
         }
         /// <summary>
         /// Sec_C_4c - NAVEX llega a Parking_BASEX y solicita permiso para descargar
-        /// Request:  ARRIVAL_REQUEST_UNLOAD
+        /// Request:  REQUEST_UNLOAD_TO_CUSTOMER
         /// Execute:  REQUEST_UNLOAD
         /// </summary>
-        void ArrivalRequestUnload()
+        void RequestUnloadToCustomer()
         {
             status = ShipStatus.WaitingForUnload;
 
-            string command = $"Command=REQUEST_UNLOAD|To={currentTrip.OrderCustomer}|From={shipId}|Order={currentTrip.OrderId}";
+            string command = $"Command=REQUEST_UNLOAD|To={deliveryData.OrderCustomer}|From={shipId}|Order={deliveryData.OrderId}";
             SendIGCMessage(command);
 
             timerWaiting.ApplyAction("Start");
         }
         /// <summary>
         /// Sec_D_2b - NAVEX avisa a BASEX que ha llegado para descargar el ID_PEDIDO en el conector. Lanza [UNLOADING] a BASEX
-        /// Request:  ALIGN_UNLOADING
+        /// Request:  START_UNLOADING
         /// Execute:  UNLOADING
         /// </summary>
-        void AlignUnloading()
+        void StartUnloading()
         {
-            string command = $"Command=UNLOADING|To={currentTrip.OrderCustomer}|From={shipId}|Order={currentTrip.OrderId}|Exchange={currentTrip.ExchangeName}";
+            string command = $"Command=UNLOADING|To={deliveryData.OrderCustomer}|From={shipId}|Order={deliveryData.OrderId}|Exchange={deliveryData.ExchangeName}";
             SendIGCMessage(command);
 
             status = ShipStatus.Unloading;
@@ -672,41 +680,39 @@ namespace IngameScript
         /// <summary>
         /// Sec_D_2d - NAVEX informa del fin de la descarga a BASEX, empieza el camino de vuelta a Parking_WH
         /// Execute:  UNLOADED - Informa a BASEX
-        /// Execute:  ALIGN_UNLOADED - Comienza la maniobra de salida del conector
-        /// Execute:  ARRIVAL_WAITING - Marca como punto destino Parking_WH
+        /// Execute:  NAVIGATE_TO_WAREHOUSE - Comienza la maniobra de salida del conector
+        /// Execute:  WAITING_IN_WAREHOUSE - Marca como punto destino Parking_WH
         /// </summary>
         void UnloadFinished()
         {
-            string message = $"Command=UNLOADED|To={currentTrip.OrderCustomer}|From={shipId}|Order={currentTrip.OrderId}|Warehouse={currentTrip.OrderWarehouse}";
+            string message = $"Command=UNLOADED|To={deliveryData.OrderCustomer}|From={shipId}|Order={deliveryData.OrderId}|Warehouse={deliveryData.OrderWarehouse}";
             SendIGCMessage(message);
 
             status = ShipStatus.RouteToWarehouse;
 
-            //Carga la ruta de salida y al llegar al último waypoint del conector, ejecutará ALIGN_UNLOADED, que activará el pilotaje automático
-            currentTrip.NavigateFromExchange("ALIGN_UNLOADED");
+            //Carga la ruta de salida y al llegar al último waypoint del conector, ejecutará NAVIGATE_TO_WAREHOUSE, que activará la navegación al Customer
+            deliveryData.NavigateFromExchange("NAVIGATE_TO_WAREHOUSE");
 
-            //Monitorizará el viaje hasta la posición de espera del Warehouse, y ejecutará ARRIVAL_WAITING, y esperará instrucciones de la base
-            currentTrip.NavigateToWarehouse("ARRIVAL_WAITING");
+            //Monitorizará el viaje hasta la posición de espera del Warehouse, ejecutará WAITING_IN_WAREHOUSE, y esperará instrucciones de la base
+            deliveryData.NavigateToWarehouse("WAITING_IN_WAREHOUSE");
 
             Depart();
-
-            currentTrip.Clear();
         }
         /// <summary>
         /// Sec_D_2e - NAVEX activa el piloto automático cuando alcanza el último waypoint del conector
         /// </summary>
-        void AlignUnloaded()
+        void NavigateToWarehouse()
         {
-            //Activa el pilotaje automático
-            timerPilot.ApplyAction("Start");
+            StartCruising(deliveryData.DestinationPosition, deliveryData.OnDestinationArrival);
         }
         /// <summary>
         /// Sec_D_2f - NAVEX alcanza Parking_WH y se queda en espera
         /// </summary>
-        void ArrivalWainting()
+        void WaintingInWarehouse()
         {
             //Se produce cuando la nave llega al último waypoint de la ruta de entrega
             status = ShipStatus.Idle;
+            deliveryData.Clear();
 
             //Pone la nave en espera
             timerWaiting.ApplyAction("Start");
@@ -744,13 +750,13 @@ namespace IngameScript
         {
             string from = Utils.ReadString(lines, "From");
             Vector3D position = remotePilot.GetPosition();
-            string message = $"Command=RESPONSE_STATUS|To={from}|From={shipId}|Status={status}|Origin={currentTrip.OrderWarehouse}|OriginPosition={Utils.VectorToStr(currentTrip.OrderWarehouseParking)}|Destination={currentTrip.OrderCustomer}|DestinationPosition={Utils.VectorToStr(currentTrip.OrderCustomerParking)}|Position={Utils.VectorToStr(position)}";
+            string message = $"Command=RESPONSE_STATUS|To={from}|From={shipId}|Status={status}|Origin={deliveryData.OrderWarehouse}|OriginPosition={Utils.VectorToStr(deliveryData.OrderWarehouseParking)}|Destination={deliveryData.OrderCustomer}|DestinationPosition={Utils.VectorToStr(deliveryData.OrderCustomerParking)}|Position={Utils.VectorToStr(position)}";
             SendIGCMessage(message);
         }
         /// <summary>
         /// Sec_C_2a - NAVEX comienza la navegación al conector especificado y atraca en MODO CARGA.
         /// Request:  LOAD_ORDER
-        /// Execute:  ALIGN_LOADING cuando la nave alcance el conector de carga del WH
+        /// Execute:  START_LOADING cuando la nave alcance el conector de carga del WH
         /// </summary>
         void CmdLoadOrder(string[] lines)
         {
@@ -762,28 +768,28 @@ namespace IngameScript
 
             status = ShipStatus.ApproachingWarehouse;
 
-            currentTrip.SetOrder(
+            deliveryData.SetOrder(
                 Utils.ReadInt(lines, "Order"),
                 Utils.ReadString(lines, "Warehouse"),
                 Utils.ReadVector(lines, "WarehouseParking"),
                 Utils.ReadString(lines, "Customer"),
                 Utils.ReadVector(lines, "CustomerParking"));
 
-            currentTrip.SetExchange(
+            deliveryData.SetExchange(
                 Utils.ReadString(lines, "Exchange"),
                 Utils.ReadVector(lines, "Forward"),
                 Utils.ReadVector(lines, "Up"),
                 Utils.ReadVectorList(lines, "WayPoints"));
 
-            currentTrip.NavigateToExchange("ALIGN_LOADING");
+            deliveryData.NavigateToExchange("START_LOADING");
 
             Approach();
         }
         /// <summary>
         /// Sec_C_4a - NAVEX carga la ruta hasta Parking_BASEX y comienza la maniobra de salida desde el conector de WH
         /// Request:  LOADED
-        /// Execute:  ALIGN_REQUEST_UNLOAD cuando NAVEX llegue al último waypoint de la ruta de salida del conector
-        /// Execute:  ARRIVAL_REQUEST_UNLOAD cuando NAVEX llegue a Parking_BASEX
+        /// Execute:  NAVIGATE_TO_CUSTOMER cuando NAVEX llegue al último waypoint de la ruta de salida del conector
+        /// Execute:  REQUEST_UNLOAD_TO_CUSTOMER cuando NAVEX llegue a Parking_BASEX
         /// </summary>
         void CmdLoaded(string[] lines)
         {
@@ -795,17 +801,17 @@ namespace IngameScript
 
             status = ShipStatus.RouteToCustomer;
 
-            currentTrip.NavigateFromExchange("ALIGN_REQUEST_UNLOAD");
-            currentTrip.NavigateToCustomer("ARRIVAL_REQUEST_UNLOAD");
+            //Carga la ruta de salida y al llegar al último waypoint del conector, ejecutará NAVIGATE_TO_CUSTOMER, que activará la navegación al Customer
+            deliveryData.NavigateFromExchange("NAVIGATE_TO_CUSTOMER");
+
+            //Monitorizará el viaje hasta la posición de espera del Customer, ejecutará REQUEST_UNLOAD_TO_CUSTOMER, y esperará instrucciones de la base
+            deliveryData.NavigateToCustomer("REQUEST_UNLOAD_TO_CUSTOMER");
 
             Depart();
-
-            //Limpiar datos del exchange
-            currentTrip.ClearExchange();
         }
         /// <summary>
         /// Sec_D_2a - NAVEX comienza la navegación al conector especificado y atraca en MODO DESCARGA.
-        /// Execute:  ALIGN_UNLOADING
+        /// Execute:  START_UNLOADING
         /// </summary>
         void CmdUnloadOrder(string[] lines)
         {
@@ -817,13 +823,13 @@ namespace IngameScript
 
             status = ShipStatus.ApproachingCustomer;
 
-            currentTrip.SetExchange(
+            deliveryData.SetExchange(
                 Utils.ReadString(lines, "Exchange"),
                 Utils.ReadVector(lines, "Forward"),
                 Utils.ReadVector(lines, "Up"),
                 Utils.ReadVectorList(lines, "WayPoints"));
 
-            currentTrip.NavigateToExchange("ALIGN_UNLOADING");
+            deliveryData.NavigateToExchange("START_UNLOADING");
 
             Approach();
         }
@@ -840,14 +846,14 @@ namespace IngameScript
 
             status = ShipStatus.RouteToWarehouse;
 
-            currentTrip.SetOrder(
+            deliveryData.SetOrder(
                 Utils.ReadInt(lines, "Order"),
                 Utils.ReadString(lines, "Warehouse"),
                 Utils.ReadVector(lines, "WarehouseParking"),
                 Utils.ReadString(lines, "Customer"),
                 Utils.ReadVector(lines, "CustomerParking"));
 
-            StartCruising(currentTrip.OrderWarehouseParking, "ARRIVAL_WAITING");
+            StartCruising(deliveryData.OrderWarehouseParking, "WAITING_IN_WAREHOUSE");
         }
 
         /// <summary>
@@ -857,16 +863,16 @@ namespace IngameScript
         {
             //Obtener la distancia al primer punto de aproximación
             var shipPosition = remotePilot.GetPosition();
-            var wp = currentTrip.Waypoints[0];
+            var wp = deliveryData.Waypoints[0];
             double distance = Vector3D.Distance(shipPosition, wp);
-            if (distance > 200)
+            if (distance > 500)
             {
                 //Carga en el piloto automático hasta la posición del primer waypoint
-                SetTripAutoPilot(wp, "Path to Connector", approachVelocity, "DO_TRIP_WAYPOINTS", true);
+                SetTripAutoPilot(wp, "Path to Connector", approachVelocity, "START_APPROACH", true);
             }
             else
             {
-                DoTripWaypoints();
+                StartApproach();
             }
         }
         /// <summary>
@@ -877,20 +883,17 @@ namespace IngameScript
             timerUnlock?.ApplyAction("Start");
 
             //Comienza la maniobra de salida
-            Align(currentTrip.AlignFwd, currentTrip.AlignUp, currentTrip.Waypoints, currentTrip.OnLastWaypoint);
-
-            //Carga los datos en el piloto automático y espera
-            StartCruising(currentTrip.DestinationPosition, currentTrip.OnDestinationArrival);
+            alignData.Initialize(deliveryData.AlignFwd, deliveryData.AlignUp, deliveryData.Waypoints, deliveryData.OnLastWaypoint);
         }
         /// <summary>
         /// Recorre los waypoints
         /// </summary>
-        void DoTripWaypoints()
+        void StartApproach()
         {
             remotePilot.SetAutoPilotEnabled(false);
             remotePilot.ClearWaypoints();
 
-            Align(currentTrip.AlignFwd, currentTrip.AlignUp, currentTrip.Waypoints, currentTrip.OnLastWaypoint);
+            alignData.Initialize(deliveryData.AlignFwd, deliveryData.AlignUp, deliveryData.Waypoints, deliveryData.OnLastWaypoint);
         }
         /// <summary>
         /// Configura el piloto automático
@@ -986,10 +989,6 @@ namespace IngameScript
             WriteLogLCDs($"SendIGCMessage: {message}");
 
             IGC.SendBroadcastMessage(channel, message);
-        }
-        void Align(Vector3D forward, Vector3D up, List<Vector3D> wayPoints, string command)
-        {
-            alignData.Initialize(forward, up, wayPoints, command);
         }
         void Arrival(Vector3D position, string command)
         {
@@ -1137,18 +1136,20 @@ namespace IngameScript
             Echo($"Storage: {Storage}");
 
             status = (ShipStatus)Utils.ReadInt(storageLines, "Status");
-            currentTrip.LoadFromStorage(Utils.ReadString(storageLines, "CurrentTrip"));
+            deliveryData.LoadFromStorage(Utils.ReadString(storageLines, "DeliveryData"));
             alignData.LoadFromStorage(Utils.ReadString(storageLines, "AlignData"));
             arrivalData.LoadFromStorage(Utils.ReadString(storageLines, "ArrivalData"));
+            navigationData.LoadFromStorage(Utils.ReadString(storageLines, "NavigationData"));
         }
         void SaveToStorage()
         {
             List<string> parts = new List<string>
             {
                 $"Status={(int)status}{Environment.NewLine}",
-                $"CurrentTrip={currentTrip.SaveToStorage()}",
+                $"DeliveryData={deliveryData.SaveToStorage()}",
                 $"AlignData={alignData.SaveToStorage()}",
                 $"ArrivalData={arrivalData.SaveToStorage()}",
+                $"NavigationData={navigationData.SaveToStorage()}"
             };
 
             Storage = string.Join(Environment.NewLine, parts);
