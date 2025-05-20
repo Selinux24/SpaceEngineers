@@ -4,20 +4,18 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using VRage;
-using VRage.Game.ModAPI.Ingame;
 using VRageMath;
 
 namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
+        #region Constants
         const string channel = "SHIPS_DELIVERY";
         const string baseCamera = "Camera";
         const string baseWarehouses = "Warehouse";
         const string baseDataLCDs = "[DELIVERY_DATA]";
         const string baseLogLCDs = "[DELIVERY_LOG]";
-        const int NumWaypoints = 5;
 
         const string exchangeGroupName = @"GR_\w+";
         const string exchangeUpperConnector = "Input";
@@ -26,17 +24,21 @@ namespace IngameScript
         const string exchangeSorterOutput = "Output";
         const string exchangeTimerPrepare = "Prepare";
         const string exchangeTimerUnload = "Unload";
+        #endregion
 
-        readonly string baseId;
-        readonly string baseParking;
+        #region Blocks
         readonly IMyCameraBlock camera;
         readonly List<IMyCargoContainer> cargos = new List<IMyCargoContainer>();
         readonly IMyBroadcastListener bl;
         readonly List<IMyTextPanel> dataLCDs = new List<IMyTextPanel>();
-        readonly StringBuilder sbData = new StringBuilder();
         readonly List<IMyTextPanel> logLCDs = new List<IMyTextPanel>();
+        #endregion
+
+        readonly StringBuilder sbData = new StringBuilder();
         readonly StringBuilder sbLog = new StringBuilder();
 
+        readonly string baseId;
+        readonly string baseParking;
         readonly System.Text.RegularExpressions.Regex exchangesRegex = new System.Text.RegularExpressions.Regex(exchangeGroupName);
         readonly List<ExchangeGroup> exchanges = new List<ExchangeGroup>();
         readonly List<Order> orders = new List<Order>();
@@ -49,366 +51,6 @@ namespace IngameScript
         bool showReceptions = true;
         bool enableLogs = false;
         bool fakeOrders = false;
-
-        #region Helper classes
-        class ExchangeGroup
-        {
-            public string Name;
-            public string DockedShipName;
-            public IMyShipConnector UpperConnector;
-            public IMyShipConnector LowerConnector;
-            public IMyCargoContainer Cargo;
-            public IMyConveyorSorter SorterInput;
-            public IMyConveyorSorter SorterOutput;
-            public IMyTimerBlock TimerPrepare;
-            public IMyTimerBlock TimerUnload;
-
-            public bool IsValid()
-            {
-                return
-                    UpperConnector != null &&
-                    SorterInput != null &&
-                    SorterOutput != null;
-            }
-            public bool IsFree()
-            {
-                return
-                    string.IsNullOrWhiteSpace(DockedShipName) &&
-                    UpperConnector.Status == MyShipConnectorStatus.Unconnected &&
-                    (LowerConnector?.Status ?? MyShipConnectorStatus.Unconnected) == MyShipConnectorStatus.Unconnected;
-            }
-            public List<Vector3D> CalculateRouteToConnector()
-            {
-                List<Vector3D> waypoints = new List<Vector3D>();
-
-                Vector3D targetDock = UpperConnector.GetPosition();   // Punto final
-                Vector3D forward = UpperConnector.WorldMatrix.Forward;
-                Vector3D approachStart = targetDock + forward * 150;  // Punto de aproximación inicial
-
-                for (int i = 0; i <= NumWaypoints; i++)
-                {
-                    double t = i / (double)NumWaypoints;
-                    Vector3D point = Vector3D.Lerp(approachStart, targetDock, t) + forward * 2.3;
-                    waypoints.Add(point);
-                }
-
-                return waypoints;
-            }
-            public string GetApproachingWaypoints()
-            {
-                return string.Join(";", CalculateRouteToConnector().Select(VectorToStr));
-            }
-            public string MoveCargo(Order order, List<IMyCargoContainer> sourceCargos)
-            {
-                StringBuilder sb = new StringBuilder();
-                sb.AppendLine($"## Exchange: {Name}. MoveCargo {order.Id}");
-
-                if (Cargo == null)
-                {
-                    sb.AppendLine($"## ERROR Cargo not found in Exchange.");
-                    return sb.ToString();
-                }
-
-                sb.AppendLine($"## Destination Cargo: {Cargo.CustomName}. Warehouse cargos: {sourceCargos.Count}");
-
-                //Cargo del exchange a donde tienen que ir los items del pedido
-                var dstInv = Cargo.GetInventory();
-
-                foreach (var orderItem in order.Items)
-                {
-                    var amountRemaining = orderItem.Value;
-                    sb.AppendLine($"## Item {orderItem.Key}: {orderItem.Value}.");
-
-                    // Buscar ítem en los contenedores de la base
-                    foreach (var srcCargo in sourceCargos)
-                    {
-                        var srcInv = srcCargo.GetInventory();
-                        var srcItems = new List<MyInventoryItem>();
-                        srcInv.GetItems(srcItems);
-
-                        if (!srcInv.IsConnectedTo(dstInv))
-                        {
-                            sb.AppendLine($"## Los cargos {srcCargo.CustomName} y {Cargo.CustomName} no están conectados.");
-                            break;
-                        }
-
-                        for (int o = srcItems.Count - 1; o >= 0 && amountRemaining > 0; o--)
-                        {
-                            if (srcItems[o].Type.SubtypeId != orderItem.Key)
-                            {
-                                sb.AppendLine($"## WARNING Item {srcItems[o].Type.SubtypeId} discarded.");
-                                continue;
-                            }
-
-                            var transferAmount = MyFixedPoint.Min(amountRemaining, srcItems[o].Amount);
-                            sb.AppendLine($"## Moving {transferAmount}/{srcItems[o].Amount:F0} of {orderItem.Key} from {srcCargo.CustomName} to {Cargo.CustomName}.");
-
-                            if (srcInv.TransferItemTo(dstInv, srcItems[o], transferAmount))
-                            {
-                                sb.AppendLine($"## Moved {transferAmount} of {orderItem.Key} from {srcCargo.CustomName}.");
-                                amountRemaining -= transferAmount.ToIntSafe();
-                                break;
-                            }
-                            else
-                            {
-                                sb.AppendLine($"## ERROR Cannot move {transferAmount} of {orderItem.Key} from {srcCargo.CustomName} to {Cargo.CustomName}.");
-                            }
-                        }
-                    }
-
-                    sb.AppendLine($"## Remaining {amountRemaining} of {orderItem.Key}.");
-                }
-
-                return sb.ToString();
-            }
-        }
-        class Order
-        {
-            static int lastId = 0;
-
-            public int Id;
-            public string Customer;
-            public Vector3D CustomerParking;
-            public string Warehouse;
-            public Vector3D WarehouseParking;
-            public Dictionary<string, int> Items = new Dictionary<string, int>();
-            public string AssignedShip;
-
-            public Order()
-            {
-                Id = ++lastId;
-            }
-            public Order(string line)
-            {
-                LoadFromStorage(line);
-            }
-
-            public string SaveToStorage()
-            {
-                List<string> parts = new List<string>
-                {
-                    $"Id={Id}",
-                    $"Customer={Customer}",
-                    $"CustomerParking={VectorToStr(CustomerParking)}",
-                    $"Warehouse={Warehouse}",
-                    $"WarehouseParking={VectorToStr(WarehouseParking)}",
-                    $"AssignedShip={AssignedShip}",
-                    $"Items={string.Join(";", Items.Select(i => $"{i.Key}:{i.Value}"))}",
-                };
-
-                return string.Join("|", parts);
-            }
-            public void LoadFromStorage(string line)
-            {
-                var parts = line.Split('|');
-
-                Id = ReadInt(parts, "Id");
-                Customer = ReadString(parts, "Customer");
-                CustomerParking = StrToVector(ReadString(parts, "CustomerParking"));
-                Warehouse = ReadString(parts, "Warehouse");
-                WarehouseParking = StrToVector(ReadString(parts, "WarehouseParking"));
-                AssignedShip = ReadString(parts, "AssignedShip");
-
-                Items.Clear();
-                var itemsParts = ReadString(parts, "Items").Split(';');
-                foreach (var item in itemsParts)
-                {
-                    var itemParts = item.Split(':');
-                    if (itemParts.Length != 2) continue;
-
-                    string itemName = itemParts[0];
-
-                    int itemAmount;
-                    if (!int.TryParse(itemParts[1], out itemAmount)) continue;
-                    Items[itemName] = itemAmount;
-                }
-
-                lastId = Id + 1;
-            }
-        }
-        enum ShipStatus
-        {
-            Unknown,
-            Idle,
-
-            ApproachingWarehouse,
-            Loading,
-            RouteToCustomer,
-
-            WaitingForUnload,
-
-            ApproachingCustomer,
-            Unloading,
-            RouteToWarehouse,
-        }
-        class Ship
-        {
-            public string Name;
-            public ShipStatus ShipStatus;
-            public Vector3D Position;
-            public string Origin;
-            public Vector3D OriginPosition;
-            public string Destination;
-            public Vector3D DestinationPosition;
-            public DateTime UpdateTime;
-        }
-        class UnloadRequest
-        {
-            public string From;
-            public int OrderId;
-            public bool Idle;
-
-            public UnloadRequest()
-            {
-
-            }
-            public UnloadRequest(string line)
-            {
-                LoadFromStorage(line);
-            }
-
-            public string SaveToStorage()
-            {
-                return $"UnloadRequest={From}|OrderId={OrderId}|Idle={(Idle ? 1 : 0)}";
-            }
-            public void LoadFromStorage(string line)
-            {
-                var parts = line.Split('|');
-                From = ReadString(parts, "From");
-                OrderId = ReadInt(parts, "OrderId");
-                Idle = ReadInt(parts, "Idle") == 1;
-            }
-        }
-        class ShipExchangePair
-        {
-            public Ship Ship;
-            public ExchangeGroup Exchange;
-            public double Distance;
-        }
-        #endregion
-
-        string ExtractGroupName(string input)
-        {
-            var match = exchangesRegex.Match(input);
-            if (match.Success)
-            {
-                return match.Value;
-            }
-
-            return string.Empty;
-        }
-        T GetBlockWithName<T>(string name) where T : class, IMyTerminalBlock
-        {
-            List<T> blocks = new List<T>();
-            GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid);
-
-            return blocks.FirstOrDefault(b => b.CustomName.Contains(name));
-        }
-        static string ReadArgument(string[] lines, string command)
-        {
-            string cmdToken = $"{command}=";
-            return lines.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";
-        }
-        static string ReadString(string[] lines, string name, string defaultValue = null)
-        {
-            string cmdToken = $"{name}=";
-            string value = lines.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";
-            if (string.IsNullOrEmpty(value))
-            {
-                return defaultValue;
-            }
-
-            return value;
-        }
-        static int ReadInt(string[] lines, string name, int defaultValue = 0)
-        {
-            string cmdToken = $"{name}=";
-            string value = lines.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";
-            if (string.IsNullOrEmpty(value))
-            {
-                return defaultValue;
-            }
-
-            return int.Parse(value);
-        }
-        static string VectorToStr(Vector3D v)
-        {
-            return $"{v.X}:{v.Y}:{v.Z}";
-        }
-        static Vector3D StrToVector(string str)
-        {
-            string[] coords = str.Split(':');
-            if (coords.Length == 3)
-            {
-                return new Vector3D(double.Parse(coords[0]), double.Parse(coords[1]), double.Parse(coords[2]));
-            }
-            return new Vector3D();
-        }
-        static ShipStatus StrToShipStatus(string str)
-        {
-            if (str == "Idle") return ShipStatus.Idle;
-            if (str == "ApproachingWarehouse") return ShipStatus.ApproachingWarehouse;
-            if (str == "Loading") return ShipStatus.Loading;
-            if (str == "RouteToCustomer") return ShipStatus.RouteToCustomer;
-            if (str == "WaitingForUnload") return ShipStatus.WaitingForUnload;
-            if (str == "ApproachingCustomer") return ShipStatus.ApproachingCustomer;
-            if (str == "Unloading") return ShipStatus.Unloading;
-            if (str == "RouteToWarehouse") return ShipStatus.RouteToWarehouse;
-            return ShipStatus.Unknown;
-        }
-        void WriteLCDs(string wildcard, string text)
-        {
-            List<IMyTextPanel> lcds = new List<IMyTextPanel>();
-            GridTerminalSystem.GetBlocksOfType(lcds, lcd => lcd.CubeGrid == Me.CubeGrid && lcd.CustomName.Contains(wildcard));
-            foreach (var lcd in lcds)
-            {
-                lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-                lcd.WriteText(text, false);
-            }
-        }
-        void WriteDataLCDs(string text, bool append)
-        {
-            foreach (var lcd in dataLCDs)
-            {
-                lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-                lcd.WriteText(text, append);
-            }
-        }
-        void WriteLogLCDs(string text)
-        {
-            if (!enableLogs)
-            {
-                return;
-            }
-
-            sbLog.Insert(0, text + Environment.NewLine);
-
-            var log = sbLog.ToString();
-            string[] logLines = log.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
-
-            foreach (var lcd in logLCDs)
-            {
-                lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-
-                string customData = lcd.CustomData;
-                var blackList = customData.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
-                if (blackList.Length > 0)
-                {
-                    string[] lines = logLines.Where(l => !blackList.Any(b => l.Contains(b))).ToArray();
-                    lcd.WriteText(string.Join(Environment.NewLine, lines));
-                }
-                else
-                {
-                    lcd.WriteText(log, false);
-                }
-            }
-        }
-        void SendIGCMessage(string message)
-        {
-            WriteLogLCDs($"SendIGCMessage: {message}");
-
-            IGC.SendBroadcastMessage(channel, message);
-        }
 
         public Program()
         {
@@ -438,6 +80,11 @@ namespace IngameScript
             Runtime.UpdateFrequency = UpdateFrequency.Update100; // Ejecuta cada ~1.6s
         }
 
+        public void Save()
+        {
+            SaveToStorage();
+        }
+
         public void Main(string argument, UpdateType updateSource)
         {
             if (!string.IsNullOrEmpty(argument))
@@ -451,8 +98,6 @@ namespace IngameScript
                 ParseMessage(message.Data.ToString());
             }
 
-            SaveToStorage();
-
             if (showShips || showOrders)
             {
                 sbData.Clear();
@@ -465,6 +110,7 @@ namespace IngameScript
             }
         }
 
+        #region TERMINAL COMMANDS
         void ParseTerminalMessage(string argument)
         {
             WriteLogLCDs($"ParseTerminalMessage: {argument}");
@@ -528,10 +174,10 @@ namespace IngameScript
             ship.ShipStatus = ShipStatus.ApproachingWarehouse;
             exchange.DockedShipName = ship.Name;
 
-            string forward = VectorToStr(camera.WorldMatrix.Forward);
-            string up = VectorToStr(camera.WorldMatrix.Up);
+            string forward = Utils.VectorToStr(camera.WorldMatrix.Forward);
+            string up = Utils.VectorToStr(camera.WorldMatrix.Up);
             string waypoints = exchange.GetApproachingWaypoints();
-            string message = $"Command=LOAD_ORDER|To={ship.Name}|Warehouse={baseId}|WarehouseParking={baseParking}|Customer={order.Customer}|CustomerParking={VectorToStr(order.CustomerParking)}|Order={order.Id}|Forward={forward}|Up={up}|WayPoints={waypoints}|Exchange={exchange.Name}";
+            string message = $"Command=LOAD_ORDER|To={ship.Name}|Warehouse={baseId}|WarehouseParking={baseParking}|Customer={order.Customer}|CustomerParking={Utils.VectorToStr(order.CustomerParking)}|Order={order.Id}|Forward={forward}|Up={up}|WayPoints={waypoints}|Exchange={exchange.Name}";
             SendIGCMessage(message);
 
             //Pone el exchange en modo preparar pedido
@@ -577,8 +223,8 @@ namespace IngameScript
                 ship.ShipStatus = ShipStatus.ApproachingCustomer;
                 exchange.DockedShipName = ship.Name;
 
-                string forward = VectorToStr(camera.WorldMatrix.Forward);
-                string up = VectorToStr(camera.WorldMatrix.Up);
+                string forward = Utils.VectorToStr(camera.WorldMatrix.Forward);
+                string up = Utils.VectorToStr(camera.WorldMatrix.Up);
                 string waypoints = exchange.GetApproachingWaypoints();
                 string message = $"Command=UNLOAD_ORDER|To={request.From}|From={baseId}|Forward={forward}|Up={up}|WayPoints={waypoints}|Exchange={exchange.Name}";
                 SendIGCMessage(message);
@@ -632,7 +278,7 @@ namespace IngameScript
                 return;
             }
 
-            string fakeOrder = $"Command=REQUEST_ORDER|To=BaseWarehouse1|Customer={baseId}|CustomerParking={baseParking}|Items=SteelPlate:10;";
+            string fakeOrder = $"Command=REQUEST_ORDER|To=BaseWarehouse1|Customer={baseId}|CustomerParking={baseParking}|Items=SteelPlate:1000;";
 
             SendIGCMessage(fakeOrder);
         }
@@ -660,7 +306,7 @@ namespace IngameScript
         {
             string[] lines = argument.Split('|');
 
-            string exchangeName = ReadArgument(lines, "Exchange");
+            string exchangeName = Utils.ReadArgument(lines, "Exchange");
             var exchange = exchanges.Find(e => e.Name == exchangeName);
             if (exchange == null)
             {
@@ -672,13 +318,15 @@ namespace IngameScript
 
             exchange.DockedShipName = null;
         }
+        #endregion
 
+        #region IGC COMMANDS
         void ParseMessage(string signal)
         {
             WriteLogLCDs($"ParseMessage: {signal}");
 
             string[] lines = signal.Split('|');
-            string command = ReadArgument(lines, "Command");
+            string command = Utils.ReadArgument(lines, "Command");
 
             if (command == "RESPONSE_STATUS") CmdResponseStatus(lines);
             else if (command == "REQUEST_ORDER") CmdRequestOrder(lines);
@@ -694,19 +342,19 @@ namespace IngameScript
         /// </summary>
         void CmdResponseStatus(string[] lines)
         {
-            string to = ReadArgument(lines, "To");
+            string to = Utils.ReadArgument(lines, "To");
             if (to != baseId)
             {
                 return;
             }
 
-            string from = ReadArgument(lines, "From");
-            ShipStatus status = StrToShipStatus(ReadArgument(lines, "Status"));
-            string origin = ReadArgument(lines, "Origin");
-            Vector3D originPosition = StrToVector(ReadArgument(lines, "OriginPosition"));
-            string destination = ReadArgument(lines, "Destination");
-            Vector3D destinationPosition = StrToVector(ReadArgument(lines, "DestinationPosition"));
-            Vector3D position = StrToVector(ReadArgument(lines, "Position"));
+            string from = Utils.ReadArgument(lines, "From");
+            ShipStatus status = Utils.StrToShipStatus(Utils.ReadArgument(lines, "Status"));
+            string origin = Utils.ReadArgument(lines, "Origin");
+            Vector3D originPosition = Utils.StrToVector(Utils.ReadArgument(lines, "OriginPosition"));
+            string destination = Utils.ReadArgument(lines, "Destination");
+            Vector3D destinationPosition = Utils.StrToVector(Utils.ReadArgument(lines, "DestinationPosition"));
+            Vector3D position = Utils.StrToVector(Utils.ReadArgument(lines, "Position"));
 
             var ship = ships.Find(s => s.Name == from);
             if (ship == null)
@@ -729,20 +377,20 @@ namespace IngameScript
         /// </summary>
         void CmdRequestOrder(string[] lines)
         {
-            string to = ReadArgument(lines, "To");
+            string to = Utils.ReadArgument(lines, "To");
             if (to != baseId)
             {
                 return;
             }
 
-            string customer = ReadArgument(lines, "Customer");
-            Vector3D customerParking = StrToVector(ReadArgument(lines, "CustomerParking"));
-            string items = ReadArgument(lines, "Items");
+            string customer = Utils.ReadArgument(lines, "Customer");
+            Vector3D customerParking = Utils.StrToVector(Utils.ReadArgument(lines, "CustomerParking"));
+            string items = Utils.ReadArgument(lines, "Items");
 
             Order order = new Order
             {
                 Warehouse = baseId,
-                WarehouseParking = StrToVector(baseParking),
+                WarehouseParking = Utils.StrToVector(baseParking),
                 Customer = customer,
                 CustomerParking = customerParking,
             };
@@ -773,15 +421,15 @@ namespace IngameScript
         /// </summary>
         void CmdLoading(string[] lines)
         {
-            string to = ReadArgument(lines, "To");
+            string to = Utils.ReadArgument(lines, "To");
             if (to != baseId)
             {
                 return;
             }
 
-            string from = ReadArgument(lines, "From");
-            int orderId = int.Parse(ReadArgument(lines, "Order"));
-            string exchangeName = ReadArgument(lines, "Exchange");
+            string from = Utils.ReadArgument(lines, "From");
+            int orderId = int.Parse(Utils.ReadArgument(lines, "Order"));
+            string exchangeName = Utils.ReadArgument(lines, "Exchange");
 
             var order = orders.FirstOrDefault(o => o.Id == orderId);
             var exchange = exchanges.Find(e => e.Name == exchangeName);
@@ -797,14 +445,14 @@ namespace IngameScript
         /// </summary>
         void CmdRequestUnload(string[] lines)
         {
-            string to = ReadArgument(lines, "To");
+            string to = Utils.ReadArgument(lines, "To");
             if (to != baseId)
             {
                 return;
             }
 
-            string from = ReadArgument(lines, "From");
-            int orderId = int.Parse(ReadArgument(lines, "Order"));
+            string from = Utils.ReadArgument(lines, "From");
+            int orderId = int.Parse(Utils.ReadArgument(lines, "Order"));
 
             unloadRequests.Add(new UnloadRequest
             {
@@ -818,13 +466,13 @@ namespace IngameScript
         /// </summary>
         void CmdUnloading(string[] lines)
         {
-            string to = ReadArgument(lines, "To");
+            string to = Utils.ReadArgument(lines, "To");
             if (to != baseId)
             {
                 return;
             }
 
-            string exchangeName = ReadArgument(lines, "Exchange");
+            string exchangeName = Utils.ReadArgument(lines, "Exchange");
             var exchange = exchanges.Find(e => e.Name == exchangeName);
             exchange.TimerUnload?.ApplyAction("Start");
         }
@@ -835,16 +483,16 @@ namespace IngameScript
         /// </summary>
         void CmdUnloaded(string[] lines)
         {
-            string to = ReadArgument(lines, "To");
+            string to = Utils.ReadArgument(lines, "To");
             if (to != baseId)
             {
                 return;
             }
 
-            string warehouse = ReadArgument(lines, "Warehouse");
+            string warehouse = Utils.ReadArgument(lines, "Warehouse");
 
             //Eliminar la orden de descarga del pedido
-            int orderId = int.Parse(ReadArgument(lines, "Order"));
+            int orderId = int.Parse(Utils.ReadArgument(lines, "Order"));
             var req = unloadRequests.FirstOrDefault(o => o.OrderId == orderId);
             if (req != null)
             {
@@ -867,21 +515,23 @@ namespace IngameScript
         /// </summary>
         void CmdOrderReceived(string[] lines)
         {
-            string to = ReadArgument(lines, "To");
+            string to = Utils.ReadArgument(lines, "To");
             if (to != baseId)
             {
                 return;
             }
 
             //Eliminar el pedido de la lista
-            int orderId = int.Parse(ReadArgument(lines, "Order"));
+            int orderId = int.Parse(Utils.ReadArgument(lines, "Order"));
             var order = orders.FirstOrDefault(o => o.Id == orderId);
             if (order != null)
             {
                 orders.Remove(order);
             }
         }
+        #endregion
 
+        #region UTILITY
         void InitializeExchangeGroups()
         {
             //Busca todos los bloques que tengan en el nombre la regex de exchanges
@@ -1026,7 +676,7 @@ namespace IngameScript
             foreach (var ship in ships)
             {
                 sbData.AppendLine($"{ship.Name} Status: {ship.ShipStatus}.");
-                sbData.AppendLine($"Last known position: {VectorToStr(ship.Position)}. Last update: {(DateTime.Now - ship.UpdateTime).TotalSeconds:F0}secs");
+                sbData.AppendLine($"Last known position: {Utils.VectorToStr(ship.Position)}. Last update: {(DateTime.Now - ship.UpdateTime).TotalSeconds:F0}secs");
                 if (string.IsNullOrEmpty(ship.Origin)) continue;
 
                 double distanceToOrigin = Vector3D.Distance(ship.Position, ship.OriginPosition);
@@ -1072,48 +722,121 @@ namespace IngameScript
             }
         }
 
+        string ExtractGroupName(string input)
+        {
+            var match = exchangesRegex.Match(input);
+            if (match.Success)
+            {
+                return match.Value;
+            }
+
+            return string.Empty;
+        }
+        T GetBlockWithName<T>(string name) where T : class, IMyTerminalBlock
+        {
+            List<T> blocks = new List<T>();
+            GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid);
+
+            return blocks.FirstOrDefault(b => b.CustomName.Contains(name));
+        }
+        void WriteLCDs(string wildcard, string text)
+        {
+            List<IMyTextPanel> lcds = new List<IMyTextPanel>();
+            GridTerminalSystem.GetBlocksOfType(lcds, lcd => lcd.CubeGrid == Me.CubeGrid && lcd.CustomName.Contains(wildcard));
+            foreach (var lcd in lcds)
+            {
+                lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                lcd.WriteText(text, false);
+            }
+        }
+        void WriteDataLCDs(string text, bool append)
+        {
+            foreach (var lcd in dataLCDs)
+            {
+                lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                lcd.WriteText(text, append);
+            }
+        }
+        void WriteLogLCDs(string text)
+        {
+            if (!enableLogs)
+            {
+                return;
+            }
+
+            sbLog.Insert(0, text + Environment.NewLine);
+
+            var log = sbLog.ToString();
+            string[] logLines = log.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (var lcd in logLCDs)
+            {
+                lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+
+                string customData = lcd.CustomData;
+                var blackList = customData.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+                if (blackList.Length > 0)
+                {
+                    string[] lines = logLines.Where(l => !blackList.Any(b => l.Contains(b))).ToArray();
+                    lcd.WriteText(string.Join(Environment.NewLine, lines));
+                }
+                else
+                {
+                    lcd.WriteText(log, false);
+                }
+            }
+        }
+        void SendIGCMessage(string message)
+        {
+            WriteLogLCDs($"SendIGCMessage: {message}");
+
+            IGC.SendBroadcastMessage(channel, message);
+        }
+        #endregion
+
         void LoadFromStorage()
         {
             orders.Clear();
             unloadRequests.Clear();
 
             string[] storageLines = Storage.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+            if (storageLines.Length == 0) return;
 
-            int orderCount = ReadInt(storageLines, "Orders");
-            for (int i = 1; i < orderCount; i++)
+            int orderCount = Utils.ReadInt(storageLines, "OrderCount");
+            int reqCount = Utils.ReadInt(storageLines, "UnloadRequestCount");
+
+            if (orderCount > 0)
             {
-                string orderLine = storageLines[i];
-                if (string.IsNullOrEmpty(orderLine)) continue;
-
-                orders.Add(new Order(orderLine));
+                string orderList = Utils.ReadString(storageLines, "Orders");
+                string[] ordersLines = orderList.Split('¬');
+                for (int i = 0; i < ordersLines.Length; i++)
+                {
+                    orders.Add(new Order(ordersLines[i]));
+                }
             }
 
-            int reqCount = ReadInt(storageLines, "UnloadRequests");
-            for (int i = 1 + orderCount + 1; i < reqCount; i++)
+            if (reqCount > 0)
             {
-                var reqLine = storageLines[i];
-                if (string.IsNullOrEmpty(reqLine)) continue;
-
-                unloadRequests.Add(new UnloadRequest(reqLine));
+                string unloadList = Utils.ReadString(storageLines, "UnloadRequests");
+                string[] unloadLines = unloadList.Split('¬');
+                for (int i = 0; i < unloadLines.Length; i++)
+                {
+                    unloadRequests.Add(new UnloadRequest(unloadLines[i]));
+                }
             }
         }
         void SaveToStorage()
         {
-            List<string> parts = new List<string>();
+            var orderList = string.Join("¬", orders.Select(o => o.SaveToStorage()).ToList());
+            var unloadList = string.Join("¬", unloadRequests.Select(o => o.SaveToStorage()).ToList());
 
-            //Orders
-            parts.Add($"Orders={orders.Count}");
-            foreach (var order in orders)
+            List<string> parts = new List<string>
             {
-                parts.Add(order.SaveToStorage());
-            }
-
-            //UnloadRequests
-            parts.Add($"UnloadRequests={unloadRequests.Count}");
-            foreach (var req in unloadRequests)
-            {
-                parts.Add(req.SaveToStorage());
-            }
+                $"OrderCount={orders.Count}",
+                $"Orders={orderList}",
+                $"UnloadRequestCount={unloadRequests.Count}",
+                $"UnloadRequests={unloadList}",
+            };
 
             Storage = string.Join(Environment.NewLine, parts);
         }

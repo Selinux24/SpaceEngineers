@@ -47,7 +47,7 @@ namespace IngameScript
         const double CruisingMaxSpeedThr = 0.95;
         const double CruisingMaxAccelerationSpeed = 19.5; // Velocidad máxima de crucero cerca de la base
         const double CruisingToBasesDistanceThr = 2000.0; // Distancia al punto de salida para activar la velocidad máxima de crucero
-        const double CruisingToTargetDistanceThr = 5000.0; // Rango de frenado hasta el objetivo
+        const double CruisingToTargetDistanceThr = 3000.0; // Rango de frenado hasta el objetivo
 
         const double CruisingThrustAlignSeconds = 5.0; // Tiempo de encendido de thrusters hasta alineación
         const double CruisingLocateAlignThr = 0.001; // Precisión de alineación

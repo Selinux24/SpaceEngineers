@@ -17,11 +17,6 @@ namespace IngameScript
             string cmdToken = $"{command}{sep}";
             return arguments.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";
         }
-        public static string ReadArgument(string argument, string command, char sep = ArgumentSep)
-        {
-            string cmdToken = $"{command}{sep}";
-            return argument.StartsWith(cmdToken) ? argument.Replace(cmdToken, "") : "";
-        }
 
         public static string VectorToStr(Vector3D v)
         {
@@ -56,10 +51,6 @@ namespace IngameScript
         public static string VectorListToStr(List<Vector3D> list)
         {
             return string.Join($"{VariableSep}", list.Select(VectorToStr));
-        }
-        public static int StrToInt(string s)
-        {
-            return int.Parse(s);
         }
 
         public static string ReadString(string[] lines, string name, string defaultValue = "")
