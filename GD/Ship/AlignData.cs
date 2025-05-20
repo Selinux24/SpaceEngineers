@@ -11,27 +11,21 @@ namespace IngameScript
         const double maxApproachSpeedLocking = 5.0; //Velocidad máxima en el último waypoint
         const double slowdownDistance = 50.0; //Distancia de frenada
 
-        public List<Vector3D> Waypoints = new List<Vector3D>();
+        public readonly List<Vector3D> Waypoints = new List<Vector3D>();
         public int CurrentTarget = 0;
         public Vector3D TargetForward = new Vector3D(1, 0, 0);
         public Vector3D TargetUp = new Vector3D(0, 1, 0);
         public bool HasTarget = false;
         public string Command = null;
 
-        public void Initialize(string data)
+        public void Initialize(Vector3D forward, Vector3D up, List<Vector3D> wayPoints, string command)
         {
-            Clear();
-
-            var parts = data.Split('¬');
-
-            if (parts.Length < 3) return;
-            TargetForward = -Vector3D.Normalize(Utils.StrToVector(parts[0]));
-            TargetUp = Vector3D.Normalize(Utils.StrToVector(parts[1]));
-            Waypoints = Utils.StrToVectorList(parts[2]);
+            TargetForward = -Vector3D.Normalize(forward);
+            TargetUp = Vector3D.Normalize(up);
+            Waypoints.Clear();
+            Waypoints.AddRange(wayPoints);
+            Command = command;
             HasTarget = true;
-
-            if (parts.Length < 4) return;
-            Command = parts[3];
         }
         public void Clear()
         {
@@ -67,7 +61,8 @@ namespace IngameScript
             var parts = storageLine.Split('¬');
             if (parts.Length != 6) return;
 
-            Waypoints = Utils.ReadVectorList(parts, "Waypoints");
+            Waypoints.Clear();
+            Waypoints.AddRange(Utils.ReadVectorList(parts, "Waypoints"));
             CurrentTarget = Utils.ReadInt(parts, "CurrentTarget");
             TargetForward = Utils.ReadVector(parts, "TargetForward");
             TargetUp = Utils.ReadVector(parts, "TargetUp");

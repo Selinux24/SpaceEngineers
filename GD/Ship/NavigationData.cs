@@ -7,7 +7,7 @@ namespace IngameScript
 {
     class NavigationData
     {
-        public NavState CurrentState = NavState.Idle;
+        public NavigationStatus CurrentState = NavigationStatus.Idle;
         public Vector3D Destination;
         public bool HasTarget = false;
         public bool Thrusting = false;
@@ -19,12 +19,12 @@ namespace IngameScript
 
         private MyDetectedEntityInfo lastHit;
 
-        public void Initialize(string data)
+        public void Initialize(Vector3D position)
         {
-            Destination = Utils.StrToVector(data);
+            Destination = position;
             HasTarget = true;
             EvadingPoints.Clear();
-            CurrentState = NavState.Locating;
+            CurrentState = NavigationStatus.Locating;
             Thrusting = false;
             EvadingPoints.Clear();
 
@@ -35,7 +35,7 @@ namespace IngameScript
             Destination = Vector3D.Zero;
             HasTarget = false;
             EvadingPoints.Clear();
-            CurrentState = NavState.Idle;
+            CurrentState = NavigationStatus.Idle;
             Thrusting = false;
             EvadingPoints.Clear();
             lastHit = new MyDetectedEntityInfo();
@@ -103,7 +103,7 @@ namespace IngameScript
         {
             var parts = storageLine.Split('¬');
 
-            CurrentState = (NavState)Utils.ReadInt(parts, "CurrentState");
+            CurrentState = (NavigationStatus)Utils.ReadInt(parts, "CurrentState");
             Destination = Utils.ReadVector(parts, "Destination");
             HasTarget = Utils.ReadInt(parts, "HasTarget") == 1;
             Thrusting = Utils.ReadInt(parts, "Thrusting") == 1;

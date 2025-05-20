@@ -9,18 +9,11 @@ namespace IngameScript
         public string Command = null;
         public bool HasPosition = false;
 
-        public void Initialize(string data)
+        public void Initialize(Vector3D position, string commad)
         {
-            Clear();
-
-            var parts = data.Split('¬');
-
-            if (parts.Length < 1) return;
-            TargetPosition = Utils.StrToVector(parts[0]);
+            TargetPosition = position;
+            Command = commad;
             HasPosition = true;
-
-            if (parts.Length < 2) return;
-            Command = parts[1];
         }
         public void Clear()
         {
