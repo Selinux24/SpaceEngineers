@@ -5,29 +5,39 @@ namespace IngameScript
 {
     class ArrivalData
     {
-        public Vector3D TargetPosition = Vector3D.Zero;
+        public Vector3D Destination = Vector3D.Zero;
+        public double Distance = 0;
         public string Command = null;
         public bool HasPosition = false;
 
-        public void Initialize(Vector3D position, string commad)
+        public void Initialize(Vector3D destination, double distance, string commad)
         {
-            TargetPosition = position;
+            Destination = destination;
+            Distance = distance;
             Command = commad;
             HasPosition = true;
         }
         public void Clear()
         {
-            TargetPosition = Vector3D.Zero;
+            Destination = Vector3D.Zero;
+            Distance = 0;
             Command = null;
             HasPosition = false;
+        }
+
+        public bool Arrived(Vector3D position, out double distance)
+        {
+            distance = Vector3D.Distance(position, Destination);
+            return distance <= Distance;
         }
 
         public void LoadFromStorage(string storageLine)
         {
             var parts = storageLine.Split('¬');
-            if (parts.Length != 3) return;
+            if (parts.Length == 0) return;
 
-            TargetPosition = Utils.StrToVector(Utils.ReadString(parts, "TargetPosition"));
+            Destination = Utils.ReadVector(parts, "Destination");
+            Distance = Utils.ReadDouble(parts, "Distance");
             Command = Utils.ReadString(parts, "Command");
             HasPosition = Utils.ReadInt(parts, "HasPosition") == 1;
         }
@@ -35,7 +45,8 @@ namespace IngameScript
         {
             List<string> parts = new List<string>()
             {
-                $"TargetPosition={Utils.VectorToStr(TargetPosition)}",
+                $"Destination={Utils.VectorToStr(Destination)}",
+                $"Distance={Distance}",
                 $"Command={Command}",
                 $"HasPosition={(HasPosition ? 1 : 0)}",
             };

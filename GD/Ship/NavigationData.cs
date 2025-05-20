@@ -8,7 +8,9 @@ namespace IngameScript
     class NavigationData
     {
         public NavigationStatus CurrentState = NavigationStatus.Idle;
+        public Vector3D Origin;
         public Vector3D Destination;
+        public string Command = null;
         public bool HasTarget = false;
         public bool Thrusting = false;
         public readonly List<Vector3D> EvadingPoints = new List<Vector3D>();
@@ -19,9 +21,11 @@ namespace IngameScript
 
         private MyDetectedEntityInfo lastHit;
 
-        public void Initialize(Vector3D position)
+        public void Initialize(Vector3D origin, Vector3D destination, string commad)
         {
-            Destination = position;
+            Origin = origin;
+            Destination = destination;
+            Command = commad;
             HasTarget = true;
             EvadingPoints.Clear();
             CurrentState = NavigationStatus.Locating;
@@ -32,7 +36,9 @@ namespace IngameScript
         }
         public void Clear()
         {
+            Origin = Vector3D.Zero;
             Destination = Vector3D.Zero;
+            Command = null;
             HasTarget = false;
             EvadingPoints.Clear();
             CurrentState = NavigationStatus.Idle;
@@ -104,7 +110,9 @@ namespace IngameScript
             var parts = storageLine.Split('¬');
 
             CurrentState = (NavigationStatus)Utils.ReadInt(parts, "CurrentState");
+            Origin = Utils.ReadVector(parts, "Origin");
             Destination = Utils.ReadVector(parts, "Destination");
+            Command = Utils.ReadString(parts, "Command");
             HasTarget = Utils.ReadInt(parts, "HasTarget") == 1;
             Thrusting = Utils.ReadInt(parts, "Thrusting") == 1;
             int evadingCount = Utils.ReadInt(parts, "EvadingPoints");
@@ -119,7 +127,9 @@ namespace IngameScript
             List<string> parts = new List<string>()
             {
                 $"CurrentState={(int)CurrentState}",
+                $"Origin={Utils.VectorToStr(Origin)}",
                 $"Destination={Utils.VectorToStr(Destination)}",
+                $"Command={Command}",
                 $"HasTarget={(HasTarget?1:0)}",
                 $"Thrusting={(Thrusting?1:0)}",
                 $"EvadingPoints={EvadingPoints.Count}",

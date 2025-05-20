@@ -83,6 +83,16 @@ namespace IngameScript
 
             return int.Parse(value);
         }
+        public static double ReadDouble(string[] lines, string name, double defaultValue = 0)
+        {
+            string value = ReadString(lines, name);
+            if (string.IsNullOrEmpty(value))
+            {
+                return defaultValue;
+            }
+
+            return double.Parse(value);
+        }
         public static Vector3D ReadVector(string[] lines, string name)
         {
             string value = ReadString(lines, name);
