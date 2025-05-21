@@ -1,59 +1,84 @@
 ﻿using Sandbox.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        readonly string nombreAntena = "Laser Emisor";
-        readonly string gpsReceptor = "GPS:Laser Receptor:-50027.34:-87333.41:-43673.9:";
-        readonly string temporizadorEnvio = "Timer_Envio";
-        readonly string temporizadorError = "Timer_Error";
+        const string LaserAntennaName = "BaseMiner1 Laser Antenna";
+        const string TimerSendName = "BaseMiner1 Timer Laser Off";
 
-        IMyLaserAntenna antena;
+        readonly IMyLaserAntenna antenna;
+
+        string gpsReceptor;
+        bool sending = false;
+
+        public Program()
+        {
+            Runtime.UpdateFrequency = UpdateFrequency.None;
+
+            antenna = GetBlockWithName<IMyLaserAntenna>(LaserAntennaName);
+            if (antenna == null)
+            {
+                Echo($"Antenna {LaserAntennaName} not found.");
+                return;
+            }
+
+            Echo("Working!");
+        }
 
         public void Main(string argument, UpdateType updateSource)
         {
-            if (argument == "ENVIAR")
+            if (argument == "SEND")
             {
-                antena = GridTerminalSystem.GetBlockWithName(nombreAntena) as IMyLaserAntenna;
-                if (antena == null)
+                if (!string.IsNullOrWhiteSpace(Me.CustomData))
                 {
-                    ActivarTemporizador(temporizadorError);
-                    Echo("No se encontró la antena.");
-                    return;
+                    gpsReceptor = Me.CustomData;
+                    sending = !string.IsNullOrWhiteSpace(gpsReceptor);
+                    Runtime.UpdateFrequency = UpdateFrequency.Update100;
                 }
 
-                Runtime.UpdateFrequency = UpdateFrequency.Update100;
+                return;
             }
 
-            if (antena == null)
+            if (!sending)
             {
                 return;
             }
 
             // Conectar si no está aún
-            if (antena.Status != MyLaserAntennaStatus.Connected)
+            if (antenna.Status != MyLaserAntennaStatus.Connected)
             {
-                Echo($"{antena.Status} Conectando a GPS...");
-                if (antena.Status != MyLaserAntennaStatus.SearchingTargetForAntenna && antena.Status != MyLaserAntennaStatus.RotatingToTarget && antena.Status != MyLaserAntennaStatus.Connecting)
+                Echo($"{antenna.Status} Connecting to GPS...");
+                if (antenna.Status != MyLaserAntennaStatus.SearchingTargetForAntenna && antenna.Status != MyLaserAntennaStatus.RotatingToTarget && antenna.Status != MyLaserAntennaStatus.Connecting)
                 {
-                    antena.Enabled = true;
-                    antena.SetTargetCoords(gpsReceptor);
-                    antena.Connect();
+                    antenna.Enabled = true;
+                    antenna.SetTargetCoords(gpsReceptor);
+                    antenna.Connect();
                 }
                 return;
             }
 
-            ActivarTemporizador(temporizadorEnvio);
+            ActivateTimer(TimerSendName);
+            gpsReceptor = null;
+            sending = false;
             Runtime.UpdateFrequency = UpdateFrequency.None;
-            Echo("Comando enviado.");
+            Echo("Send completed.");
         }
 
-        void ActivarTemporizador(string nombre)
+        void ActivateTimer(string nombre)
         {
-            var timer = GridTerminalSystem.GetBlockWithName(nombre) as IMyTimerBlock;
+            var timer = GetBlockWithName<IMyTimerBlock>(nombre);
             timer?.StartCountdown();
+        }
+
+        T GetBlockWithName<T>(string name) where T : class, IMyTerminalBlock
+        {
+            var blocks = new List<T>();
+            GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && b.CustomName.Contains(name));
+            return blocks.FirstOrDefault();
         }
     }
 }
