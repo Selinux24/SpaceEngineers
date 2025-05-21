@@ -756,7 +756,6 @@ namespace IngameScript
             else if (command == "LOAD_ORDER") CmdLoadOrder(lines);
             else if (command == "LOADED") CmdLoaded(lines);
             else if (command == "UNLOAD_ORDER") CmdUnloadOrder(lines);
-            else if (command == "GOTO_WAREHOUSE") CmdGotoWarehouse(lines);
         }
         /// <summary>
         /// Sec_A_2 - La nave responde con su estado
@@ -849,28 +848,6 @@ namespace IngameScript
             deliveryData.NavigateToExchange("START_UNLOADING");
 
             Approach();
-        }
-        /// <summary>
-        /// NEW - Va directamente al parking del cliente, sin pasar por el Warehouse
-        /// </summary>
-        void CmdGotoWarehouse(string[] lines)
-        {
-            string to = Utils.ReadString(lines, "To");
-            if (to != shipId)
-            {
-                return;
-            }
-
-            status = ShipStatus.RouteToWarehouse;
-
-            deliveryData.SetOrder(
-                Utils.ReadInt(lines, "Order"),
-                Utils.ReadString(lines, "Warehouse"),
-                Utils.ReadVector(lines, "WarehouseParking"),
-                Utils.ReadString(lines, "Customer"),
-                Utils.ReadVector(lines, "CustomerParking"));
-
-            StartCruising(deliveryData.OrderWarehouseParking, "WAITING_IN_WAREHOUSE");
         }
 
         /// <summary>

@@ -126,8 +126,11 @@ namespace IngameScript
             else if (argument == "ENABLE_LOGS") EnableLogs();
             else if (argument == "FAKE_ORDER") FakeOrder();
             else if (argument.StartsWith("SHIP_LOADED")) ShipLoaded(argument);
-            else if (argument == "ORDER_BaseMarte4") SetOrder("BaseMarte4", "1034144.28:232383.37:1648954.36", 24);
+            else if (argument.StartsWith("SET_ORDER")) SetOrder(argument);
         }
+        /// <summary>
+        /// Resets the state
+        /// </summary>
         void Reset()
         {
             Storage = "";
@@ -192,7 +195,7 @@ namespace IngameScript
             string forward = Utils.VectorToStr(camera.WorldMatrix.Forward);
             string up = Utils.VectorToStr(camera.WorldMatrix.Up);
             string waypoints = exchange.GetApproachingWaypoints();
-            string message = $"Command=LOAD_ORDER|To={ship.Name}|Warehouse={baseId}|WarehouseParking={baseParking}|Customer={order.Customer}|CustomerParking={Utils.VectorToStr(order.CustomerParking)}|Order={order.Id}|Forward={forward}|Up={up}|WayPoints={waypoints}|Exchange={exchange.Name}";
+            string message = $"Command=LOAD_ORDER|To={ship.Name}|Warehouse={order.Warehouse}|WarehouseParking={Utils.VectorToStr(order.WarehouseParking)}|Customer={order.Customer}|CustomerParking={Utils.VectorToStr(order.CustomerParking)}|Order={order.Id}|Forward={forward}|Up={up}|WayPoints={waypoints}|Exchange={exchange.Name}";
             SendIGCMessage(message);
 
             //Pone el exchange en modo preparar pedido
@@ -297,21 +300,6 @@ namespace IngameScript
 
             SendIGCMessage(fakeOrder);
         }
-
-        void SetOrder(string warehouse, string warehouseParking, int orderId)
-        {
-            var freeShips = GetFreeShips(ShipStatus.Idle);
-            if (freeShips.Count == 0)
-            {
-                RequestStatus();
-                return;
-            }
-
-            var ship = freeShips[0];
-
-            string message = $"Command=GOTO_WAREHOUSE|To={ship.Name}|Warehouse={warehouse}|WarehouseParking={warehouseParking}|Customer={baseId}|CustomerParking={baseParking}|Order={orderId}";
-            SendIGCMessage(message);
-        }
         /// <summary>
         /// Sec_C_3b - WH termina la carga y avisa a NAVEX
         /// Request:  SHIP_LOADED
@@ -332,6 +320,26 @@ namespace IngameScript
             SendIGCMessage(message);
 
             exchange.DockedShipName = null;
+        }
+        /// <summary>
+        /// NEW - Sets an empty order for full loading in warehouse, and full unloading in costumer
+        /// </summary>
+        void SetOrder(string argument)
+        {
+            string[] lines = argument.Split('|');
+
+            string warehouse = Utils.ReadString(lines, "Warehouse");
+            string warehouseParking = Utils.ReadString(lines, "WarehouseParking");
+
+            Order order = new Order
+            {
+                Warehouse = warehouse,
+                WarehouseParking = Utils.StrToVector(warehouseParking),
+                Customer = baseId,
+                CustomerParking = Utils.StrToVector(baseParking),
+            };
+
+            orders.Add(order);
         }
         #endregion
 
