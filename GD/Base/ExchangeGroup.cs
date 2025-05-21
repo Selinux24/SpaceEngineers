@@ -14,7 +14,7 @@ namespace IngameScript
         const int NumWaypoints = 5;
 
         public string Name;
-        public string DockedShipName;
+        public string DockedShipName; //TODO: Guardar en Storage
         public IMyShipConnector UpperConnector;
         public IMyShipConnector LowerConnector;
         public IMyCargoContainer Cargo;
@@ -120,6 +120,48 @@ namespace IngameScript
             }
 
             return sb.ToString();
+        }
+
+        public string SaveToStorage()
+        {
+            List<string> parts = new List<string>
+            {
+                $"Name={Name}",
+                $"DockedShipName={DockedShipName}",
+            };
+
+            return string.Join("|", parts);
+        }
+
+        public static List<string> SaveListToStorage(List<ExchangeGroup> exchanges)
+        {
+            var exchangeList = string.Join("¬", exchanges.Select(e => e.SaveToStorage()).ToList());
+
+            return new List<string>
+            {
+                $"ExchangeCount={exchanges.Count}",
+                $"Exchanges={exchangeList}",
+            };
+        }
+        public static void LoadListFromStorage(string[] storageLines, List<ExchangeGroup> exchanges)
+        {
+            int exchangeCount = Utils.ReadInt(storageLines, "ExchangeCount");
+            if (exchangeCount == 0) return;
+
+            string exchangeList = Utils.ReadString(storageLines, "Exchanges");
+            string[] exchangeLines = exchangeList.Split('¬');
+            for (int i = 0; i < exchangeLines.Length; i++)
+            {
+                var parts = exchangeLines[i].Split('|');
+                string name = Utils.ReadString(parts, "Name");
+                string dockedShipName = Utils.ReadString(parts, "DockedShipName");
+
+                var exchange = exchanges.Find(e => e.Name == name);
+                if (exchange != null)
+                {
+                    exchange.DockedShipName = dockedShipName;
+                }
+            }
         }
     }
 }

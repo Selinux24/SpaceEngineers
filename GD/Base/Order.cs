@@ -67,5 +67,28 @@ namespace IngameScript
 
             lastId = Id + 1;
         }
+
+        public static List<string> SaveListToStorage(List<Order> orders)
+        {
+            var orderList = string.Join("¬", orders.Select(o => o.SaveToStorage()).ToList());
+
+            return new List<string>
+            {
+                $"OrderCount={orders.Count}",
+                $"Orders={orderList}",
+            };
+        }
+        public static void LoadListFromStorage(string[] storageLines, List<Order> orders)
+        {
+            int orderCount = Utils.ReadInt(storageLines, "OrderCount");
+            if (orderCount == 0) return;
+
+            string orderList = Utils.ReadString(storageLines, "Orders");
+            string[] ordersLines = orderList.Split('¬');
+            for (int i = 0; i < ordersLines.Length; i++)
+            {
+                orders.Add(new Order(ordersLines[i]));
+            }
+        }
     }
 }

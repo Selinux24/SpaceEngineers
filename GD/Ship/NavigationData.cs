@@ -117,10 +117,7 @@ namespace IngameScript
             Thrusting = Utils.ReadInt(parts, "Thrusting") == 1;
             int evadingCount = Utils.ReadInt(parts, "EvadingPoints");
             EvadingPoints.Clear();
-            for (int i = 0; i < evadingCount; i++)
-            {
-                EvadingPoints.Add(Utils.StrToVector(parts[5 + i]));
-            }
+            EvadingPoints.AddRange(Utils.StrToVectorList(parts[parts.Length - 1]));
         }
         public string SaveToStorage()
         {

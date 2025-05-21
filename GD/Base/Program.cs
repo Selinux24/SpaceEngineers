@@ -57,9 +57,9 @@ namespace IngameScript
             baseId = Me.CubeGrid.CustomName;
             baseParking = Me.CustomData;
 
-            LoadFromStorage();
-
             InitializeExchangeGroups();
+
+            LoadFromStorage();
 
             camera = GetBlockWithName<IMyCameraBlock>(baseCamera);
             if (camera == null)
@@ -115,7 +115,8 @@ namespace IngameScript
         {
             WriteLogLCDs($"ParseTerminalMessage: {argument}");
 
-            if (argument == "REQUEST_STATUS") RequestStatus();
+            if (argument == "RESET") Reset();
+            else if (argument == "REQUEST_STATUS") RequestStatus();
             else if (argument == "REQUEST_DELIVERY") RequestDelivery();
             else if (argument == "REQUEST_RECEPTION") RequestReception();
             else if (argument == "LIST_EXCHANGES") ListExchanges();
@@ -126,6 +127,20 @@ namespace IngameScript
             else if (argument == "FAKE_ORDER") FakeOrder();
             else if (argument.StartsWith("SHIP_LOADED")) ShipLoaded(argument);
             else if (argument == "ORDER_BaseMarte4") SetOrder("BaseMarte4", "1034144.28:232383.37:1648954.36", 24);
+        }
+        void Reset()
+        {
+            Storage = "";
+
+            sbData.Clear();
+            sbLog.Clear();
+
+            exchanges.Clear();
+            orders.Clear();
+            ships.Clear();
+            unloadRequests.Clear();
+
+            InitializeExchangeGroups();
         }
         /// <summary>
         /// Sec_A_1 - WH pide situación a todas las naves
@@ -802,41 +817,16 @@ namespace IngameScript
             string[] storageLines = Storage.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
             if (storageLines.Length == 0) return;
 
-            int orderCount = Utils.ReadInt(storageLines, "OrderCount");
-            int reqCount = Utils.ReadInt(storageLines, "UnloadRequestCount");
-
-            if (orderCount > 0)
-            {
-                string orderList = Utils.ReadString(storageLines, "Orders");
-                string[] ordersLines = orderList.Split('¬');
-                for (int i = 0; i < ordersLines.Length; i++)
-                {
-                    orders.Add(new Order(ordersLines[i]));
-                }
-            }
-
-            if (reqCount > 0)
-            {
-                string unloadList = Utils.ReadString(storageLines, "UnloadRequests");
-                string[] unloadLines = unloadList.Split('¬');
-                for (int i = 0; i < unloadLines.Length; i++)
-                {
-                    unloadRequests.Add(new UnloadRequest(unloadLines[i]));
-                }
-            }
+            Order.LoadListFromStorage(storageLines, orders);
+            UnloadRequest.LoadListFromStorage(storageLines, unloadRequests);
+            ExchangeGroup.LoadListFromStorage(storageLines, exchanges);
         }
         void SaveToStorage()
         {
-            var orderList = string.Join("¬", orders.Select(o => o.SaveToStorage()).ToList());
-            var unloadList = string.Join("¬", unloadRequests.Select(o => o.SaveToStorage()).ToList());
-
-            List<string> parts = new List<string>
-            {
-                $"OrderCount={orders.Count}",
-                $"Orders={orderList}",
-                $"UnloadRequestCount={unloadRequests.Count}",
-                $"UnloadRequests={unloadList}",
-            };
+            List<string> parts = new List<string>();
+            parts.AddRange(Order.SaveListToStorage(orders));
+            parts.AddRange(UnloadRequest.SaveListToStorage(unloadRequests));
+            parts.AddRange(ExchangeGroup.SaveListToStorage(exchanges));
 
             Storage = string.Join(Environment.NewLine, parts);
         }
