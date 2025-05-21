@@ -115,9 +115,8 @@ namespace IngameScript
             Command = Utils.ReadString(parts, "Command");
             HasTarget = Utils.ReadInt(parts, "HasTarget") == 1;
             Thrusting = Utils.ReadInt(parts, "Thrusting") == 1;
-            int evadingCount = Utils.ReadInt(parts, "EvadingPoints");
             EvadingPoints.Clear();
-            EvadingPoints.AddRange(Utils.StrToVectorList(parts[parts.Length - 1]));
+            EvadingPoints.AddRange(Utils.ReadVectorList(parts, "EvadingPoints"));
         }
         public string SaveToStorage()
         {
@@ -129,8 +128,7 @@ namespace IngameScript
                 $"Command={Command}",
                 $"HasTarget={(HasTarget?1:0)}",
                 $"Thrusting={(Thrusting?1:0)}",
-                $"EvadingPoints={EvadingPoints.Count}",
-                $"{Utils.VectorListToStr(EvadingPoints)}",
+                $"EvadingPoints={Utils.VectorListToStr(EvadingPoints)}",
             };
 
             return string.Join("¬", parts);
