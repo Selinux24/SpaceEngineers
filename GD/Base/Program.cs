@@ -192,11 +192,23 @@ namespace IngameScript
             ship.ShipStatus = ShipStatus.ApproachingWarehouse;
             exchange.DockedShipName = ship.Name;
 
-            string forward = Utils.VectorToStr(camera.WorldMatrix.Forward);
-            string up = Utils.VectorToStr(camera.WorldMatrix.Up);
-            string waypoints = exchange.GetApproachingWaypoints();
-            string message = $"Command=LOAD_ORDER|To={ship.Name}|Warehouse={order.Warehouse}|WarehouseParking={Utils.VectorToStr(order.WarehouseParking)}|Customer={order.Customer}|CustomerParking={Utils.VectorToStr(order.CustomerParking)}|Order={order.Id}|Forward={forward}|Up={up}|WayPoints={waypoints}|Exchange={exchange.Name}";
-            SendIGCMessage(message);
+            List<string> parts = new List<string>()
+            {
+                $"Command=LOAD_ORDER",
+                $"To={ship.Name}",
+                $"Warehouse={order.Warehouse}",
+                $"WarehouseParking={Utils.VectorToStr(order.WarehouseParking)}",
+                $"Customer={order.Customer}",
+                $"CustomerParking={Utils.VectorToStr(order.CustomerParking)}",
+                $"Order={order.Id}",
+
+                $"Forward={Utils.VectorToStr(camera.WorldMatrix.Forward)}",
+                $"Up={Utils.VectorToStr(camera.WorldMatrix.Up)}",
+                $"WayPoints={Utils.VectorListToStr(exchange.CalculateRouteToConnector())}",
+                $"Exchange={exchange.Name}",
+            };
+
+            SendIGCMessage(string.Join("|", parts));
 
             //Pone el exchange en modo preparar pedido
             exchange.TimerPrepare?.ApplyAction("TriggerNow");
@@ -241,11 +253,18 @@ namespace IngameScript
                 ship.ShipStatus = ShipStatus.ApproachingCustomer;
                 exchange.DockedShipName = ship.Name;
 
-                string forward = Utils.VectorToStr(camera.WorldMatrix.Forward);
-                string up = Utils.VectorToStr(camera.WorldMatrix.Up);
-                string waypoints = exchange.GetApproachingWaypoints();
-                string message = $"Command=UNLOAD_ORDER|To={request.From}|From={baseId}|Forward={forward}|Up={up}|WayPoints={waypoints}|Exchange={exchange.Name}";
-                SendIGCMessage(message);
+                List<string> parts = new List<string>()
+                {
+                    $"Command=UNLOAD_ORDER",
+                    $"To={request.From}",
+                    $"From={baseId}",
+                    $"Forward={Utils.VectorToStr(camera.WorldMatrix.Forward)}",
+                    $"Up={Utils.VectorToStr(camera.WorldMatrix.Up)}",
+                    $"WayPoints={Utils.VectorListToStr(exchange.CalculateRouteToConnector())}",
+                    $"Exchange={exchange.Name}",
+                };
+
+                SendIGCMessage(string.Join("|", parts));
 
                 break;
             }

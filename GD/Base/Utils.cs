@@ -1,4 +1,5 @@
-﻿using System.Linq;
+﻿using System.Collections.Generic;
+using System.Linq;
 using VRageMath;
 
 namespace IngameScript
@@ -35,6 +36,10 @@ namespace IngameScript
         public static string VectorToStr(Vector3D v)
         {
             return $"{v.X}:{v.Y}:{v.Z}";
+        }
+        public static string VectorListToStr(List<Vector3D> list)
+        {
+            return string.Join(";", list.Select(VectorToStr));
         }
         public static Vector3D StrToVector(string str)
         {

@@ -54,10 +54,6 @@ namespace IngameScript
 
             return waypoints;
         }
-        public string GetApproachingWaypoints()
-        {
-            return string.Join(";", CalculateRouteToConnector().Select(Utils.VectorToStr));
-        }
         public string MoveCargo(Order order, List<IMyCargoContainer> sourceCargos)
         {
             StringBuilder sb = new StringBuilder();
