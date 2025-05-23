@@ -4,16 +4,40 @@ using VRageMath;
 
 namespace IngameScript
 {
-    static class Utils
+    public static class Utils
     {
-        public static string ReadArgument(string[] lines, string command)
+        const char ArgumentSep = '=';
+        const char VariableSep = ';';
+        const char VariablePartSep = ':';
+        const char AttributeSep = '=';
+
+        public static string ReadArgument(string[] arguments, string command, char sep = ArgumentSep)
         {
-            string cmdToken = $"{command}=";
-            return lines.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";
+            string cmdToken = $"{command}{sep}";
+            return arguments.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";
         }
-        public static string ReadString(string[] lines, string name, string defaultValue = null)
+
+        public static string VectorToStr(Vector3D v)
         {
-            string cmdToken = $"{name}=";
+            return $"{v.X}{VariablePartSep}{v.Y}{VariablePartSep}{v.Z}";
+        }
+        public static Vector3D StrToVector(string input)
+        {
+            var trimmed = input.Split(VariablePartSep);
+            return new Vector3D(
+                double.Parse(trimmed[0]),
+                double.Parse(trimmed[1]),
+                double.Parse(trimmed[2])
+            );
+        }
+        public static string VectorListToStr(List<Vector3D> list)
+        {
+            return string.Join($"{VariableSep}", list.Select(VectorToStr));
+        }
+
+        public static string ReadString(string[] lines, string name, string defaultValue = "")
+        {
+            string cmdToken = $"{name}{AttributeSep}";
             string value = lines.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";
             if (string.IsNullOrEmpty(value))
             {
@@ -24,8 +48,7 @@ namespace IngameScript
         }
         public static int ReadInt(string[] lines, string name, int defaultValue = 0)
         {
-            string cmdToken = $"{name}=";
-            string value = lines.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";
+            string value = ReadString(lines, name);
             if (string.IsNullOrEmpty(value))
             {
                 return defaultValue;
@@ -33,34 +56,15 @@ namespace IngameScript
 
             return int.Parse(value);
         }
-        public static string VectorToStr(Vector3D v)
+        public static Vector3D ReadVector(string[] lines, string name)
         {
-            return $"{v.X}:{v.Y}:{v.Z}";
-        }
-        public static string VectorListToStr(List<Vector3D> list)
-        {
-            return string.Join(";", list.Select(VectorToStr));
-        }
-        public static Vector3D StrToVector(string str)
-        {
-            string[] coords = str.Split(':');
-            if (coords.Length == 3)
+            string value = ReadString(lines, name);
+            if (string.IsNullOrEmpty(value))
             {
-                return new Vector3D(double.Parse(coords[0]), double.Parse(coords[1]), double.Parse(coords[2]));
+                return Vector3D.Zero;
             }
-            return new Vector3D();
-        }
-        public static ShipStatus StrToShipStatus(string str)
-        {
-            if (str == "Idle") return ShipStatus.Idle;
-            if (str == "ApproachingWarehouse") return ShipStatus.ApproachingWarehouse;
-            if (str == "Loading") return ShipStatus.Loading;
-            if (str == "RouteToCustomer") return ShipStatus.RouteToCustomer;
-            if (str == "WaitingForUnload") return ShipStatus.WaitingForUnload;
-            if (str == "ApproachingCustomer") return ShipStatus.ApproachingCustomer;
-            if (str == "Unloading") return ShipStatus.Unloading;
-            if (str == "RouteToWarehouse") return ShipStatus.RouteToWarehouse;
-            return ShipStatus.Unknown;
+
+            return StrToVector(value);
         }
     }
 }

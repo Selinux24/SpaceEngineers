@@ -31,6 +31,10 @@ namespace IngameScript
                 double.Parse(trimmed[2])
             );
         }
+        public static string VectorListToStr(List<Vector3D> list)
+        {
+            return string.Join($"{VariableSep}", list.Select(VectorToStr));
+        }
         public static List<Vector3D> StrToVectorList(string data)
         {
             List<Vector3D> res = new List<Vector3D>();
@@ -47,10 +51,6 @@ namespace IngameScript
             }
 
             return res;
-        }
-        public static string VectorListToStr(List<Vector3D> list)
-        {
-            return string.Join($"{VariableSep}", list.Select(VectorToStr));
         }
 
         public static string ReadString(string[] lines, string name, string defaultValue = "")
@@ -127,6 +127,5 @@ namespace IngameScript
         {
             return Math.Abs(v.X) < thr && Math.Abs(v.Y) < thr && Math.Abs(v.Z) < thr;
         }
-
     }
 }

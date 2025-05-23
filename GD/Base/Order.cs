@@ -28,16 +28,15 @@ namespace IngameScript
         public string SaveToStorage()
         {
             List<string> parts = new List<string>
-                {
-                    $"Id={Id}",
-                    $"Customer={Customer}",
-                    $"CustomerParking={Utils.VectorToStr(CustomerParking)}",
-                    $"Warehouse={Warehouse}",
-                    $"WarehouseParking={Utils.VectorToStr(WarehouseParking)}",
-                    $"AssignedShip={AssignedShip}",
-                    $"Items={string.Join(";", Items.Select(i => $"{i.Key}:{i.Value}"))}",
-                };
-
+            {
+                $"Id={Id}",
+                $"Customer={Customer}",
+                $"CustomerParking={Utils.VectorToStr(CustomerParking)}",
+                $"Warehouse={Warehouse}",
+                $"WarehouseParking={Utils.VectorToStr(WarehouseParking)}",
+                $"AssignedShip={AssignedShip}",
+                $"Items={string.Join(";", Items.Select(i => $"{i.Key}:{i.Value}"))}",
+            };
             return string.Join("|", parts);
         }
         public void LoadFromStorage(string line)
@@ -46,9 +45,9 @@ namespace IngameScript
 
             Id = Utils.ReadInt(parts, "Id");
             Customer = Utils.ReadString(parts, "Customer");
-            CustomerParking = Utils.StrToVector(Utils.ReadString(parts, "CustomerParking"));
+            CustomerParking = Utils.ReadVector(parts, "CustomerParking");
             Warehouse = Utils.ReadString(parts, "Warehouse");
-            WarehouseParking = Utils.StrToVector(Utils.ReadString(parts, "WarehouseParking"));
+            WarehouseParking = Utils.ReadVector(parts, "WarehouseParking");
             AssignedShip = Utils.ReadString(parts, "AssignedShip");
 
             Items.Clear();
@@ -59,7 +58,6 @@ namespace IngameScript
                 if (itemParts.Length != 2) continue;
 
                 string itemName = itemParts[0];
-
                 int itemAmount;
                 if (!int.TryParse(itemParts[1], out itemAmount)) continue;
                 Items[itemName] = itemAmount;

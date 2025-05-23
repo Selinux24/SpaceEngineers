@@ -126,7 +126,7 @@ namespace IngameScript
             ExchangeDepartingWaypoints.Clear();
         }
 
-        public void NavigateFromExchange(string onLastWaypoint)
+        public void PrepareNavigationFromExchange(string onLastWaypoint)
         {
             AlignFwd = ExchangeForward;
             AlignUp = ExchangeUp;
@@ -134,7 +134,7 @@ namespace IngameScript
             Waypoints.AddRange(ExchangeDepartingWaypoints);
             OnLastWaypoint = onLastWaypoint;
         }
-        public void NavigateToExchange(string onLastWaypoint)
+        public void PrepareNavigationToExchange(string onLastWaypoint)
         {
             AlignFwd = ExchangeForward;
             AlignUp = ExchangeUp;
@@ -142,13 +142,14 @@ namespace IngameScript
             Waypoints.AddRange(ExchangeApproachingWaypoints);
             OnLastWaypoint = onLastWaypoint;
         }
-        public void NavigateToWarehouse(string onDestinationArrival)
+
+        public void PrepareNavigationToWarehouse(string onDestinationArrival)
         {
             DestinationName = OrderWarehouse;
             DestinationPosition = OrderWarehouseParking;
             OnDestinationArrival = onDestinationArrival;
         }
-        public void NavigateToCustomer(string onDestinationArrival)
+        public void PrepareNavigationToCustomer(string onDestinationArrival)
         {
             DestinationName = OrderCustomer;
             DestinationPosition = OrderCustomerParking;
