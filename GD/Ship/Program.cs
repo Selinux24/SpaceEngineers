@@ -1214,13 +1214,12 @@ namespace IngameScript
                 return;
             }
 
-            Echo($"Storage: {Storage}");
-
             status = (ShipStatus)Utils.ReadInt(storageLines, "Status");
             deliveryData.LoadFromStorage(Utils.ReadString(storageLines, "DeliveryData"));
             alignData.LoadFromStorage(Utils.ReadString(storageLines, "AlignData"));
             arrivalData.LoadFromStorage(Utils.ReadString(storageLines, "ArrivalData"));
             navigationData.LoadFromStorage(Utils.ReadString(storageLines, "NavigationData"));
+            enableLogs = Utils.ReadInt(storageLines, "EnableLogs") == 1;
         }
         void SaveToStorage()
         {
@@ -1230,7 +1229,8 @@ namespace IngameScript
                 $"DeliveryData={deliveryData.SaveToStorage()}",
                 $"AlignData={alignData.SaveToStorage()}",
                 $"ArrivalData={arrivalData.SaveToStorage()}",
-                $"NavigationData={navigationData.SaveToStorage()}"
+                $"NavigationData={navigationData.SaveToStorage()}",
+                $"EnableLogs={(enableLogs ? 1 : 0)}"
             };
 
             Storage = string.Join(Environment.NewLine, parts);

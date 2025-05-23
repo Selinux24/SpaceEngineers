@@ -61,17 +61,11 @@ namespace IngameScript
                 return;
             }
 
-            ActivateTimer(TimerSendName);
+            GetBlockWithName<IMyTimerBlock>(TimerSendName)?.StartCountdown();
             gpsReceptor = null;
             sending = false;
             Runtime.UpdateFrequency = UpdateFrequency.None;
             Echo("Send completed.");
-        }
-
-        void ActivateTimer(string nombre)
-        {
-            var timer = GetBlockWithName<IMyTimerBlock>(nombre);
-            timer?.StartCountdown();
         }
 
         T GetBlockWithName<T>(string name) where T : class, IMyTerminalBlock

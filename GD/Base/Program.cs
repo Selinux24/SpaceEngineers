@@ -44,13 +44,13 @@ namespace IngameScript
         readonly List<Order> orders = new List<Order>();
         readonly List<Ship> ships = new List<Ship>();
         readonly List<ExchangeRequest> exchangeRequests = new List<ExchangeRequest>();
+        readonly bool fakeOrders = false;
 
         bool showExchanges = true;
         bool showShips = true;
         bool showOrders = true;
         bool showExchangeRequests = true;
         bool enableLogs = false;
-        bool fakeOrders = false;
 
         public Program()
         {
@@ -906,6 +906,11 @@ namespace IngameScript
             Order.LoadListFromStorage(storageLines, orders);
             ExchangeRequest.LoadListFromStorage(storageLines, exchangeRequests);
             ExchangeGroup.LoadListFromStorage(storageLines, exchanges);
+            showExchanges = Utils.ReadInt(storageLines, "ShowExchanges") == 1;
+            showShips = Utils.ReadInt(storageLines, "ShowShips") == 1;
+            showOrders = Utils.ReadInt(storageLines, "ShowOrders") == 1;
+            showExchangeRequests = Utils.ReadInt(storageLines, "ShowExchangeRequests") == 1;
+            enableLogs = Utils.ReadInt(storageLines, "EnableLogs") == 1;
         }
         void SaveToStorage()
         {
@@ -913,6 +918,11 @@ namespace IngameScript
             parts.AddRange(Order.SaveListToStorage(orders));
             parts.AddRange(ExchangeRequest.SaveListToStorage(exchangeRequests));
             parts.AddRange(ExchangeGroup.SaveListToStorage(exchanges));
+            parts.Add($"ShowExchanges={(showExchanges ? 1 : 0)}");
+            parts.Add($"ShowShips={(showShips ? 1 : 0)}");
+            parts.Add($"ShowOrders={(showOrders ? 1 : 0)}");
+            parts.Add($"ShowExchangeRequests={(showExchangeRequests ? 1 : 0)}");
+            parts.Add($"EnableLogs={(enableLogs ? 1 : 0)}");
 
             Storage = string.Join(Environment.NewLine, parts);
         }
