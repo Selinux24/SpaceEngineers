@@ -85,7 +85,8 @@ namespace Sandbox.ModAPI.Ingame
     }
     public enum MyShipConnectorStatus
     {
-        Unconnected
+        Unconnected,
+        Connected
     }
 
     public interface IMyGridProgramRuntimeInfo
@@ -105,6 +106,7 @@ namespace Sandbox.ModAPI.Ingame
 
     public interface IMyTerminalBlock
     {
+        bool Enabled { get; set; }
         string CustomName { get; set; }
         IMyTerminalBlock CubeGrid { get; set; }
     }
@@ -142,7 +144,6 @@ namespace Sandbox.ModAPI.Ingame
     public interface IMyThrust : IMyTerminalBlock
     {
         MatrixD WorldMatrix { get; }
-        bool Enabled { get; set; }
         float ThrustOverridePercentage { get; set; }
         float MaxEffectiveThrust { get; set; }
     }
@@ -156,12 +157,10 @@ namespace Sandbox.ModAPI.Ingame
     }
     public interface IMyBeacon : IMyTerminalBlock
     {
-        bool Enabled { get; set; }
     }
     public interface IMyLaserAntenna : IMyTerminalBlock
     {
         MyLaserAntennaStatus Status { get; set; }
-        bool Enabled { get; set; }
 
         void Connect();
         void SetTargetCoords(string gpsReceptor);
@@ -195,5 +194,9 @@ namespace Sandbox.ModAPI.Ingame
     public interface IMyConveyorSorter : IMyTerminalBlock
     {
 
+    }
+    public interface IMyRadioAntenna : IMyTerminalBlock
+    {
+        
     }
 }
