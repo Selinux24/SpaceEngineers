@@ -1,5 +1,6 @@
 ﻿using Sandbox.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -7,22 +8,56 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        const string LaserAntennaName = "BaseMiner1 Laser Antenna";
-        const string TimerSendName = "BaseMiner1 Timer Laser Off";
-
         readonly IMyLaserAntenna antenna;
+        readonly IMyTimerBlock timerSend;
+        readonly string gpsReceptor;
 
-        string gpsReceptor;
         bool sending = false;
 
         public Program()
         {
             Runtime.UpdateFrequency = UpdateFrequency.None;
 
-            antenna = GetBlockWithName<IMyLaserAntenna>(LaserAntennaName);
+            if (string.IsNullOrWhiteSpace(Me.CustomData))
+            {
+                Me.CustomData =
+                    "LaserAntenna=name\n" +
+                    "TimerSend=name\n" +
+                    "GPSReceptor=x:y:z\n";
+
+                Echo("CustomData not set.");
+                return;
+            }
+
+            string laserAntennaName = ReadConfig(Me.CustomData, "LaserAntenna");
+            if (string.IsNullOrWhiteSpace(laserAntennaName))
+            {
+                Echo("LaserAntenna name not set.");
+                return;
+            }
+            string timerSendName = ReadConfig(Me.CustomData, "TimerSend");
+            if (string.IsNullOrWhiteSpace(timerSendName))
+            {
+                Echo("TimerSend name not set.");
+                return;
+            }
+            gpsReceptor = ReadConfig(Me.CustomData, "GPSReceptor");
+            if (string.IsNullOrWhiteSpace(gpsReceptor))
+            {
+                Echo("GPS receptor coordinates not set.");
+                return;
+            }
+
+            antenna = GetBlockWithName<IMyLaserAntenna>(laserAntennaName);
             if (antenna == null)
             {
-                Echo($"Antenna {LaserAntennaName} not found.");
+                Echo($"Antenna {laserAntennaName} not found.");
+                return;
+            }
+            timerSend = GetBlockWithName<IMyTimerBlock>(timerSendName);
+            if (timerSend == null)
+            {
+                Echo($"Timer {timerSendName} not found.");
                 return;
             }
 
@@ -33,12 +68,8 @@ namespace IngameScript
         {
             if (argument == "SEND")
             {
-                if (!string.IsNullOrWhiteSpace(Me.CustomData))
-                {
-                    gpsReceptor = Me.CustomData;
-                    sending = !string.IsNullOrWhiteSpace(gpsReceptor);
-                    Runtime.UpdateFrequency = UpdateFrequency.Update100;
-                }
+                sending = true;
+                Runtime.UpdateFrequency = UpdateFrequency.Update100;
 
                 return;
             }
@@ -48,7 +79,6 @@ namespace IngameScript
                 return;
             }
 
-            // Conectar si no está aún
             if (antenna.Status != MyLaserAntennaStatus.Connected)
             {
                 Echo($"{antenna.Status} Connecting to GPS...");
@@ -61,8 +91,7 @@ namespace IngameScript
                 return;
             }
 
-            GetBlockWithName<IMyTimerBlock>(TimerSendName)?.StartCountdown();
-            gpsReceptor = null;
+            timerSend.StartCountdown();
             sending = false;
             Runtime.UpdateFrequency = UpdateFrequency.None;
             Echo("Send completed.");
@@ -73,6 +102,13 @@ namespace IngameScript
             var blocks = new List<T>();
             GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && b.CustomName.Contains(name));
             return blocks.FirstOrDefault();
+        }
+        static string ReadConfig(string customData, string name)
+        {
+            string[] lines = customData.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+
+            string cmdToken = $"{name}=";
+            return lines.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";
         }
     }
 }

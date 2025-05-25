@@ -108,8 +108,6 @@ namespace IngameScript
 
         public Program()
         {
-            Runtime.UpdateFrequency = UpdateFrequency.Update1;
-
             shipId = Me.CubeGrid.CustomName;
 
             timerPilot = GetBlockWithName<IMyTimerBlock>(ShipTimerPilot);
@@ -209,6 +207,8 @@ namespace IngameScript
             Echo($"Listening in channel {DeliveryChannel}");
 
             LoadFromStorage();
+
+            Runtime.UpdateFrequency = UpdateFrequency.Update1;
 
             Echo("Working!");
         }

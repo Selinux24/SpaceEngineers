@@ -1,126 +1,190 @@
 ﻿using Sandbox.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using VRage.Game.ModAPI.Ingame;
 
 namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        // Nombre de los contenedores donde se va a validar que exiten los componentes pedidos. Debe incluir contenedor de salida y el conector del Shuttle
-        const string inventoryCargoName = "Cargo Container Components";
-        // Nombre del contenedor donde se añaden los componentes a enviar
-        const string outputCargoName = "Cargo Container Components MK3HQ Exports";
+        const string MessageCallback = "InventorySystem";
 
-        // Listener global
         readonly IMyBroadcastListener bl;
 
         public Program()
         {
-            string canal = Me.CustomData.Split(',')[0].Trim();
+            if (string.IsNullOrWhiteSpace(Me.CustomData))
+            {
+                Me.CustomData = 
+                    "Channel=name\n" +
+                    "OutputCargo=name\n" +
+                    "InventoryCargo=name\n" +
+                    "InventoryTimer=name";
 
-            bl = IGC.RegisterBroadcastListener(canal);
-            bl.SetMessageCallback("procesarMensaje");
-            Echo($"Listener registrado en el canal {canal}");
+                Echo("CustomData not set.");
+                return;
+            }
+
+            string channel = ReadConfig(Me.CustomData, "Channel");
+            if (string.IsNullOrWhiteSpace(channel))
+            {
+                Echo("Channel not set.");
+                return;
+            }
+
+            bl = IGC.RegisterBroadcastListener(channel);
+            bl.SetMessageCallback(MessageCallback);
+            Echo($"Listener registered on {channel}");
         }
 
         public void Main(string argument, UpdateType updateSource)
         {
-            if ((updateSource & UpdateType.IGC) != 0 && argument == "procesarMensaje")
+            if ((updateSource & UpdateType.IGC) == 0 || argument != MessageCallback)
             {
-                while (bl.HasPendingMessage)
-                {
-                    var mensaje = bl.AcceptMessage();
-                    string contenido = mensaje.Data.ToString();
+                return;
+            }
 
-                    Echo("Mensaje recibido:");
-                    Echo(contenido);
+            while (bl.HasPendingMessage)
+            {
+                var msg = bl.AcceptMessage();
+                var requestedItems = ReadItems(msg.Data.ToString());
 
-                    var requestedItems = ReadItems(contenido);
-                    Prepare(requestedItems);
-                }
+                Prepare(requestedItems);
             }
         }
-        Dictionary<string, int> ReadItems(string contenido)
+        Dictionary<string, int> ReadItems(string data)
         {
             Dictionary<string, int> requestedItems = new Dictionary<string, int>();
 
-            var partes = contenido.Split(';');
-            foreach (var parte in partes)
+            var parts = data.Split(';');
+            foreach (var part in parts)
             {
-                string[] parts = parte.Split('=');
-                if (parts.Length == 2)
+                string[] items = part.Split('=');
+                if (items.Length != 2)
                 {
-                    string item = parts[0].Trim();
-                    int amount = (int)decimal.Parse(parts[1].Trim());
-                    requestedItems.Add(item, amount);
+                    continue;
                 }
+
+                string item = items[0].Trim();
+                int amount = (int)decimal.Parse(items[1].Trim());
+                requestedItems.Add(item, amount);
             }
 
             return requestedItems;
         }
         void Prepare(Dictionary<string, int> requestedItems)
         {
-
-            IMyCargoContainer salida = GridTerminalSystem.GetBlockWithName(outputCargoName) as IMyCargoContainer;
-            if (salida == null)
+            string outputCargoName = ReadConfig(Me.CustomData, "OutputCargo");
+            if (string.IsNullOrWhiteSpace(outputCargoName))
             {
-                Echo("Contenedor de salida no encontrado");
+                Echo("OutputCargo name not set.");
                 return;
             }
-            var invSalida = salida.GetInventory();
-            var itemsSalida = new List<MyInventoryItem>();
-            invSalida.GetItems(itemsSalida);
+
+            string inventoryCargoName = ReadConfig(Me.CustomData, "InventoryCargo");
+            if (string.IsNullOrWhiteSpace(inventoryCargoName))
+            {
+                Echo("InventoryCargo name not set.");
+                return;
+            }
+
+            string timerName = ReadConfig(Me.CustomData, "InventoryTimer");
+            if (string.IsNullOrWhiteSpace(timerName))
+            {
+                Echo("InventoryTimer name not set.");
+                return;
+            }
+
+            // Obtener el contenedor de salida
+            var outputCargo = GetBlockWithName<IMyCargoContainer>(outputCargoName);
+            if (outputCargo == null)
+            {
+                Echo("Output cargo not found.");
+                return;
+            }
 
             // Obtener todos los contenedores de entrada
-            List<IMyCargoContainer> contenedores = new List<IMyCargoContainer>();
-            GridTerminalSystem.GetBlocksOfType(contenedores, c => c.CustomName.Contains(inventoryCargoName));
+            var warehouseCargos = GetBlocksOfType<IMyCargoContainer>(inventoryCargoName);
+            if (warehouseCargos.Count == 0)
+            {
+                Echo("No warehouse cargo containers found.");
+                return;
+            }
+
+            var outputInv = outputCargo.GetInventory();
+            var orderItems = GetItemsFromCargo(outputInv);
 
             // Recorrer cada item solicitado
-            foreach (var par in requestedItems)
+            foreach (var reqItem in requestedItems)
             {
-                string tipo = par.Key;
-                int cantidadRestante = par.Value;
+                string itemType = reqItem.Key;
+                int itemRemaining = reqItem.Value;
 
-                int index = itemsSalida.FindIndex(i => i.Type.ToString().Contains(tipo));
+                int index = orderItems.FindIndex(i => i.Type.ToString().Contains(itemType));
                 if (index >= 0)
                 {
-                    int c = (int)itemsSalida[index].Amount;
-                    cantidadRestante -= c;
+                    int c = (int)orderItems[index].Amount;
+                    itemRemaining -= c;
                 }
 
                 // Buscar ese item en los contenedores
-                foreach (var cont in contenedores)
+                foreach (var cargo in warehouseCargos)
                 {
-                    if (cantidadRestante <= 0) break;
+                    if (itemRemaining <= 0) break;
 
-                    var inv = cont.GetInventory();
-                    var items = new List<MyInventoryItem>();
-                    inv.GetItems(items);
+                    var inv = cargo.GetInventory();
+                    var items = GetItemsFromCargo(inv);
 
                     foreach (var item in items)
                     {
-                        if (!item.Type.ToString().Contains(tipo)) continue;
+                        if (itemRemaining <= 0) break;
 
-                        VRage.MyFixedPoint cantidadDisponible = item.Amount;
-                        VRage.MyFixedPoint aMover = VRage.MyFixedPoint.Min(cantidadDisponible, cantidadRestante);
+                        if (!item.Type.ToString().Contains(itemType)) continue;
 
-                        bool movido = inv.TransferItemTo(invSalida, item, aMover);
-                        if (movido) { cantidadRestante -= (int)aMover; Echo($"Movido {(int)aMover} de {item.Type}"); }
-                        if (cantidadRestante <= 0) break;
+                        var toTransfer = VRage.MyFixedPoint.Min(item.Amount, itemRemaining);
+
+                        bool moved = inv.TransferItemTo(outputInv, item, toTransfer);
+                        if (moved)
+                        {
+                            itemRemaining -= (int)toTransfer;
+                            Echo($"Transfered {(int)toTransfer} of {item.Type}");
+                        }
                     }
                 }
 
-                Echo($"{tipo}: {(cantidadRestante > 0 ? $"FALTAN {cantidadRestante}" : "OK")}");
+                Echo($"{itemType}: {(itemRemaining > 0 ? $"Missing {itemRemaining}" : "Transfered")}");
             }
 
-            string timerName = Me.CustomData.Split(',')[1].Trim();
-            IMyTimerBlock timer = GridTerminalSystem.GetBlockWithName(timerName) as IMyTimerBlock;
-            if (timer != null)
-            {
-                timer.ApplyAction("TriggerNow");
-                Echo($"{timerName} triggered");
-            }
+            GetBlockWithName<IMyTimerBlock>(timerName).Trigger();
+            Echo($"{timerName} triggered");
+        }
+        List<T> GetBlocksOfType<T>(string name) where T : class, IMyTerminalBlock
+        {
+            var blocks = new List<T>();
+            GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && b.CustomName.Contains(name));
+            return blocks;
+        }
+        List<MyInventoryItem> GetItemsFromCargo(IMyInventory cargoInv)
+        {
+            var items = new List<MyInventoryItem>();
+            cargoInv.GetItems(items);
+            return items;
+        }
+
+        T GetBlockWithName<T>(string name) where T : class, IMyTerminalBlock
+        {
+            var blocks = new List<T>();
+            GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && b.CustomName == name);
+            return blocks.FirstOrDefault();
+        }
+        static string ReadConfig(string customData, string name)
+        {
+            string[] config = customData.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+
+            string cmdToken = $"{name}=";
+            return config.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";
         }
     }
 }
