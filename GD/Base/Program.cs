@@ -113,16 +113,13 @@ namespace IngameScript
                 ParseMessage(message.Data.ToString());
             }
 
-            if (showShips || showOrders)
-            {
-                sbData.Clear();
-                sbData.AppendLine($"Listening in channel: {channel}");
-                PrintExchanges();
-                PrintShipStatus();
-                PrintOrders();
-                PrintReceptions();
-                WriteDataLCDs(sbData.ToString(), false);
-            }
+            sbData.Clear();
+            sbData.AppendLine($"Listening in channel: {channel}");
+            PrintExchanges();
+            PrintShipStatus();
+            PrintOrders();
+            PrintReceptions();
+            WriteDataLCDs(sbData.ToString(), false);
         }
 
         #region STATUS
