@@ -24,6 +24,10 @@ namespace IngameScript
         const string exchangeSorterOutput = "Output";
         const string exchangeTimerPrepare = "Prepare";
         const string exchangeTimerUnload = "Unload";
+
+        const int requestStatusInterval = 10; // seconds, how often to request status from ships
+        const int requestDeliveryInterval = 60; // seconds, how often to request deliveries
+        const int requestReceptionInterval = 60; // seconds, how often to request receptions
         #endregion
 
         #region Blocks
@@ -51,6 +55,13 @@ namespace IngameScript
         bool showOrders = true;
         bool showExchangeRequests = true;
         bool enableLogs = false;
+        bool requestStatus = true;
+        bool requestDelivery = true;
+        bool requestReception = true;
+
+        DateTime lastRequestStatus = DateTime.MinValue;
+        DateTime lastRequestDelivery = DateTime.MinValue;
+        DateTime lastRequestReception = DateTime.MinValue;
 
         public Program()
         {
@@ -87,6 +98,10 @@ namespace IngameScript
 
         public void Main(string argument, UpdateType updateSource)
         {
+            RequestStatus();
+            RequestDelivery();
+            RequestReception();
+
             if (!string.IsNullOrEmpty(argument))
             {
                 ParseTerminalMessage(argument);
@@ -110,47 +125,24 @@ namespace IngameScript
             }
         }
 
-        #region TERMINAL COMMANDS
-        void ParseTerminalMessage(string argument)
-        {
-            WriteLogLCDs($"ParseTerminalMessage: {argument}");
-
-            if (argument == "RESET") Reset();
-            else if (argument == "REQUEST_STATUS") RequestStatus();
-            else if (argument == "REQUEST_DELIVERY") RequestDelivery();
-            else if (argument == "REQUEST_RECEPTION") RequestReception();
-            else if (argument == "LIST_EXCHANGES") ListExchanges();
-            else if (argument == "LIST_SHIPS") ListShips();
-            else if (argument == "LIST_ORDERS") ListOrders();
-            else if (argument == "LIST_RECEPTIONS") ListReceptions();
-            else if (argument == "ENABLE_LOGS") EnableLogs();
-            else if (argument == "FAKE_ORDER") FakeOrder();
-            else if (argument.StartsWith("SHIP_LOADED")) ShipLoaded(argument);
-            else if (argument.StartsWith("SET_ORDER")) SetOrder(argument);
-        }
-        /// <summary>
-        /// Resets the state
-        /// </summary>
-        void Reset()
-        {
-            Storage = "";
-
-            sbData.Clear();
-            sbLog.Clear();
-
-            exchanges.Clear();
-            orders.Clear();
-            ships.Clear();
-            exchangeRequests.Clear();
-
-            InitializeExchangeGroups();
-        }
+        #region STATUS
         /// <summary>
         /// Sec_A_1 - WH pide situación a todas las naves
         /// Execute:  REQUEST_STATUS
         /// </summary>
         void RequestStatus()
         {
+            if (!requestStatus)
+            {
+                return;
+            }
+
+            if (DateTime.Now - lastRequestStatus < TimeSpan.FromSeconds(requestStatusInterval))
+            {
+                return;
+            }
+            lastRequestStatus = DateTime.Now;
+
             List<string> parts = new List<string>()
             {
                 $"Command=REQUEST_STATUS",
@@ -158,12 +150,26 @@ namespace IngameScript
             };
             BroadcastMessage(parts);
         }
+        #endregion
+
+        #region DELIVERY
         /// <summary>
         /// Sec_C_1 - WH revisa los pedidos. Para cada pedido, busca una nave libre y le da la orden de carga en un conector para NAVEX
         /// Execute:  START_DELIVERY
         /// </summary>
         void RequestDelivery()
         {
+            if (!requestDelivery)
+            {
+                return;
+            }
+
+            if (DateTime.Now - lastRequestDelivery < TimeSpan.FromSeconds(requestDeliveryInterval))
+            {
+                return;
+            }
+            lastRequestDelivery = DateTime.Now;
+
             var pendantOrders = GetPendingOrders();
             if (pendantOrders.Count == 0)
             {
@@ -211,12 +217,26 @@ namespace IngameScript
             //Pone el exchange en modo preparar pedido
             exchange.TimerPrepare?.ApplyAction("TriggerNow");
         }
+        #endregion
+
+        #region RECEPTION
         /// <summary>
         /// Sec_D_1 - BASEX revisa las peticiones de descarga. Busca conectores libres y da la orden de descarga a NAVEX en el conector especificado
         /// Execute:  UNLOAD_ORDER
         /// </summary>
         void RequestReception()
         {
+            if (!requestReception)
+            {
+                return;
+            }
+
+            if (DateTime.Now - lastRequestReception < TimeSpan.FromSeconds(requestReceptionInterval))
+            {
+                return;
+            }
+            lastRequestReception = DateTime.Now;
+
             var exRequest = GetPendingExchangeRequests();
             if (exRequest.Count == 0)
             {
@@ -272,6 +292,44 @@ namespace IngameScript
                 break;
             }
         }
+
+        #endregion
+
+        #region TERMINAL COMMANDS
+        void ParseTerminalMessage(string argument)
+        {
+            WriteLogLCDs($"ParseTerminalMessage: {argument}");
+
+            if (argument == "RESET") Reset();
+            else if (argument == "LIST_EXCHANGES") ListExchanges();
+            else if (argument == "LIST_SHIPS") ListShips();
+            else if (argument == "LIST_ORDERS") ListOrders();
+            else if (argument == "LIST_RECEPTIONS") ListReceptions();
+            else if (argument == "ENABLE_LOGS") EnableLogs();
+            else if (argument == "ENABLE_STATUS_REQUEST") EnableStatusRequest();
+            else if (argument == "ENABLE_DELIVERY_REQUEST") EnableDeliveryRequest();
+            else if (argument == "ENABLE_RECEPTION_REQUEST") EnableReceptionRequest();
+            else if (argument == "FAKE_ORDER") FakeOrder();
+            else if (argument.StartsWith("SHIP_LOADED")) ShipLoaded(argument);
+            else if (argument.StartsWith("SET_ORDER")) SetOrder(argument);
+        }
+        /// <summary>
+        /// Resets the state
+        /// </summary>
+        void Reset()
+        {
+            Storage = "";
+
+            sbData.Clear();
+            sbLog.Clear();
+
+            exchanges.Clear();
+            orders.Clear();
+            ships.Clear();
+            exchangeRequests.Clear();
+
+            InitializeExchangeGroups();
+        }
         /// <summary>
         /// Cambia el estado de la variable que controla la visualización de los exchanges
         /// </summary>
@@ -306,6 +364,27 @@ namespace IngameScript
         void EnableLogs()
         {
             enableLogs = !enableLogs;
+        }
+        /// <summary>
+        /// Cambia el estado de la variable que controla la petición de estado a las naves
+        /// </summary>
+        void EnableStatusRequest()
+        {
+            requestStatus = !requestStatus;
+        }
+        /// <summary>
+        /// Cambia el estado de la variable que controla la petición de entrega de pedidos
+        /// </summary>
+        void EnableDeliveryRequest()
+        {
+            requestDelivery = !requestDelivery;
+        }
+        /// <summary>
+        /// Cambia el estado de la variable que controla la petición de recepción de pedidos
+        /// </summary>
+        void EnableReceptionRequest()
+        {
+            requestReception = !requestReception;
         }
         /// <summary>
         /// Sec_B_1 - BASEX revisa el inventario y pide a WH
@@ -911,6 +990,9 @@ namespace IngameScript
             showOrders = Utils.ReadInt(storageLines, "ShowOrders") == 1;
             showExchangeRequests = Utils.ReadInt(storageLines, "ShowExchangeRequests") == 1;
             enableLogs = Utils.ReadInt(storageLines, "EnableLogs") == 1;
+            requestStatus = Utils.ReadInt(storageLines, "RequestStatus", 1) == 1;
+            requestDelivery = Utils.ReadInt(storageLines, "RequestDelivery", 1) == 1;
+            requestReception = Utils.ReadInt(storageLines, "RequestReception", 1) == 1;
         }
         void SaveToStorage()
         {
@@ -923,6 +1005,9 @@ namespace IngameScript
             parts.Add($"ShowOrders={(showOrders ? 1 : 0)}");
             parts.Add($"ShowExchangeRequests={(showExchangeRequests ? 1 : 0)}");
             parts.Add($"EnableLogs={(enableLogs ? 1 : 0)}");
+            parts.Add($"RequestStatus={(requestStatus ? 1 : 0)}");
+            parts.Add($"RequestDelivery={(requestDelivery ? 1 : 0)}");
+            parts.Add($"RequestReception={(requestReception ? 1 : 0)}");
 
             Storage = string.Join(Environment.NewLine, parts);
         }
