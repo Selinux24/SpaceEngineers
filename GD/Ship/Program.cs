@@ -605,6 +605,8 @@ namespace IngameScript
 
             if (argument == "RESET") Reset();
 
+            else if (argument.StartsWith("GOTO")) Goto(argument);
+
             else if (argument == "APPROACH_TO_PARKING") ApproachToParking();
 
             else if (argument == "REQUEST_LOAD_TO_WAREHOUSE") RequestLoadToWarehouse();
@@ -639,6 +641,16 @@ namespace IngameScript
             status = ShipStatus.Idle;
 
             Echo("Stopped.");
+        }
+        /// <summary>
+        /// Goes to a position defined in the argument.
+        /// </summary>
+        void Goto(string argument)
+        {
+            string[] lines = argument.Split('|');
+            var position = Utils.ReadVector(lines, "Position");
+
+            StartCruising(position, "WAITING");
         }
         /// <summary>
         /// Realiza la aproximación al parking destino cargado en delivery data
