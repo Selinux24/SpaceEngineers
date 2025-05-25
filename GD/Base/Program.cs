@@ -177,7 +177,7 @@ namespace IngameScript
             {
                 return;
             }
-            var freeShips = GetFreeShips(ShipStatus.Idle);
+            var freeShips = GetFreeShips();
             if (freeShips.Count == 0)
             {
                 RequestStatus();
@@ -244,7 +244,7 @@ namespace IngameScript
             {
                 return;
             }
-            var waitingShips = GetFreeShips(ShipStatus.WaitingForUnload);
+            var waitingShips = GetWaitingShips();
             if (waitingShips.Count == 0)
             {
                 RequestStatus();
@@ -778,9 +778,13 @@ namespace IngameScript
         {
             return orders.Where(o => string.IsNullOrWhiteSpace(o.AssignedShip)).ToList();
         }
-        List<Ship> GetFreeShips(ShipStatus status)
+        List<Ship> GetFreeShips()
         {
-            return ships.Where(s => s.ShipStatus == status).ToList();
+            return ships.Where(s => s.ShipStatus == ShipStatus.Idle).ToList();
+        }
+        List<Ship> GetWaitingShips()
+        {
+            return ships.Where(s => s.ShipStatus == ShipStatus.WaitingForLoad || s.ShipStatus == ShipStatus.WaitingForUnload).ToList();
         }
         List<ExchangeGroup> GetFreeExchanges()
         {

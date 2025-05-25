@@ -6,14 +6,14 @@ namespace IngameScript
         Unknown,
         Idle,
 
-        ApproachingWarehouse,
-        Loading,
-        RouteToCustomer,
-
-        WaitingForUnload,
-
-        ApproachingCustomer,
-        Unloading,
         RouteToWarehouse,
+        ApproachingWarehouse,
+        WaitingForLoad,
+        Loading,
+
+        RouteToCustomer,
+        ApproachingCustomer,
+        WaitingForUnload,
+        Unloading,
     }
 }

@@ -19,7 +19,7 @@ namespace IngameScript
             List<string> list = new List<string>();
             foreach (var r in requests)
             {
-                list.Add($"UnloadRequest={r.From}|OrderId={r.OrderId}|Idle={(r.Idle ? 1 : 0)}|Task={(int)r.Task}");
+                list.Add($"From={r.From}|OrderId={r.OrderId}|Idle={(r.Idle ? 1 : 0)}|Task={(int)r.Task}");
             }
 
             return new List<string>
