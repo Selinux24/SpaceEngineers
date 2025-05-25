@@ -23,7 +23,7 @@ namespace IngameScript
                 Me.CustomData =
                     "LaserAntenna=name\n" +
                     "TimerSend=name\n" +
-                    "GPSReceptor=x:y:z\n";
+                    "GPSReceptor=GPS:Name:x:y:z:\n";
 
                 Echo("CustomData not set.");
                 return;
