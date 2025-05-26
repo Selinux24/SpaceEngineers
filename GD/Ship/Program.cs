@@ -12,8 +12,6 @@ namespace IngameScript
     /// Ship script for delivery and distress signals.
     /// </summary>
     /// <remarks>
-    /// TODO: A una distancia del destino, bajar la velocidad de crucero a la mitad
-    /// TODO: Las correcciones de trayectoria en el modo de crucero deben hacerse con los propulsores pequeños
     /// TODO: Cuando se quede a un porcentaje de batería, parar y esperar a que se recargue
     /// TODO: Cuando esté en espera de cargarse, al llegar a un porcentaje de batería, continuar el viaje
     /// </remarks>
@@ -54,7 +52,7 @@ namespace IngameScript
         const double CruisingLocateAlignThr = 0.001; // Precisión de alineación
         const double CruisingCruiseAlignThr = 0.01; // Precisión de alineación
 
-        const double CrusingCollisionDetectRange = 5000.0; // Rango de detección de colisiones
+        const double CrusingCollisionDetectRange = 10000.0; // Rango de detección de colisiones
         const double CrusingEvadingWaypointDistance = 100.0;
         const double CrusingEvadingMaxSpeed = 19.5;
 
