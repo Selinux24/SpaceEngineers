@@ -130,6 +130,7 @@ namespace Sandbox.ModAPI.Ingame
         MyShipVelocities GetShipVelocities();
         void SetAutoPilotEnabled(bool v);
         void SetCollisionAvoidance(bool v);
+        Vector3D GetNaturalGravity();
     }
     public interface IMyCameraBlock : IMyTerminalBlock
     {

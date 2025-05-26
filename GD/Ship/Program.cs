@@ -438,8 +438,9 @@ namespace IngameScript
                 return;
             }
 
+            bool inGravity = IsShipInGravity();
             var shipVelocity = remotePilot.GetShipVelocities().LinearVelocity.Length();
-            if (shipVelocity >= CruisingMaxSpeed * CruisingMaxSpeedThr)
+            if (!inGravity && shipVelocity >= CruisingMaxSpeed * CruisingMaxSpeedThr)
             {
                 BroadcastStatus("Reached cruise speed. Deactivating thrusters.");
                 navigationData.CurrentState = NavigationStatus.Cruising;
@@ -473,7 +474,8 @@ namespace IngameScript
             }
 
             // Mantener velocidad
-            if (!AlignToDirection(remotePilot.WorldMatrix.Forward, CruisingCruiseAlignThr))
+            bool inGravity = IsShipInGravity();
+            if (inGravity || !AlignToDirection(remotePilot.WorldMatrix.Forward, CruisingCruiseAlignThr))
             {
                 // Encender los propulsores hasta alinear de nuevo el vector velocidad con el vector hasta el objetivo
                 ThrustToTarget(CruisingMaxSpeed);
@@ -486,9 +488,9 @@ namespace IngameScript
             if (navigationData.Thrusting)
             {
                 // Propulsores encendidos para recuperar la alineación
-                if ((DateTime.Now - navigationData.AlignThrustStart).TotalSeconds > CruisingThrustAlignSeconds)
+                if (!inGravity && (DateTime.Now - navigationData.AlignThrustStart).TotalSeconds > CruisingThrustAlignSeconds)
                 {
-                    // Tiempo de alineación consumido. Desactivar propulsores
+                    // Fuera de la gravedad y tiempo de alineación consumido. Desactivar propulsores
                     EnterCruising();
                     navigationData.Thrusting = false;
                 }
@@ -595,6 +597,11 @@ namespace IngameScript
             ResetThrust();
             StopThrust();
             ResetGyros();
+        }
+        bool IsShipInGravity()
+        {
+            var gravitry = remotePilot.GetNaturalGravity();
+            return gravitry.Length() >= 0.001;
         }
         #endregion
 

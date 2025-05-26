@@ -6,5 +6,6 @@ namespace SpaceEngineers.Game.ModAPI.Ingame
     {
         void ApplyAction(string v);
         void StartCountdown();
+        void Trigger();
     }
 }
