@@ -8,6 +8,12 @@ using VRageMath;
 
 namespace IngameScript
 {
+    /// <summary>
+    /// Base script for managing ship deliveries in Space Engineers.
+    /// </summary>
+    /// <remarks>
+    /// TODO: Detect connected ship to connector group.
+    /// </remarks>
     partial class Program : MyGridProgram
     {
         #region Constants
@@ -289,7 +295,6 @@ namespace IngameScript
                 break;
             }
         }
-
         #endregion
 
         #region TERMINAL COMMANDS
@@ -869,8 +874,8 @@ namespace IngameScript
                 double distanceToOrigin = Vector3D.Distance(ship.Position, originPosition);
                 double distanceToDestination = Vector3D.Distance(ship.Position, destinationPosition);
                 TimeSpan time = TimeSpan.FromSeconds(distanceToDestination / ship.Speed);
-                sbData.AppendLine($"Distance from origin: {distanceToOrigin:F0} m.");
-                sbData.AppendLine($"Distance to destination: {distanceToDestination:F0} m.");
+                sbData.AppendLine($"Distance from origin: {Utils.DistanceToStr(distanceToOrigin)}.");
+                sbData.AppendLine($"Distance to destination: {Utils.DistanceToStr(distanceToDestination)}.");
                 sbData.AppendLine($"Estimated arrival: {time}.");
             }
         }
