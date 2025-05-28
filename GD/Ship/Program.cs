@@ -234,8 +234,8 @@ namespace IngameScript
             if (deliveryData.OrderId > 0)
             {
                 Echo($"Order: {deliveryData.OrderId}");
-                Echo($"Load: {deliveryData.OrderWarehouse} -> {Utils.VectorToStr(deliveryData.OrderWarehouseParking)}");
-                Echo($"Unload: {deliveryData.OrderCustomer} -> {Utils.VectorToStr(deliveryData.OrderCustomerParking)}");
+                Echo($"Load: {deliveryData.OrderWarehouse}");
+                Echo($"Unload: {deliveryData.OrderCustomer}");
             }
 
             DoArrival();
@@ -248,7 +248,6 @@ namespace IngameScript
         {
             if (!alignData.HasTarget)
             {
-                Echo("Align target undefined...");
                 return;
             }
 
@@ -293,7 +292,7 @@ namespace IngameScript
             var toTarget = targetPos - currentPos;
             double distance = toTarget.Length();
 
-            Echo($"Distance to destination: {distance:F2}m");
+            Echo($"Distance to destination: {Utils.DistanceToStr(distance)}");
             Echo($"Progress: {alignData.CurrentTarget + 1}/{alignData.Waypoints.Count}.");
             Echo($"Has command? {!string.IsNullOrWhiteSpace(alignData.Command)}");
 
@@ -317,7 +316,6 @@ namespace IngameScript
         {
             if (!arrivalData.HasPosition)
             {
-                Echo("Arrival position undefined...");
                 return;
             }
 
@@ -344,7 +342,7 @@ namespace IngameScript
                 return;
             }
 
-            arrivalStateMsg = $"Distance to destination: {distance:F2}m.";
+            arrivalStateMsg = $"Distance to destination: {Utils.DistanceToStr(distance)}";
         }
         #endregion
 
@@ -353,7 +351,6 @@ namespace IngameScript
         {
             if (!navigationData.HasTarget)
             {
-                Echo("Waiting for position...");
                 return;
             }
 
@@ -369,11 +366,13 @@ namespace IngameScript
         }
         void MonitorizeNavigation()
         {
-            navigationData.UpdatePosition(cameraPilot.GetPosition());
+            navigationData.UpdatePositionAndVelocity(cameraPilot.GetPosition(), remotePilot.GetShipSpeed());
 
             navigationStateMsg = $"Navigation state {navigationData.CurrentState}";
 
-            Echo($"To target: {navigationData.DistanceToTarget:F2}m.");
+            Echo($"To target: {Utils.DistanceToStr(navigationData.DistanceToTarget)}");
+            Echo($"ETC: {navigationData.EstimatedArrival:hh\\:mm\\:ss}");
+            Echo($"Progress {navigationData.Progress:P1}");
             Echo(navigationData.PrintObstacle());
 
             switch (navigationData.CurrentState)
@@ -584,7 +583,7 @@ namespace IngameScript
             }
 
             Echo($"Evading route...");
-            Echo($"Distance to waypoint {d:F2}m.");
+            Echo($"Distance to waypoint {Utils.DistanceToStr(d)}");
 
             ThrustToPosition(wayPoint, maxSpeed);
         }
@@ -849,6 +848,7 @@ namespace IngameScript
         {
             string from = Utils.ReadString(lines, "From");
             Vector3D position = remotePilot.GetPosition();
+            double speed = remotePilot.GetShipVelocities().LinearVelocity.Length();
 
             List<string> parts = new List<string>()
             {
@@ -856,11 +856,12 @@ namespace IngameScript
                 $"To={from}",
                 $"From={shipId}",
                 $"Status={(int)status}",
-                $"Origin={deliveryData.OrderWarehouse}",
-                $"OriginPosition={Utils.VectorToStr(deliveryData.OrderWarehouseParking)}",
-                $"Destination={deliveryData.OrderCustomer}",
-                $"DestinationPosition={Utils.VectorToStr(deliveryData.OrderCustomerParking)}",
+                $"Warehouse={deliveryData.OrderWarehouse}",
+                $"WarehousePosition={Utils.VectorToStr(deliveryData.OrderWarehouseParking)}",
+                $"Customer={deliveryData.OrderCustomer}",
+                $"CustomerPosition={Utils.VectorToStr(deliveryData.OrderCustomerParking)}",
                 $"Position={Utils.VectorToStr(position)}",
+                $"Speed={speed:F2}",
             };
             BroadcastMessage(parts);
         }

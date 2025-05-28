@@ -8,10 +8,11 @@ namespace IngameScript
         public string Name;
         public ShipStatus ShipStatus;
         public Vector3D Position;
-        public string Origin;
-        public Vector3D OriginPosition;
-        public string Destination;
-        public Vector3D DestinationPosition;
+        public string Warehouse;
+        public Vector3D WarehousePosition;
+        public string Customer;
+        public Vector3D CustomerPosition;
+        public double Speed;
         public DateTime UpdateTime;
     }
 }

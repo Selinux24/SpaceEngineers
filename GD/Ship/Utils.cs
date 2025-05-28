@@ -52,6 +52,21 @@ namespace IngameScript
 
             return res;
         }
+        public static object DistanceToStr(double distance)
+        {
+            if(distance < 1000)
+            {
+                return $"{distance:0.00}m";
+            }
+            else if (distance < 1000000)
+            {
+                return $"{distance / 1000:0.00}km";
+            }
+            else
+            {
+                return $"{distance / 1000:0.0}km";
+            }
+        }
 
         public static string ReadString(string[] lines, string name, string defaultValue = "")
         {

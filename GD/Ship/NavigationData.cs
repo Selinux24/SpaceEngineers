@@ -18,6 +18,8 @@ namespace IngameScript
 
         public Vector3D DirectionToTarget { get; private set; }
         public double DistanceToTarget { get; private set; }
+        public TimeSpan EstimatedArrival { get; private set; }
+        public double Progress => DistanceToTarget > 0 ? 1 - (DistanceToTarget / Vector3D.Distance(Origin, Destination)) : 1;
 
         private MyDetectedEntityInfo lastHit;
 
@@ -47,11 +49,12 @@ namespace IngameScript
             lastHit = new MyDetectedEntityInfo();
         }
 
-        public void UpdatePosition(Vector3D position)
+        public void UpdatePositionAndVelocity(Vector3D position, double speed)
         {
             var toTarget = Destination - position;
             DirectionToTarget = Vector3D.Normalize(toTarget);
             DistanceToTarget = toTarget.Length();
+            EstimatedArrival = TimeSpan.FromSeconds(DistanceToTarget / speed);
         }
 
         public bool IsObstacleAhead(IMyCameraBlock camera, double collisionDetectRange)

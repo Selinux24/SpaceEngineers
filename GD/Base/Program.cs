@@ -485,11 +485,12 @@ namespace IngameScript
 
             string from = Utils.ReadString(lines, "From");
             ShipStatus status = (ShipStatus)Utils.ReadInt(lines, "Status");
-            string origin = Utils.ReadString(lines, "Origin");
-            Vector3D originPosition = Utils.ReadVector(lines, "OriginPosition");
-            string destination = Utils.ReadString(lines, "Destination");
-            Vector3D destinationPosition = Utils.ReadVector(lines, "DestinationPosition");
+            string wh = Utils.ReadString(lines, "Warehouse");
+            Vector3D whPosition = Utils.ReadVector(lines, "WarehousePosition");
+            string customer = Utils.ReadString(lines, "Customer");
+            Vector3D customerPosition = Utils.ReadVector(lines, "CustomerPosition");
             Vector3D position = Utils.ReadVector(lines, "Position");
+            double speed = Utils.ReadDouble(lines, "Speed");
 
             var ship = ships.Find(s => s.Name == from);
             if (ship == null)
@@ -499,11 +500,12 @@ namespace IngameScript
             }
 
             ship.ShipStatus = status;
-            ship.Origin = origin;
-            ship.OriginPosition = originPosition;
-            ship.Destination = destination;
-            ship.DestinationPosition = destinationPosition;
+            ship.Warehouse = wh;
+            ship.WarehousePosition = whPosition;
+            ship.Customer = customer;
+            ship.CustomerPosition = customerPosition;
             ship.Position = position;
+            ship.Speed = speed;
             ship.UpdateTime = DateTime.Now;
         }
         /// <summary>
@@ -856,13 +858,20 @@ namespace IngameScript
             {
                 sbData.AppendLine($"{ship.Name} Status: {ship.ShipStatus}.");
                 sbData.AppendLine($"Last known position: {Utils.VectorToStr(ship.Position)}. Last update: {(DateTime.Now - ship.UpdateTime).TotalSeconds:F0}secs");
-                if (string.IsNullOrEmpty(ship.Origin)) continue;
+                if (ship.ShipStatus != ShipStatus.RouteToCustomer && ship.ShipStatus != ShipStatus.RouteToWarehouse) continue;
 
-                double distanceToOrigin = Vector3D.Distance(ship.Position, ship.OriginPosition);
-                double distanceToDestination = Vector3D.Distance(ship.Position, ship.DestinationPosition);
-                sbData.AppendLine($"On route from [{ship.Origin}] to [{ship.Destination}]");
-                sbData.AppendLine($"Distance from origin: {distanceToOrigin:F0}m.");
-                sbData.AppendLine($"Distance to destination: {distanceToDestination:F0}m.");
+                string origin = ship.ShipStatus == ShipStatus.RouteToCustomer ? ship.Warehouse : ship.Customer;
+                string destination = ship.ShipStatus == ShipStatus.RouteToCustomer ? ship.Customer : ship.Warehouse;
+                sbData.AppendLine($"On route from [{origin}] to [{destination}]");
+
+                Vector3D originPosition = ship.ShipStatus == ShipStatus.RouteToCustomer ? ship.WarehousePosition : ship.CustomerPosition;
+                Vector3D destinationPosition = ship.ShipStatus == ShipStatus.RouteToCustomer ? ship.CustomerPosition : ship.WarehousePosition;
+                double distanceToOrigin = Vector3D.Distance(ship.Position, originPosition);
+                double distanceToDestination = Vector3D.Distance(ship.Position, destinationPosition);
+                TimeSpan time = TimeSpan.FromSeconds(distanceToDestination / ship.Speed);
+                sbData.AppendLine($"Distance from origin: {distanceToOrigin:F0} m.");
+                sbData.AppendLine($"Distance to destination: {distanceToDestination:F0} m.");
+                sbData.AppendLine($"Estimated arrival: {time}.");
             }
         }
         void PrintOrders()
