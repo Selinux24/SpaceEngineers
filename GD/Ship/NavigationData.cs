@@ -18,8 +18,10 @@ namespace IngameScript
 
         public Vector3D DirectionToTarget { get; private set; }
         public double DistanceToTarget { get; private set; }
-        public TimeSpan EstimatedArrival { get; private set; }
-        public double Progress => DistanceToTarget > 0 ? 1 - (DistanceToTarget / Vector3D.Distance(Origin, Destination)) : 1;
+        public double Speed { get; private set; } = 0;
+        public TimeSpan EstimatedArrival => TimeSpan.FromSeconds(DistanceToTarget / Speed);
+        public double TotalDistance => Vector3D.Distance(Origin, Destination);
+        public double Progress => DistanceToTarget > 0 ? 1 - (DistanceToTarget / TotalDistance) : 1;
 
         private MyDetectedEntityInfo lastHit;
 
@@ -54,7 +56,7 @@ namespace IngameScript
             var toTarget = Destination - position;
             DirectionToTarget = Vector3D.Normalize(toTarget);
             DistanceToTarget = toTarget.Length();
-            EstimatedArrival = TimeSpan.FromSeconds(DistanceToTarget / speed);
+            Speed = speed;
         }
 
         public bool IsObstacleAhead(IMyCameraBlock camera, double collisionDetectRange)
@@ -77,7 +79,7 @@ namespace IngameScript
 
             return "";
         }
-        public bool CalculateEvadingWaypoints(IMyCameraBlock camera)
+        public bool CalculateEvadingWaypoints(IMyCameraBlock camera, double safetyDistance)
         {
             if (EvadingPoints.Count > 0)
             {
@@ -98,7 +100,7 @@ namespace IngameScript
             EvadingPoints.Add(p1);
 
             //Punto al otro lado del obstáculo desde el punto de vista de la nave
-            var p2 = obstacleCenter + (camera.WorldMatrix.Forward * obstacleSize);
+            var p2 = obstacleCenter + (camera.WorldMatrix.Forward * (obstacleSize + safetyDistance));
             EvadingPoints.Add(p2);
 
             return true;

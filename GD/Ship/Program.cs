@@ -21,6 +21,10 @@ namespace IngameScript
         const string DeliveryChannel = "SHIPS_DELIVERY";
         const string DistressChannel = "SHIPS_STATUS";
 
+        const string WildcardShipId = "[shipId]";
+        const string WildcardShipInfo = "[DELIVERY_INFO]";
+        const string WildcardLogLCDs = "[DELIVERY_LOG]";
+
         const string ShipTimerPilot = "HT Automaton Timer Block Pilot";
         const string ShipTimerLock = "HT Automaton Timer Block Locking";
         const string ShipTimerUnlock = "HT Automaton Timer Block Unlocking";
@@ -33,7 +37,6 @@ namespace IngameScript
         const string ShipConnectorA = "HT Connector A";
         const string ShipBeaconName = "HT Distress Beacon";
         const string ShipAntennaName = "HT Compact Antenna";
-        const string ShipLogLCDs = "[DELIVERY_LOG]";
 
         const double GyrosThr = 0.001; //Precisión de alineación
         const double GyrosSpeed = 2f; //Velocidad de los giroscopios
@@ -82,7 +85,9 @@ namespace IngameScript
 
         readonly List<IMyThrust> thrusters = new List<IMyThrust>();
         readonly List<IMyGyro> gyros = new List<IMyGyro>();
+        readonly List<IMyTextPanel> infoLCDs = new List<IMyTextPanel>();
         readonly List<IMyTextPanel> logLCDs = new List<IMyTextPanel>();
+        readonly List<IMyCargoContainer> shipCargos = new List<IMyCargoContainer>();
         #endregion
 
         readonly string shipId;
@@ -197,9 +202,11 @@ namespace IngameScript
                 return;
             }
 
-            logLCDs = GetBlocksOfType<IMyTextPanel>(ShipLogLCDs);
+            logLCDs = GetBlocksOfType<IMyTextPanel>(WildcardLogLCDs);
+            infoLCDs = GetBlocksOfType<IMyTextPanel>(WildcardShipInfo);
+            shipCargos = GetBlocksOfType<IMyCargoContainer>();
 
-            WriteLCDs("[shipId]", shipId);
+            WriteLCDs(WildcardShipId, shipId);
 
             bl = IGC.RegisterBroadcastListener(DeliveryChannel);
             Echo($"Listening in channel {DeliveryChannel}");
@@ -218,6 +225,8 @@ namespace IngameScript
 
         public void Main(string argument, UpdateType updateSource)
         {
+            WriteInfoLCDs(shipId, false);
+            WriteInfoLCDs($"{CalculateCargoPercentage():P1} cargo.");
             if (!string.IsNullOrEmpty(argument))
             {
                 ParseTerminalMessage(argument);
@@ -230,12 +239,12 @@ namespace IngameScript
                 ParseMessage(message.Data.ToString());
             }
 
-            Echo($"Status: {status}");
+            WriteInfoLCDs($"Status: {status}");
             if (deliveryData.OrderId > 0)
             {
-                Echo($"Order: {deliveryData.OrderId}");
-                Echo($"Load: {deliveryData.OrderWarehouse}");
-                Echo($"Unload: {deliveryData.OrderCustomer}");
+                WriteInfoLCDs($"Order: {deliveryData.OrderId}");
+                WriteInfoLCDs($"Load: {deliveryData.OrderWarehouse}");
+                WriteInfoLCDs($"Unload: {deliveryData.OrderCustomer}");
             }
 
             DoArrival();
@@ -292,9 +301,9 @@ namespace IngameScript
             var toTarget = targetPos - currentPos;
             double distance = toTarget.Length();
 
-            Echo($"Distance to destination: {Utils.DistanceToStr(distance)}");
-            Echo($"Progress: {alignData.CurrentTarget + 1}/{alignData.Waypoints.Count}.");
-            Echo($"Has command? {!string.IsNullOrWhiteSpace(alignData.Command)}");
+            WriteInfoLCDs($"Distance to destination: {Utils.DistanceToStr(distance)}");
+            WriteInfoLCDs($"Progress: {alignData.CurrentTarget + 1}/{alignData.Waypoints.Count}.");
+            WriteInfoLCDs($"Has command? {!string.IsNullOrWhiteSpace(alignData.Command)}");
 
             if (distance < ExchangeWaypointDistanceThr)
             {
@@ -370,10 +379,12 @@ namespace IngameScript
 
             navigationStateMsg = $"Navigation state {navigationData.CurrentState}";
 
-            Echo($"To target: {Utils.DistanceToStr(navigationData.DistanceToTarget)}");
-            Echo($"ETC: {navigationData.EstimatedArrival:hh\\:mm\\:ss}");
-            Echo($"Progress {navigationData.Progress:P1}");
-            Echo(navigationData.PrintObstacle());
+            WriteInfoLCDs($"Trip: {Utils.DistanceToStr(navigationData.TotalDistance)}");
+            WriteInfoLCDs($"To target: {Utils.DistanceToStr(navigationData.DistanceToTarget)}");
+            WriteInfoLCDs($"ETC: {navigationData.EstimatedArrival:hh\\:mm\\:ss}");
+            WriteInfoLCDs($"Speed: {navigationData.Speed:F2}");
+            WriteInfoLCDs($"Progress {navigationData.Progress:P1}");
+            WriteInfoLCDs(navigationData.PrintObstacle());
 
             switch (navigationData.CurrentState)
             {
@@ -544,7 +555,7 @@ namespace IngameScript
             }
 
             // Calcular los puntos de evasión
-            if (!navigationData.CalculateEvadingWaypoints(cameraPilot))
+            if (!navigationData.CalculateEvadingWaypoints(cameraPilot, CrusingCollisionDetectRange * 0.5))
             {
                 //No se puede calcular un punto de evasión
                 navigationData.CurrentState = NavigationStatus.Braking;
@@ -555,7 +566,7 @@ namespace IngameScript
             // Navegar entre los puntos de evasión
             if (navigationData.EvadingPoints.Count > 0)
             {
-                NavigateTo(navigationData.EvadingPoints[0], CrusingEvadingMaxSpeed);
+                EvadingTo(navigationData.EvadingPoints[0], CrusingEvadingMaxSpeed);
 
                 if (navigationData.EvadingPoints.Count == 0)
                 {
@@ -571,7 +582,7 @@ namespace IngameScript
                 return;
             }
         }
-        void NavigateTo(Vector3D wayPoint, double maxSpeed)
+        void EvadingTo(Vector3D wayPoint, double maxSpeed)
         {
             var d = Vector3D.Distance(wayPoint, cameraPilot.GetPosition());
             if (d <= CrusingEvadingWaypointDistance)
@@ -582,8 +593,8 @@ namespace IngameScript
                 return;
             }
 
-            Echo($"Evading route...");
-            Echo($"Distance to waypoint {Utils.DistanceToStr(d)}");
+            WriteInfoLCDs($"Following evading route...");
+            WriteInfoLCDs($"Distance to waypoint {Utils.DistanceToStr(d)}");
 
             ThrustToPosition(wayPoint, maxSpeed);
         }
@@ -644,7 +655,7 @@ namespace IngameScript
 
             status = ShipStatus.Idle;
 
-            Echo("Stopped.");
+            WriteInfoLCDs("Stopped.");
         }
         /// <summary>
         /// Goes to a position defined in the argument.
@@ -1060,6 +1071,16 @@ namespace IngameScript
                 lcd.WriteText(text, false);
             }
         }
+        void WriteInfoLCDs(string text, bool append = true)
+        {
+            Echo(text);
+
+            foreach (var lcd in infoLCDs)
+            {
+                lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                lcd.WriteText(text + Environment.NewLine, append);
+            }
+        }
         void WriteLogLCDs(string text)
         {
             if (!enableLogs)
@@ -1153,17 +1174,17 @@ namespace IngameScript
         bool AlignToDirection(Vector3D direction, double thr)
         {
             double angle = Utils.AngleBetweenVectors(direction, navigationData.DirectionToTarget);
-            Echo($"Alineación: {angle:F4}");
+            WriteInfoLCDs($"Alineación: {angle:F4}");
 
             var rotationAxis = Vector3D.Cross(direction, navigationData.DirectionToTarget);
             if (Utils.IsZero(rotationAxis, thr))
             {
                 ResetGyros();
-                Echo("Alineado con el objetivo.");
+                WriteInfoLCDs("Alineado con el objetivo.");
                 return true;
             }
 
-            Echo("Alineando...");
+            WriteInfoLCDs("Alineando...");
             ApplyGyroOverride(rotationAxis);
 
             return false;
@@ -1176,15 +1197,15 @@ namespace IngameScript
 
             double angleFW = Utils.AngleBetweenVectors(shipForward, targetForward);
             double angleUP = Utils.AngleBetweenVectors(shipUp, targetUp);
-            Echo($"Target angles: {angleFW:F2} | {angleUP:F2}");
+            WriteInfoLCDs($"Target angles: {angleFW:F2} | {angleUP:F2}");
 
             if (angleFW <= thr && angleUP <= thr)
             {
                 ResetGyros();
-                Echo("Aligned.");
+                WriteInfoLCDs("Aligned.");
                 return;
             }
-            Echo("Aligning...");
+            WriteInfoLCDs("Aligning...");
 
             if (angleFW > thr)
             {
@@ -1221,6 +1242,25 @@ namespace IngameScript
                 gyro.Yaw = 0;
                 gyro.Roll = 0;
             }
+        }
+
+        double CalculateCargoPercentage()
+        {
+            if (shipCargos.Count == 0)
+            {
+                return 0;
+            }
+
+            double max = 0;
+            double curr = 0;
+            foreach (var cargo in shipCargos)
+            {
+                var inv = cargo.GetInventory();
+                max += (double)inv.MaxVolume;
+                curr += (double)inv.CurrentVolume;
+            }
+
+            return curr / max;
         }
         #endregion
 
