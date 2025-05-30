@@ -119,6 +119,8 @@ namespace IngameScript
                 ParseMessage(message.Data.ToString());
             }
 
+            UpdateBaseState();
+
             sbData.Clear();
             sbData.AppendLine($"Listening in channel: {channel}");
             PrintExchanges();
@@ -203,7 +205,7 @@ namespace IngameScript
 
             order.AssignedShip = ship.Name;
             ship.ShipStatus = ShipStatus.ApproachingWarehouse;
-            exchange.DockedShipName = ship.Name;
+            exchange.DockRequest(ship.Name);
 
             List<string> parts = new List<string>()
             {
@@ -277,7 +279,7 @@ namespace IngameScript
 
                 request.Idle = false;
                 ship.ShipStatus = ShipStatus.ApproachingCustomer;
-                exchange.DockedShipName = ship.Name;
+                exchange.DockRequest(ship.Name);
                 string task = request.Task == ExchangeTasks.Loading ? "LOAD_ORDER" : "UNLOAD_ORDER";
 
                 List<string> parts = new List<string>()
@@ -434,8 +436,6 @@ namespace IngameScript
                 $"From={baseId}"
             };
             BroadcastMessage(parts);
-
-            exchange.DockedShipName = null;
         }
         /// <summary>
         /// NEW - Sets an empty order for full loading in warehouse, and full unloading in costumer
@@ -675,13 +675,6 @@ namespace IngameScript
                 exchangeRequests.Remove(req);
             }
 
-            //Libera el exchange
-            var exchange = exchanges.Find(e => e.DockedShipName == req.From);
-            if (exchange != null)
-            {
-                exchange.DockedShipName = null;
-            }
-
             //Enviar al WH el mensaje de que se ha recibido el pedido
             List<string> parts = new List<string>()
             {
@@ -709,6 +702,20 @@ namespace IngameScript
             if (order != null)
             {
                 orders.Remove(order);
+            }
+        }
+        #endregion
+
+        #region UPDATE BASE STATE
+        void UpdateBaseState()
+        {
+            double time = Runtime.TimeSinceLastRun.TotalSeconds;
+
+            foreach (var exchange in exchanges)
+            {
+                if (exchange.Update(time)) continue;
+
+                //TODO: Si hay una petición de dock y no coincide con las naves conectadas, poner en wait el docking
             }
         }
         #endregion

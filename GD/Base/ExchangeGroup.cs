@@ -1,5 +1,6 @@
 ﻿using Sandbox.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -12,9 +13,11 @@ namespace IngameScript
     class ExchangeGroup
     {
         const int NumWaypoints = 5;
+        const double DockRequestTimeThr = 15 * 60; //Seconds
+
+        private double dockRequestTime = 0;
 
         public string Name;
-        public string DockedShipName; //TODO: Guardar en Storage
         public IMyShipConnector UpperConnector;
         public IMyShipConnector LowerConnector;
         public IMyCargoContainer Cargo;
@@ -22,6 +25,8 @@ namespace IngameScript
         public IMyConveyorSorter SorterOutput;
         public IMyTimerBlock TimerPrepare;
         public IMyTimerBlock TimerUnload;
+
+        public string DockedShipName { get; private set; }
 
         public bool IsValid()
         {
@@ -37,6 +42,50 @@ namespace IngameScript
                 UpperConnector.Status == MyShipConnectorStatus.Unconnected &&
                 (LowerConnector?.Status ?? MyShipConnectorStatus.Unconnected) == MyShipConnectorStatus.Unconnected;
         }
+
+        public bool Update(double time)
+        {
+            dockRequestTime += time;
+
+            bool upperConnected = false;
+            bool lowerConnected = false;
+            string newShipU = null;
+            string newShipL = null;
+
+            if (UpperConnector.Status == MyShipConnectorStatus.Connected)
+            {
+                newShipU = UpperConnector.OtherConnector.CubeGrid.CustomName;
+                upperConnected = true;
+            }
+            if (LowerConnector != null && LowerConnector.Status == MyShipConnectorStatus.Connected)
+            {
+                newShipL = LowerConnector.OtherConnector.CubeGrid.CustomName;
+                lowerConnected = true;
+            }
+
+            bool hasDockRequested = !string.IsNullOrWhiteSpace(DockedShipName) && dockRequestTime <= DockRequestTimeThr;
+            if (hasDockRequested)
+            {
+                if ((upperConnected && DockedShipName != newShipU) || (lowerConnected && DockedShipName != newShipL))
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                //Actualizar el nombre de la nave
+                DockedShipName = newShipU ?? newShipL;
+            }
+
+            return true;
+        }
+
+        public void DockRequest(string shipName)
+        {
+            dockRequestTime = 0;
+            DockedShipName = shipName;
+        }
+
         public List<Vector3D> CalculateRouteToConnector()
         {
             List<Vector3D> waypoints = new List<Vector3D>();
@@ -124,6 +173,7 @@ namespace IngameScript
             {
                 $"Name={Name}",
                 $"DockedShipName={DockedShipName}",
+                $"DockRequestTime={dockRequestTime}",
             };
 
             return string.Join("|", parts);
@@ -151,11 +201,13 @@ namespace IngameScript
                 var parts = exchangeLines[i].Split('|');
                 string name = Utils.ReadString(parts, "Name");
                 string dockedShipName = Utils.ReadString(parts, "DockedShipName");
+                double dockRequestTime = Utils.ReadDouble(parts, "DockRequestTime");
 
                 var exchange = exchanges.Find(e => e.Name == name);
                 if (exchange != null)
                 {
                     exchange.DockedShipName = dockedShipName;
+                    exchange.dockRequestTime = dockRequestTime;
                 }
             }
         }

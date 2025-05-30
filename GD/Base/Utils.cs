@@ -34,7 +34,7 @@ namespace IngameScript
         {
             return string.Join($"{VariableSep}", list.Select(VectorToStr));
         }
-        public static object DistanceToStr(double distance)
+        public static string DistanceToStr(double distance)
         {
             if (distance < 1000)
             {

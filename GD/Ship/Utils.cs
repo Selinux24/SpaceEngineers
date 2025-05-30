@@ -52,7 +52,7 @@ namespace IngameScript
 
             return res;
         }
-        public static object DistanceToStr(double distance)
+        public static string DistanceToStr(double distance)
         {
             if(distance < 1000)
             {

@@ -92,6 +92,7 @@ namespace Sandbox.ModAPI.Ingame
     public interface IMyGridProgramRuntimeInfo
     {
         UpdateFrequency UpdateFrequency { get; set; }
+        TimeSpan TimeSinceLastRun { get; }
     }
     public interface IMyIntergridCommunicationSystem
     {
@@ -131,6 +132,7 @@ namespace Sandbox.ModAPI.Ingame
         void SetAutoPilotEnabled(bool v);
         void SetCollisionAvoidance(bool v);
         Vector3D GetNaturalGravity();
+        double GetShipSpeed();
     }
     public interface IMyCameraBlock : IMyTerminalBlock
     {
@@ -189,6 +191,7 @@ namespace Sandbox.ModAPI.Ingame
     {
         MyShipConnectorStatus Status { get; set; }
         MatrixD WorldMatrix { get; set; }
+        IMyShipConnector OtherConnector { get; }
 
         Vector3D GetPosition();
     }
