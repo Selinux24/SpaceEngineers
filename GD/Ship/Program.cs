@@ -98,6 +98,8 @@ namespace IngameScript
         readonly ArrivalData arrivalData = new ArrivalData();
         readonly NavigationData navigationData = new NavigationData();
 
+        bool paused;
+
         int alignTickCount = 0;
         int arrivalTickCount = 0;
         int navigationTickCount = 0;
@@ -287,6 +289,8 @@ namespace IngameScript
                 return;
             }
 
+            if (DoPause()) return;
+
             AlignToVectors(alignData.TargetForward, alignData.TargetUp, GyrosThr);
 
             var currentPos = connectorA.GetPosition();
@@ -385,6 +389,8 @@ namespace IngameScript
             WriteInfoLCDs($"Speed: {navigationData.Speed:F2}");
             WriteInfoLCDs($"Progress {navigationData.Progress:P1}");
             WriteInfoLCDs(navigationData.PrintObstacle());
+
+            if (DoPause()) return;
 
             switch (navigationData.CurrentState)
             {
@@ -619,9 +625,10 @@ namespace IngameScript
             WriteLogLCDs($"ParseTerminalMessage: {argument}");
 
             if (argument == "RESET") Reset();
+            else if (argument == "PAUSE") Pause();
+            else if (argument == "RESUME") Resume();
 
             else if (argument.StartsWith("GOTO")) Goto(argument);
-
             else if (argument == "APPROACH_TO_PARKING") ApproachToParking();
 
             else if (argument == "REQUEST_LOAD_TO_WAREHOUSE") RequestLoadToWarehouse();
@@ -657,6 +664,21 @@ namespace IngameScript
 
             WriteInfoLCDs("Stopped.");
         }
+        /// <summary>
+        /// Pausa todas las tareas de navegación
+        /// </summary>
+        void Pause()
+        {
+            paused = true;
+        }
+        /// <summary>
+        /// Continua todas las tareas de navegación
+        /// </summary>
+        void Resume()
+        {
+            paused = false;
+        }
+
         /// <summary>
         /// Goes to a position defined in the argument.
         /// </summary>
@@ -1262,6 +1284,20 @@ namespace IngameScript
 
             return curr / max;
         }
+
+        bool DoPause()
+        {
+            if (!paused)
+            {
+                return false;
+            }
+
+            WriteInfoLCDs("Paused...");
+
+            ResetThrust();
+            ResetGyros();
+            return true;
+        }
         #endregion
 
         void LoadFromStorage()
@@ -1278,6 +1314,7 @@ namespace IngameScript
             arrivalData.LoadFromStorage(Utils.ReadString(storageLines, "ArrivalData"));
             navigationData.LoadFromStorage(Utils.ReadString(storageLines, "NavigationData"));
             enableLogs = Utils.ReadInt(storageLines, "EnableLogs") == 1;
+            paused = Utils.ReadInt(storageLines, "Paused", 0) == 1;
         }
         void SaveToStorage()
         {
@@ -1288,7 +1325,8 @@ namespace IngameScript
                 $"AlignData={alignData.SaveToStorage()}",
                 $"ArrivalData={arrivalData.SaveToStorage()}",
                 $"NavigationData={navigationData.SaveToStorage()}",
-                $"EnableLogs={(enableLogs ? 1 : 0)}"
+                $"EnableLogs={(enableLogs ? 1 : 0)}",
+                $"Paused={(paused ? 1 : 0)}",
             };
 
             Storage = string.Join(Environment.NewLine, parts);

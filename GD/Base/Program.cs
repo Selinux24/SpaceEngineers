@@ -11,9 +11,6 @@ namespace IngameScript
     /// <summary>
     /// Base script for managing ship deliveries in Space Engineers.
     /// </summary>
-    /// <remarks>
-    /// TODO: Detect connected ship to connector group.
-    /// </remarks>
     partial class Program : MyGridProgram
     {
         #region Constants
@@ -715,7 +712,7 @@ namespace IngameScript
             {
                 if (exchange.Update(time)) continue;
 
-                //TODO: Si hay una petición de dock y no coincide con las naves conectadas, poner en wait el docking
+                //TODO: Si hay una petición de dock y no coincide con las naves conectadas, abortar y devolver la nave al parking, y ponerla en espera
             }
         }
         #endregion
