@@ -14,7 +14,7 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Mal.Mdk2.PbPackager" Version="2.1.4">
+    <PackageReference Include="Mal.Mdk2.PbPackager" Version="2.1.5">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
@@ -23,7 +23,7 @@
 
   <!--
   <ItemGroup>
-    <ProjectReference Include="..\SEMocks\SEMocks.csproj" />
+    <ProjectReference Include="..\..\SEMocks\SEMocks.csproj" />
   </ItemGroup>
   -->
 
