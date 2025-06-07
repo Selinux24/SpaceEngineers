@@ -36,7 +36,7 @@ namespace IngameScript
             var time = DateTime.Now - lastQuery;
             if (time < QueryInterval)
             {
-                Echo($"Waiting for next query: {QueryInterval - time}");
+                Echo($"Waiting for next query: {QueryInterval - time:hh\\:mm\\:ss}");
                 return;
             }
             lastQuery = DateTime.Now;
