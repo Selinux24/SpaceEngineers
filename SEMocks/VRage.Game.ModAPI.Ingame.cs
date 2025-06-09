@@ -11,7 +11,9 @@ namespace VRage.Game.ModAPI.Ingame
     {
         MyFixedPoint MaxVolume { get; }
         MyFixedPoint CurrentVolume { get; }
+        int ItemCount { get; set; }
 
+        MyInventoryItem? GetItemAt(int index);
         void GetItems(List<MyInventoryItem> itemsSalida);
         bool IsConnectedTo(IMyInventory dstInv);
         bool TransferItemTo(IMyInventory invSalida, MyInventoryItem item, MyFixedPoint aMover);
