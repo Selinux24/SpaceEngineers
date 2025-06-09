@@ -22,6 +22,26 @@ namespace IngameScript
         {
             return $"{v.X}{VariablePartSep}{v.Y}{VariablePartSep}{v.Z}";
         }
+        public static string VectorListToStr(List<Vector3D> list)
+        {
+            return string.Join($"{VariableSep}", list.Select(VectorToStr));
+        }
+        public static string DistanceToStr(double distance)
+        {
+            if(distance < 1000)
+            {
+                return $"{distance:0.00}m";
+            }
+            else if (distance < 1000000)
+            {
+                return $"{distance / 1000:0.00}km";
+            }
+            else
+            {
+                return $"{distance / 1000:0.0}km";
+            }
+        }
+
         public static Vector3D StrToVector(string input)
         {
             var trimmed = input.Split(VariablePartSep);
@@ -30,10 +50,6 @@ namespace IngameScript
                 double.Parse(trimmed[1]),
                 double.Parse(trimmed[2])
             );
-        }
-        public static string VectorListToStr(List<Vector3D> list)
-        {
-            return string.Join($"{VariableSep}", list.Select(VectorToStr));
         }
         public static List<Vector3D> StrToVectorList(string data)
         {
@@ -51,21 +67,6 @@ namespace IngameScript
             }
 
             return res;
-        }
-        public static string DistanceToStr(double distance)
-        {
-            if(distance < 1000)
-            {
-                return $"{distance:0.00}m";
-            }
-            else if (distance < 1000000)
-            {
-                return $"{distance / 1000:0.00}km";
-            }
-            else
-            {
-                return $"{distance / 1000:0.0}km";
-            }
         }
 
         public static string ReadString(string[] lines, string name, string defaultValue = "")
