@@ -8,6 +8,8 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
+        const string WildcardLCDs = "[EMITTER]";
+
         readonly IMyLaserAntenna antenna;
         readonly IMyTimerBlock timerSend;
         readonly string gpsReceptor;
@@ -79,9 +81,11 @@ namespace IngameScript
                 return;
             }
 
+            var infoLCDs = GetBlocksOfType<IMyTextPanel>(WildcardLCDs);
+
             if (antenna.Status != MyLaserAntennaStatus.Connected)
             {
-                Echo($"{antenna.Status} Connecting to GPS...");
+                WriteInfoLCDs(infoLCDs, $"{antenna.Status} Connecting to GPS...");
                 if (antenna.Status != MyLaserAntennaStatus.SearchingTargetForAntenna && antenna.Status != MyLaserAntennaStatus.RotatingToTarget && antenna.Status != MyLaserAntennaStatus.Connecting)
                 {
                     antenna.Enabled = true;
@@ -94,7 +98,7 @@ namespace IngameScript
             timerSend.StartCountdown();
             sending = false;
             Runtime.UpdateFrequency = UpdateFrequency.None;
-            Echo("Send completed.");
+            WriteInfoLCDs(infoLCDs, "Send completed.");
         }
 
         T GetBlockWithName<T>(string name) where T : class, IMyTerminalBlock
@@ -103,6 +107,23 @@ namespace IngameScript
             GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && b.CustomName.Contains(name));
             return blocks.FirstOrDefault();
         }
+        List<T> GetBlocksOfType<T>(string filter) where T : class, IMyTerminalBlock
+        {
+            var blocks = new List<T>();
+            GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && b.CustomName.Contains(filter));
+            return blocks;
+        }
+        void WriteInfoLCDs(List<IMyTextPanel> lcds, string text, bool append = true)
+        {
+            Echo(text);
+
+            foreach (var lcd in lcds)
+            {
+                lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                lcd.WriteText(text + Environment.NewLine, append);
+            }
+        }
+
         static string ReadConfig(string customData, string name)
         {
             string[] lines = customData.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);

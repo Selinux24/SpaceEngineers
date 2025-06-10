@@ -9,6 +9,8 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
+        const string WildcardLCDs = "[INV]";
+
         readonly TimeSpan QueryInterval = TimeSpan.FromMinutes(10);
 
         DateTime lastQuery = DateTime.MinValue;
@@ -41,31 +43,35 @@ namespace IngameScript
             }
             lastQuery = DateTime.Now;
 
+            var infoLCDs = GetBlocksOfType<IMyTextPanel>(WildcardLCDs);
+
+            WriteInfoLCDs(infoLCDs, "Inventory Monitor", false);
+
             string channel = ReadConfig(Me.CustomData, "Channel");
             if (string.IsNullOrWhiteSpace(channel))
             {
-                Echo("Channel not set.");
+                WriteInfoLCDs(infoLCDs, "Channel not set.");
                 return;
             }
 
             string cargoContainerName = ReadConfig(Me.CustomData, "CargoContainerName");
             if (string.IsNullOrWhiteSpace(cargoContainerName))
             {
-                Echo("CargoContainerName not set.");
+                WriteInfoLCDs(infoLCDs, "CargoContainerName not set.");
                 return;
             }
 
             string inventory = ReadConfig(Me.CustomData, "Inventory");
             if (string.IsNullOrWhiteSpace(inventory))
             {
-                Echo("Inventory not set.");
+                WriteInfoLCDs(infoLCDs, "Inventory not set.");
                 return;
             }
 
             var cargoContainers = GetBlocksOfType<IMyCargoContainer>(cargoContainerName);
             if (cargoContainers.Count == 0)
             {
-                Echo("Cargo Containers Not Found.");
+                WriteInfoLCDs(infoLCDs, "Cargo Containers Not Found.");
                 return;
             }
 
@@ -77,7 +83,8 @@ namespace IngameScript
             if (message.Length > 0)
             {
                 IGC.SendBroadcastMessage(channel, message.ToString());
-                Echo($"Sending from {channel}: {message}");
+                WriteInfoLCDs(infoLCDs, $"Sending from {channel}");
+                WriteInfoLCDs(infoLCDs, message);
             }
         }
 
@@ -86,6 +93,16 @@ namespace IngameScript
             var blocks = new List<T>();
             GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && b.CustomName.Contains(name));
             return blocks;
+        }
+        void WriteInfoLCDs(List<IMyTextPanel> lcds, string text, bool append = true)
+        {
+            Echo(text);
+
+            foreach (var lcd in lcds)
+            {
+                lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                lcd.WriteText(text + Environment.NewLine, append);
+            }
         }
 
         static string ReadConfig(string customData, string name)

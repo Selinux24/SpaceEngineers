@@ -10,14 +10,16 @@ namespace IngameScript
     partial class Program : MyGridProgram
     {
         const string MessageCallback = "InventorySystem";
+        const string WildcardLCDs = "[INV]";
 
         readonly IMyBroadcastListener bl;
+        readonly string channel;
 
         public Program()
         {
             if (string.IsNullOrWhiteSpace(Me.CustomData))
             {
-                Me.CustomData = 
+                Me.CustomData =
                     "Channel=name\n" +
                     "OutputCargo=name\n" +
                     "InventoryCargo=name\n" +
@@ -27,7 +29,7 @@ namespace IngameScript
                 return;
             }
 
-            string channel = ReadConfig(Me.CustomData, "Channel");
+            channel = ReadConfig(Me.CustomData, "Channel");
             if (string.IsNullOrWhiteSpace(channel))
             {
                 Echo("Channel not set.");
@@ -49,51 +51,33 @@ namespace IngameScript
             while (bl.HasPendingMessage)
             {
                 var msg = bl.AcceptMessage();
-                var requestedItems = ReadItems(msg.Data.ToString());
-
-                Prepare(requestedItems);
+                Prepare(msg.Data.ToString());
             }
         }
-        Dictionary<string, int> ReadItems(string data)
+        void Prepare(string data)
         {
-            Dictionary<string, int> requestedItems = new Dictionary<string, int>();
+            var infoLCDs = GetBlocksOfType<IMyTextPanel>(WildcardLCDs);
 
-            var parts = data.Split(';');
-            foreach (var part in parts)
-            {
-                string[] items = part.Split('=');
-                if (items.Length != 2)
-                {
-                    continue;
-                }
+            WriteInfoLCDs(infoLCDs, $"Inventory Listener - {channel}", false);
 
-                string item = items[0].Trim();
-                int amount = (int)decimal.Parse(items[1].Trim());
-                requestedItems.Add(item, amount);
-            }
-
-            return requestedItems;
-        }
-        void Prepare(Dictionary<string, int> requestedItems)
-        {
             string outputCargoName = ReadConfig(Me.CustomData, "OutputCargo");
             if (string.IsNullOrWhiteSpace(outputCargoName))
             {
-                Echo("OutputCargo name not set.");
+                WriteInfoLCDs(infoLCDs, "OutputCargo name not set.");
                 return;
             }
 
             string inventoryCargoName = ReadConfig(Me.CustomData, "InventoryCargo");
             if (string.IsNullOrWhiteSpace(inventoryCargoName))
             {
-                Echo("InventoryCargo name not set.");
+                WriteInfoLCDs(infoLCDs, "InventoryCargo name not set.");
                 return;
             }
 
             string timerName = ReadConfig(Me.CustomData, "InventoryTimer");
             if (string.IsNullOrWhiteSpace(timerName))
             {
-                Echo("InventoryTimer name not set.");
+                WriteInfoLCDs(infoLCDs, "InventoryTimer name not set.");
                 return;
             }
 
@@ -101,7 +85,7 @@ namespace IngameScript
             var outputCargo = GetBlockWithName<IMyCargoContainer>(outputCargoName);
             if (outputCargo == null)
             {
-                Echo("Output cargo not found.");
+                WriteInfoLCDs(infoLCDs, $"No output cargo found with name {outputCargoName}");
                 return;
             }
 
@@ -109,10 +93,11 @@ namespace IngameScript
             var warehouseCargos = GetBlocksOfType<IMyCargoContainer>(inventoryCargoName);
             if (warehouseCargos.Count == 0)
             {
-                Echo("No warehouse cargo containers found.");
+                WriteInfoLCDs(infoLCDs, $"No warehouse cargo containers found with name {inventoryCargoName}");
                 return;
             }
 
+            var requestedItems = ReadItems(data);
             var outputInv = outputCargo.GetInventory();
             var orderItems = GetItemsFromCargo(outputInv);
 
@@ -149,22 +134,42 @@ namespace IngameScript
                         if (moved)
                         {
                             itemRemaining -= (int)toTransfer;
-                            Echo($"Transfered {(int)toTransfer} of {item.Type}");
+                            WriteInfoLCDs(infoLCDs, $"Transfered {(int)toTransfer} of {item.Type}");
                         }
                     }
                 }
 
-                Echo($"{itemType}: {(itemRemaining > 0 ? $"Missing {itemRemaining}" : "Transfered")}");
+                WriteInfoLCDs(infoLCDs, $"{itemType}: {(itemRemaining > 0 ? $"Missing {itemRemaining}" : "Transfered")}");
             }
 
-            GetBlockWithName<IMyTimerBlock>(timerName).Trigger();
-            Echo($"{timerName} triggered");
+            var timer = GetBlockWithName<IMyTimerBlock>(timerName);
+            if (timer == null)
+            {
+                WriteInfoLCDs(infoLCDs, $"No timer found with name {timerName}");
+            }
+
+            timer.Trigger();
+            WriteInfoLCDs(infoLCDs, $"{timerName} triggered");
         }
-        List<T> GetBlocksOfType<T>(string name) where T : class, IMyTerminalBlock
+        Dictionary<string, int> ReadItems(string data)
         {
-            var blocks = new List<T>();
-            GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && b.CustomName.Contains(name));
-            return blocks;
+            Dictionary<string, int> requestedItems = new Dictionary<string, int>();
+
+            var parts = data.Split(';');
+            foreach (var part in parts)
+            {
+                string[] items = part.Split('=');
+                if (items.Length != 2)
+                {
+                    continue;
+                }
+
+                string item = items[0].Trim();
+                int amount = (int)decimal.Parse(items[1].Trim());
+                requestedItems.Add(item, amount);
+            }
+
+            return requestedItems;
         }
         List<MyInventoryItem> GetItemsFromCargo(IMyInventory cargoInv)
         {
@@ -179,6 +184,23 @@ namespace IngameScript
             GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && b.CustomName == name);
             return blocks.FirstOrDefault();
         }
+        List<T> GetBlocksOfType<T>(string filter) where T : class, IMyTerminalBlock
+        {
+            var blocks = new List<T>();
+            GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && b.CustomName.Contains(filter));
+            return blocks;
+        }
+        void WriteInfoLCDs(List<IMyTextPanel> lcds, string text, bool append = true)
+        {
+            Echo(text);
+
+            foreach (var lcd in lcds)
+            {
+                lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                lcd.WriteText(text + Environment.NewLine, append);
+            }
+        }
+
         static string ReadConfig(string customData, string name)
         {
             string[] config = customData.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
