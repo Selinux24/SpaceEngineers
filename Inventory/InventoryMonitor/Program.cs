@@ -115,31 +115,36 @@ namespace IngameScript
         }
         static Dictionary<string, MyFixedPoint> GetCurrentItemsInStores(List<IMyCargoContainer> cargos)
         {
-            Dictionary<string, MyFixedPoint> current = new Dictionary<string, MyFixedPoint>();
+            var list = new Dictionary<string, MyFixedPoint>();
+
             foreach (var cargo in cargos)
             {
-                var inventory = cargo.GetInventory();
-                for (int i = 0; i < inventory.ItemCount; i++)
+                var inv = cargo.GetInventory();
+
+                for (int i = 0; i < inv.ItemCount; i++)
                 {
-                    var item = inventory.GetItemAt(i).Value;
+                    var item = inv.GetItemAt(i).Value;
                     string t = item.Type.SubtypeId;
-                    if (!current.ContainsKey(t)) current[t] = 0;
-                    current[t] += item.Amount;
+                    if (!list.ContainsKey(t))
+                    {
+                        list[t] = 0;
+                    }
+                    list[t] += item.Amount;
                 }
             }
 
-            return current;
+            return list;
         }
-        static string WriteMessage(Dictionary<string, int> required, Dictionary<string, MyFixedPoint> current)
+        static string WriteMessage(Dictionary<string, int> required, Dictionary<string, MyFixedPoint> inventory)
         {
             StringBuilder message = new StringBuilder();
 
             foreach (var req in required)
             {
-                var c = current.ContainsKey(req.Key) ? current[req.Key] : 0;
-                if (c < req.Value)
+                int c = req.Value - (inventory.ContainsKey(req.Key) ? (int)inventory[req.Key] : 0);
+                if (c > 0)
                 {
-                    message.Append($"{req.Key}={req.Value - c};");
+                    message.Append($"{req.Key}={c};");
                 }
             }
 
