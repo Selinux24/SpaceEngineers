@@ -19,7 +19,7 @@ namespace IngameScript
         public Vector3D DirectionToTarget { get; private set; }
         public double DistanceToTarget { get; private set; }
         public double Speed { get; private set; } = 0;
-        public TimeSpan EstimatedArrival => TimeSpan.FromSeconds(DistanceToTarget / Speed);
+        public TimeSpan EstimatedArrival => Speed > 0 ? TimeSpan.FromSeconds(DistanceToTarget / Speed) : TimeSpan.Zero;
         public double TotalDistance => Vector3D.Distance(Origin, Destination);
         public double Progress => DistanceToTarget > 0 ? 1 - (DistanceToTarget / TotalDistance) : 1;
 

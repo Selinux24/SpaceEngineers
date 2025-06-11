@@ -656,6 +656,8 @@ namespace IngameScript
         {
             Storage = "";
 
+            status = ShipStatus.Idle;
+
             deliveryData.Clear();
             alignData.Clear();
             arrivalData.Clear();
@@ -663,10 +665,10 @@ namespace IngameScript
 
             remotePilot.SetAutoPilotEnabled(false);
             remotePilot.ClearWaypoints();
+            remoteAlign.SetAutoPilotEnabled(false);
+            remoteAlign.ClearWaypoints();
             ResetGyros();
             ResetThrust();
-
-            status = ShipStatus.Idle;
 
             WriteInfoLCDs("Stopped.");
         }
