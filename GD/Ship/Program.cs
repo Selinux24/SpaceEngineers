@@ -437,7 +437,7 @@ namespace IngameScript
         }
         void Accelerate()
         {
-            if (navigationData.IsObstacleAhead(cameraPilot, CrusingCollisionDetectRange))
+            if (navigationData.IsObstacleAhead(cameraPilot, CrusingCollisionDetectRange, remotePilot.GetShipVelocities().LinearVelocity))
             {
                 BroadcastStatus("Obstacle detected. Avoiding...");
                 navigationData.CurrentState = NavigationStatus.Avoiding;
@@ -471,7 +471,7 @@ namespace IngameScript
         }
         void Cruise()
         {
-            if (navigationData.IsObstacleAhead(cameraPilot, CrusingCollisionDetectRange))
+            if (navigationData.IsObstacleAhead(cameraPilot, CrusingCollisionDetectRange, remotePilot.GetShipVelocities().LinearVelocity))
             {
                 BroadcastStatus("Obstacle detected. Avoiding...");
                 navigationData.CurrentState = NavigationStatus.Avoiding;

@@ -59,12 +59,15 @@ namespace IngameScript
             Speed = speed;
         }
 
-        public bool IsObstacleAhead(IMyCameraBlock camera, double collisionDetectRange)
+        public bool IsObstacleAhead(IMyCameraBlock camera, double collisionDetectRange, Vector3D velocity)
         {
             camera.EnableRaycast = true;
-            if (camera.CanScan(collisionDetectRange))
+
+            MatrixD cameraMatrixInv = MatrixD.Invert(camera.WorldMatrix);
+            Vector3D localDirection = Vector3D.TransformNormal(Vector3D.Normalize(velocity), cameraMatrixInv);
+            if (camera.CanScan(collisionDetectRange, localDirection))
             {
-                lastHit = camera.Raycast(collisionDetectRange);
+                lastHit = camera.Raycast(collisionDetectRange, localDirection);
                 return !lastHit.IsEmpty() && Vector3D.Distance(lastHit.HitPosition.Value, camera.GetPosition()) <= collisionDetectRange;
             }
 
