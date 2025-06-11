@@ -41,7 +41,7 @@ namespace IngameScript
         const double GyrosThr = 0.001; //Precisión de alineación
         const double GyrosSpeed = 2f; //Velocidad de los giroscopios
 
-        const double ExchangeMaxApproachingSpeed = 15; // Velocidad máxima de aproximación al conector
+        const double ExchangeMaxApproachingSpeed = 5; // Velocidad máxima de aproximación al conector
         const double ExchangeDistanceThr = 200.0; //Precisión de aproximación al primer punto del conector
         const double ExchangeWaypointDistanceThr = 0.5; //Precisión de aproximación entre waypoints
 
@@ -291,7 +291,13 @@ namespace IngameScript
 
             if (DoPause()) return;
 
-            AlignToVectors(alignData.TargetForward, alignData.TargetUp, GyrosThr);
+            bool corrected = AlignToVectors(alignData.TargetForward, alignData.TargetUp, GyrosThr);
+            if (corrected)
+            {
+                //Wait until aligned
+                ResetThrust();
+                return;
+            }
 
             var currentPos = connectorA.GetPosition();
             var currentVelocity = remoteAlign.GetShipVelocities().LinearVelocity;
@@ -1005,7 +1011,7 @@ namespace IngameScript
         void ApproachToExchange()
         {
             //Obtener la distancia al primer punto de aproximación
-            var shipPosition = remotePilot.GetPosition();
+            var shipPosition = remoteAlign.GetPosition();
             var wp = deliveryData.Waypoints[0];
             double distance = Vector3D.Distance(shipPosition, wp);
             if (distance > 500)
@@ -1045,14 +1051,15 @@ namespace IngameScript
         {
             arrivalData.Initialize(destination, ExchangeDistanceThr, onArrival);
 
-            remotePilot.ClearWaypoints();
-            remotePilot.AddWaypoint(destination, destinationName);
-            remotePilot.SetCollisionAvoidance(true);
-            remotePilot.WaitForFreeWay = true;
-            remotePilot.FlightMode = FlightMode.OneWay;
-            remotePilot.SpeedLimit = (float)velocity;
+            timerPilot.Trigger();
 
-            timerPilot.ApplyAction("Start");
+            remoteAlign.ClearWaypoints();
+            remoteAlign.AddWaypoint(destination, destinationName);
+            remoteAlign.SetCollisionAvoidance(true);
+            remoteAlign.WaitForFreeWay = false;
+            remoteAlign.FlightMode = FlightMode.OneWay;
+            remoteAlign.SpeedLimit = (float)velocity;
+            remoteAlign.SetAutoPilotEnabled(true);
         }
         /// <summary>
         /// Configura el viaje largo
@@ -1211,7 +1218,7 @@ namespace IngameScript
 
             return false;
         }
-        void AlignToVectors(Vector3D targetForward, Vector3D targetUp, double thr)
+        bool AlignToVectors(Vector3D targetForward, Vector3D targetUp, double thr)
         {
             var shipMatrix = remoteAlign.WorldMatrix;
             var shipForward = shipMatrix.Forward;
@@ -1225,15 +1232,17 @@ namespace IngameScript
             {
                 ResetGyros();
                 WriteInfoLCDs("Aligned.");
-                return;
+                return false;
             }
             WriteInfoLCDs("Aligning...");
 
+            bool corrected = false;
             if (angleFW > thr)
             {
                 var rotationAxisFW = Vector3D.Cross(shipForward, targetForward);
                 if (rotationAxisFW.Length() <= 0.001) rotationAxisFW = new Vector3D(0, 1, 0);
                 ApplyGyroOverride(rotationAxisFW);
+                corrected = true;
             }
 
             if (angleUP > thr)
@@ -1241,7 +1250,10 @@ namespace IngameScript
                 var rotationAxisUP = Vector3D.Cross(shipUp, targetUp);
                 if (rotationAxisUP.Length() <= 0.001) rotationAxisUP = new Vector3D(1, 0, 0);
                 ApplyGyroOverride(rotationAxisUP);
+                corrected = true;
             }
+
+            return corrected;
         }
         void ApplyGyroOverride(Vector3D axis)
         {

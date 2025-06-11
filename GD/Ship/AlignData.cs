@@ -6,9 +6,9 @@ namespace IngameScript
 {
     class AlignData
     {
-        const double maxApproachSpeed = 25.0; //Velocidad máxima de llegada
-        const double maxApproachSpeedAprox = 15.0; //Velocidad máxima de aproximación
-        const double maxApproachSpeedLocking = 5.0; //Velocidad máxima en el último waypoint
+        const double maxApproachSpeed = 10.0; //Velocidad máxima de llegada
+        const double maxApproachSpeedAprox = 5.0; //Velocidad máxima de aproximación
+        const double maxApproachSpeedLocking = 1.0; //Velocidad máxima en el último waypoint
         const double slowdownDistance = 50.0; //Distancia de frenada
 
         public readonly List<Vector3D> Waypoints = new List<Vector3D>();
