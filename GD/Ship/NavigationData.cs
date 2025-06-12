@@ -68,7 +68,10 @@ namespace IngameScript
             if (camera.CanScan(collisionDetectRange, localDirection))
             {
                 lastHit = camera.Raycast(collisionDetectRange, localDirection);
-                return !lastHit.IsEmpty() && Vector3D.Distance(lastHit.HitPosition.Value, camera.GetPosition()) <= collisionDetectRange;
+                return 
+                    !lastHit.IsEmpty() && 
+                    lastHit.Type != MyDetectedEntityType.Planet && 
+                    Vector3D.Distance(lastHit.HitPosition.Value, camera.GetPosition()) <= collisionDetectRange;
             }
 
             return false;

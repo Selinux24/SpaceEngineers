@@ -313,6 +313,7 @@ namespace IngameScript
             else if (argument == "FAKE_ORDER") FakeOrder();
             else if (argument.StartsWith("SHIP_LOADED")) ShipLoaded(argument);
             else if (argument.StartsWith("SET_ORDER")) SetOrder(argument);
+            else if (argument.StartsWith("REQUEST_DOCK")) RequestDock(argument);
         }
         /// <summary>
         /// Resets the state
@@ -453,6 +454,25 @@ namespace IngameScript
             };
 
             orders.Add(order);
+        }
+        /// <summary>
+        /// NEW - Requests docking of a ship to the base
+        /// </summary>
+        void RequestDock(string argument)
+        {
+            string[] lines = argument.Split('|');
+
+            string ship = Utils.ReadString(lines, "Ship");
+
+            ExchangeRequest req = new ExchangeRequest
+            {
+                From = ship,
+                OrderId = 0, // No order for docking
+                Idle = true,
+                Task = ExchangeTasks.None,
+            };
+
+            exchangeRequests.Add(req);
         }
         #endregion
 
