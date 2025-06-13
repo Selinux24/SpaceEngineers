@@ -18,25 +18,22 @@ namespace IngameScript
     partial class Program : MyGridProgram
     {
         #region Constants
-        const string DeliveryChannel = "SHIPS_DELIVERY";
-        const string DistressChannel = "SHIPS_STATUS";
-
         const string WildcardShipId = "[shipId]";
         const string WildcardShipInfo = "[DELIVERY_INFO]";
         const string WildcardLogLCDs = "[DELIVERY_LOG]";
 
-        const string ShipTimerPilot = "HT Automaton Timer Block Pilot";
-        const string ShipTimerLock = "HT Automaton Timer Block Locking";
-        const string ShipTimerUnlock = "HT Automaton Timer Block Unlocking";
-        const string ShipTimerLoad = "HT Automaton Timer Block Load";
-        const string ShipTimerUnload = "HT Automaton Timer Block Unload";
-        const string ShipTimerWaiting = "HT Automaton Timer Block Waiting";
-        const string ShipRemoteControlPilot = "HT Remote Control Pilot";
-        const string ShipCameraPilot = "HT Camera Pilot";
-        const string ShipRemoteControlAlign = "HT Remote Control Locking";
-        const string ShipConnectorA = "HT Connector A";
-        const string ShipBeaconName = "HT Distress Beacon";
-        const string ShipAntennaName = "HT Compact Antenna";
+        const string ShipTimerPilot = "Timer Block Pilot";
+        const string ShipTimerLock = "Timer Block Locking";
+        const string ShipTimerUnlock = "Timer Block Unlocking";
+        const string ShipTimerLoad = "Timer Block Load";
+        const string ShipTimerUnload = "Timer Block Unload";
+        const string ShipTimerWaiting = "Timer Block Waiting";
+        const string ShipRemoteControlPilot = "Remote Control Pilot";
+        const string ShipCameraPilot = "Camera Pilot";
+        const string ShipRemoteControlAlign = "Remote Control Locking";
+        const string ShipConnectorA = "Connector A";
+        const string ShipBeaconName = "Distress Beacon";
+        const string ShipAntennaName = "Compact Antenna";
 
         const double GyrosThr = 0.001; //Precisión de alineación
         const double GyrosSpeed = 2f; //Velocidad de los giroscopios
@@ -91,6 +88,7 @@ namespace IngameScript
         #endregion
 
         readonly string shipId;
+        readonly string channel;
 
         ShipStatus status = ShipStatus.Idle;
         readonly DeliveryData deliveryData = new DeliveryData();
@@ -113,6 +111,21 @@ namespace IngameScript
 
         public Program()
         {
+            if (string.IsNullOrWhiteSpace(Me.CustomData))
+            {
+                Me.CustomData = "Channel=name";
+
+                Echo("CustomData not set.");
+                return;
+            }
+
+            channel = Utils.ReadConfig(Me.CustomData, "Channel");
+            if (string.IsNullOrWhiteSpace(channel))
+            {
+                Echo("Channel name not set.");
+                return;
+            }
+
             shipId = Me.CubeGrid.CustomName;
 
             timerPilot = GetBlockWithName<IMyTimerBlock>(ShipTimerPilot);
@@ -210,8 +223,8 @@ namespace IngameScript
 
             WriteLCDs(WildcardShipId, shipId);
 
-            bl = IGC.RegisterBroadcastListener(DeliveryChannel);
-            Echo($"Listening in channel {DeliveryChannel}");
+            bl = IGC.RegisterBroadcastListener(channel);
+            Echo($"Listening in channel {channel}");
 
             LoadFromStorage();
 
@@ -227,7 +240,7 @@ namespace IngameScript
 
         public void Main(string argument, UpdateType updateSource)
         {
-            WriteInfoLCDs(shipId, false);
+            WriteInfoLCDs($"{shipId} in channel {channel}", false);
             WriteInfoLCDs($"{CalculateCargoPercentage():P1} cargo.");
             if (!string.IsNullOrEmpty(argument))
             {
@@ -1147,13 +1160,13 @@ namespace IngameScript
 
             WriteLogLCDs($"BroadcastMessage: {message}");
 
-            IGC.SendBroadcastMessage(DeliveryChannel, message);
+            IGC.SendBroadcastMessage(channel, message);
         }
         void BroadcastStatus(string message)
         {
             WriteLogLCDs($"BroadcastStatus: {message}");
 
-            IGC.SendBroadcastMessage(DistressChannel, message);
+            IGC.SendBroadcastMessage(channel, message);
         }
 
         void ThrustToTarget(double maxSpeed)

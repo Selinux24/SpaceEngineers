@@ -14,7 +14,6 @@ namespace IngameScript
     partial class Program : MyGridProgram
     {
         #region Constants
-        const string channel = "SHIPS_DELIVERY";
         const string baseCamera = "Camera";
         const string baseWarehouses = "Warehouse";
         const string baseDataLCDs = "[DELIVERY_DATA]";
@@ -22,7 +21,7 @@ namespace IngameScript
 
         const string exchangeGroupName = @"GR_\w+";
         const string exchangeUpperConnector = "Input";
-        const string exchangeLowerConnector = "Ouput";
+        const string exchangeLowerConnector = "Output";
         const string exchangeSorterInput = "Input";
         const string exchangeSorterOutput = "Output";
         const string exchangeTimerPrepare = "Prepare";
@@ -45,6 +44,7 @@ namespace IngameScript
         readonly StringBuilder sbLog = new StringBuilder();
 
         readonly string baseId;
+        readonly string channel;
         readonly string baseParking;
         readonly System.Text.RegularExpressions.Regex exchangesRegex = new System.Text.RegularExpressions.Regex(exchangeGroupName);
         readonly List<ExchangeGroup> exchanges = new List<ExchangeGroup>();
@@ -68,8 +68,30 @@ namespace IngameScript
 
         public Program()
         {
+            if (string.IsNullOrWhiteSpace(Me.CustomData))
+            {
+                Me.CustomData =
+                    "Channel=name\n" +
+                    "Parking=x:y:z\n";
+
+                Echo("CustomData not set.");
+                return;
+            }
+
+            channel = Utils.ReadConfig(Me.CustomData, "Channel");
+            if (string.IsNullOrWhiteSpace(channel))
+            {
+                Echo("Channel name not set.");
+                return;
+            }
+            baseParking = Utils.ReadConfig(Me.CustomData, "Parking");
+            if (string.IsNullOrWhiteSpace(baseParking))
+            {
+                Echo("Parking position not set.");
+                return;
+            }
+
             baseId = Me.CubeGrid.CustomName;
-            baseParking = Me.CustomData;
 
             InitializeExchangeGroups();
 
@@ -89,7 +111,7 @@ namespace IngameScript
             WriteLCDs("[baseId]", baseId);
 
             bl = IGC.RegisterBroadcastListener(channel);
-            Echo($"Working. Listening in channel: {channel}");
+            Echo($"{baseId} in channel {channel}");
 
             Runtime.UpdateFrequency = UpdateFrequency.Update100; // Ejecuta cada ~1.6s
         }
@@ -119,7 +141,7 @@ namespace IngameScript
             UpdateBaseState();
 
             sbData.Clear();
-            sbData.AppendLine($"Listening in channel: {channel}");
+            sbData.AppendLine($"{baseId} in channel {channel}");
             PrintExchanges();
             PrintShipStatus();
             PrintOrders();
@@ -832,6 +854,7 @@ namespace IngameScript
         {
             if (!showExchanges) return;
 
+            sbData.AppendLine();
             sbData.AppendLine("EXCHANGE STATUS");
 
             if (exchanges.Count == 0)
@@ -842,14 +865,17 @@ namespace IngameScript
 
             foreach (var exchange in exchanges)
             {
-                sbData.AppendLine($"Exchange: {exchange.Name} Docked ship: {exchange.DockedShipName ?? "Free"}");
-                sbData.AppendLine($"Connectors: {exchange.UpperConnector?.Status} - {exchange.LowerConnector?.Status}");
+                var upStatus = exchange.UpperConnector?.Status.ToString() ?? "None";
+                var lowStatus = exchange.LowerConnector?.Status.ToString() ?? "None";
+
+                sbData.AppendLine($"Exchange {exchange.Name} - {exchange.DockedShipName ?? "Free"}. A {upStatus} - B {lowStatus}");
             }
         }
         void PrintShipStatus()
         {
             if (!showShips) return;
 
+            sbData.AppendLine();
             sbData.AppendLine("SHIPS STATUS");
 
             if (ships.Count == 0)
@@ -860,28 +886,31 @@ namespace IngameScript
 
             foreach (var ship in ships)
             {
-                sbData.AppendLine($"{ship.Name} Status: {ship.ShipStatus}.");
-                sbData.AppendLine($"Last known position: {Utils.VectorToStr(ship.Position)}. Last update: {(DateTime.Now - ship.UpdateTime).TotalSeconds:F0}secs");
+                sbData.AppendLine($"+ {ship.Name} {ship.ShipStatus}. Last update: {(DateTime.Now - ship.UpdateTime).TotalSeconds:F0}secs");
                 if (ship.ShipStatus != ShipStatus.RouteToCustomer && ship.ShipStatus != ShipStatus.RouteToWarehouse) continue;
 
                 string origin = ship.ShipStatus == ShipStatus.RouteToCustomer ? ship.Warehouse : ship.Customer;
                 string destination = ship.ShipStatus == ShipStatus.RouteToCustomer ? ship.Customer : ship.Warehouse;
-                sbData.AppendLine($"On route from [{origin}] to [{destination}]");
+                sbData.AppendLine($"  - On route from [{origin}] to [{destination}]");
 
                 Vector3D originPosition = ship.ShipStatus == ShipStatus.RouteToCustomer ? ship.WarehousePosition : ship.CustomerPosition;
                 Vector3D destinationPosition = ship.ShipStatus == ShipStatus.RouteToCustomer ? ship.CustomerPosition : ship.WarehousePosition;
                 double distanceToOrigin = Vector3D.Distance(ship.Position, originPosition);
                 double distanceToDestination = Vector3D.Distance(ship.Position, destinationPosition);
                 TimeSpan time = TimeSpan.FromSeconds(distanceToDestination / ship.Speed);
-                sbData.AppendLine($"Distance from origin: {Utils.DistanceToStr(distanceToOrigin)}.");
-                sbData.AppendLine($"Distance to destination: {Utils.DistanceToStr(distanceToDestination)}.");
-                sbData.AppendLine($"Estimated arrival: {time}.");
+                sbData.AppendLine($"  - Distance from origin: {Utils.DistanceToStr(distanceToOrigin)}.");
+                sbData.AppendLine($"  - Distance to destination: {Utils.DistanceToStr(distanceToDestination)}.");
+                sbData.AppendLine($"  - Estimated arrival: {time}.");
             }
+
+            //Remove ships that have not been updated in a while
+            ships.RemoveAll(s => (DateTime.Now - s.UpdateTime).TotalMinutes > 5);
         }
         void PrintOrders()
         {
             if (!showOrders) return;
 
+            sbData.AppendLine();
             sbData.AppendLine("ORDERS STATUS");
 
             if (orders.Count == 0)
@@ -899,6 +928,7 @@ namespace IngameScript
         {
             if (!showExchangeRequests) return;
 
+            sbData.AppendLine();
             sbData.AppendLine("RECEPTIONS STATUS");
 
             if (exchangeRequests.Count == 0)

@@ -133,7 +133,7 @@ namespace IngameScript
 
                     if (!srcInv.IsConnectedTo(dstInv))
                     {
-                        sb.AppendLine($"## Los cargos {srcCargo.CustomName} y {Cargo.CustomName} no están conectados.");
+                        sb.AppendLine($"## {srcCargo.CustomName} & {Cargo.CustomName} not connected.");
                         break;
                     }
 
