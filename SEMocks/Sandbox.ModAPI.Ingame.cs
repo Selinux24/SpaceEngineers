@@ -27,14 +27,28 @@ namespace Sandbox.ModAPI.Ingame
     {
         public Vector3D? HitPosition { get; set; }
         public string Name { get; set; }
-        public string Type { get; set; }
         public BoundingBoxD BoundingBox { get; set; }
         public Vector3D Position { get; set; }
+        public MyDetectedEntityType Type { get; set; }
 
         public bool IsEmpty()
         {
             throw new NotImplementedException();
         }
+    }
+    public enum MyDetectedEntityType
+    {
+        Asteroid,
+        CharacterHuman,
+        CharacterOther,
+        FloatingObject,
+        LargeGrid,
+        Meteor,
+        Missile,
+        None,
+        Planet,
+        SmallGrid,
+        Unknown,
     }
     public struct MatrixD
     {
@@ -42,6 +56,10 @@ namespace Sandbox.ModAPI.Ingame
         public Vector3D Backward { get; set; }
         public Vector3D Up { get; set; }
 
+        public static MatrixD Invert(MatrixD worldMatrix)
+        {
+            throw new NotImplementedException();
+        }
         public static MatrixD Transpose(MatrixD worldMatrix)
         {
             throw new NotImplementedException();
@@ -140,6 +158,7 @@ namespace Sandbox.ModAPI.Ingame
         MatrixD WorldMatrix { get; set; }
 
         bool CanScan(double collisionDetectRange);
+        bool CanScan(double collisionDetectRange, Vector3D localDirection);
         Vector3D GetPosition();
         MyDetectedEntityInfo Raycast(double collisionDetectRange);
         MyDetectedEntityInfo Raycast(double collisionDetectRange, Vector3D direction);
@@ -201,6 +220,6 @@ namespace Sandbox.ModAPI.Ingame
     }
     public interface IMyRadioAntenna : IMyTerminalBlock
     {
-        
+
     }
 }
