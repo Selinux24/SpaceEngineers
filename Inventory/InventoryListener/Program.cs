@@ -102,6 +102,7 @@ namespace IngameScript
             var orderItems = GetItemsFromCargo(outputInv);
 
             // Recorrer cada item solicitado
+            bool anyMoved = false;
             foreach (var reqItem in requestedItems)
             {
                 string itemType = reqItem.Key;
@@ -133,6 +134,7 @@ namespace IngameScript
                         bool moved = inv.TransferItemTo(outputInv, item, toTransfer);
                         if (moved)
                         {
+                            anyMoved = true;
                             itemRemaining -= (int)toTransfer;
                             WriteInfoLCDs(infoLCDs, $"Transfered {(int)toTransfer} of {item.Type}");
                         }
@@ -140,6 +142,12 @@ namespace IngameScript
                 }
 
                 WriteInfoLCDs(infoLCDs, $"{itemType}: {(itemRemaining > 0 ? $"Missing {itemRemaining}" : "Transfered")}");
+            }
+
+            if (!anyMoved)
+            {
+                WriteInfoLCDs(infoLCDs, "No items moved");
+                return;
             }
 
             var timer = GetBlockWithName<IMyTimerBlock>(timerName);

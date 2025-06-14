@@ -26,6 +26,14 @@ namespace IngameScript
         public Vector3D DestinationPosition;
         public string OnDestinationArrival;
 
+        public bool Active
+        {
+            get
+            {
+                return OrderId > 0;
+            }
+        }
+
         public void LoadFromStorage(string data)
         {
             string[] lines = data.Split('¬');

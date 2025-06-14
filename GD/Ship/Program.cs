@@ -833,6 +833,11 @@ namespace IngameScript
         /// </summary>
         void UnloadFinished()
         {
+            if (!deliveryData.Active)
+            {
+                return;
+            }
+
             //Aviso de descarga finalizada a base
             List<string> parts = new List<string>()
             {
