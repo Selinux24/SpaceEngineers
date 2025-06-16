@@ -122,8 +122,8 @@ namespace IngameScript
             foreach (var lcd in lcds)
             {
                 lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-                lcd.WriteText($"Inventory Monitor. {DateTime.Now:HH:mm:ss}", false);
-                lcd.WriteText(sb.ToString());
+                lcd.WriteText($"Inventory Monitor. {DateTime.Now:HH:mm:ss}" + Environment.NewLine);
+                lcd.WriteText(sb.ToString(), true);
             }
         }
 

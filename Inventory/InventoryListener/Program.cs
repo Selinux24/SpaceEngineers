@@ -17,6 +17,8 @@ namespace IngameScript
         readonly string channel;
         readonly StringBuilder sb = new StringBuilder();
 
+        DateTime lastQuery = DateTime.MinValue;
+
         public Program()
         {
             if (string.IsNullOrWhiteSpace(Me.CustomData))
@@ -42,19 +44,22 @@ namespace IngameScript
             bl = IGC.RegisterBroadcastListener(channel);
             bl.SetMessageCallback(MessageCallback);
             Echo($"Listener registered on {channel}");
+
+            Runtime.UpdateFrequency = UpdateFrequency.Update100;
+
+            Echo("Working...");
         }
 
         public void Main(string argument, UpdateType updateSource)
         {
-            if ((updateSource & UpdateType.IGC) == 0 || argument != MessageCallback)
+            if ((updateSource & UpdateType.IGC) != 0 && argument == MessageCallback)
             {
-                return;
-            }
-
-            while (bl.HasPendingMessage)
-            {
-                var msg = bl.AcceptMessage();
-                Prepare(msg.Data.ToString());
+                while (bl.HasPendingMessage)
+                {
+                    var msg = bl.AcceptMessage();
+                    Prepare(msg.Data.ToString());
+                    lastQuery = DateTime.Now;
+                }
             }
 
             string wildcard = ReadConfig(Me.CustomData, "WildcardLCDs") ?? WildcardLCDs;
@@ -225,8 +230,9 @@ namespace IngameScript
             foreach (var lcd in lcds)
             {
                 lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-                lcd.WriteText($"Inventory Listener - {channel}. {DateTime.Now:HH:mm:ss}", false);
-                lcd.WriteText(sb.ToString());
+                lcd.WriteText($"Inventory Listener - {channel}. {DateTime.Now:HH:mm:ss}" + Environment.NewLine);
+                lcd.WriteText($"Last query {DateTime.Now - lastQuery:hh\\:mm\\:ss}" + Environment.NewLine, true);
+                lcd.WriteText(sb.ToString(), true);
             }
         }
 
