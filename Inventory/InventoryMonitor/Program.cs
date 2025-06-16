@@ -11,8 +11,9 @@ namespace IngameScript
     {
         const string WildcardLCDs = "[INV]";
 
-        readonly TimeSpan QueryInterval = TimeSpan.FromMinutes(10);
+        readonly StringBuilder sb = new StringBuilder();
 
+        TimeSpan queryInterval = TimeSpan.FromMinutes(10);
         DateTime lastQuery = DateTime.MinValue;
 
         public Program()
@@ -22,7 +23,9 @@ namespace IngameScript
                 Me.CustomData =
                     "Channel=name\n" +
                     "CargoContainerName=name\n" +
-                    "Inventory=item1:quantity1;itemN:quantityN;";
+                    "QueryInterval=int\n" +
+                    "Inventory=item1:quantity1;itemN:quantityN;\n" +
+                    "WildcardLCDs=name(optional)";
 
                 Echo("CustomData not set.");
                 return;
@@ -35,43 +38,55 @@ namespace IngameScript
 
         public void Main(string argument, UpdateType updateSource)
         {
-            var time = DateTime.Now - lastQuery;
-            if (time < QueryInterval)
+            Monitorize();
+
+            string wildcard = ReadConfig(Me.CustomData, "WildcardLCDs") ?? WildcardLCDs;
+            var infoLCDs = GetBlocksOfType<IMyTextPanel>(wildcard);
+            WriteInfoLCDs(infoLCDs);
+        }
+        void Monitorize()
+        {
+            var interval = ReadConfigInt(Me.CustomData, "QueryInterval");
+            if (!interval.HasValue || interval.Value < 1)
             {
-                Echo($"Waiting for next query: {QueryInterval - time:hh\\:mm\\:ss}");
+                WriteText("QueryInterval minutes not valid. Must be a positive integer.", false);
+                return;
+            }
+            queryInterval = TimeSpan.FromMinutes(interval.Value);
+
+            var time = DateTime.Now - lastQuery;
+            if (time < queryInterval)
+            {
+                WriteText($"Waiting for next query: {queryInterval - time:hh\\:mm\\:ss}", false);
                 return;
             }
             lastQuery = DateTime.Now;
 
-            var infoLCDs = GetBlocksOfType<IMyTextPanel>(WildcardLCDs);
-
-            WriteInfoLCDs(infoLCDs, "Inventory Monitor", false);
-
             string channel = ReadConfig(Me.CustomData, "Channel");
             if (string.IsNullOrWhiteSpace(channel))
             {
-                WriteInfoLCDs(infoLCDs, "Channel not set.");
+                WriteText("Channel not set.", false);
                 return;
             }
 
             string cargoContainerName = ReadConfig(Me.CustomData, "CargoContainerName");
             if (string.IsNullOrWhiteSpace(cargoContainerName))
             {
-                WriteInfoLCDs(infoLCDs, "CargoContainerName not set.");
+                WriteText("CargoContainerName not set.", false);
                 return;
             }
 
             string inventory = ReadConfig(Me.CustomData, "Inventory");
             if (string.IsNullOrWhiteSpace(inventory))
             {
-                WriteInfoLCDs(infoLCDs, "Inventory not set.");
+                WriteText("Inventory not set.", false);
                 return;
             }
 
             var cargoContainers = GetBlocksOfType<IMyCargoContainer>(cargoContainerName);
             if (cargoContainers.Count == 0)
             {
-                WriteInfoLCDs(infoLCDs, "Cargo Containers Not Found.");
+                WriteText("Cargo Containers Not Found.", false);
                 return;
             }
 
@@ -80,12 +95,9 @@ namespace IngameScript
             var current = GetCurrentItemsInStores(cargoContainers);
 
             string message = WriteMessage(required, current);
-            if (message.Length > 0)
-            {
-                IGC.SendBroadcastMessage(channel, message.ToString());
-                WriteInfoLCDs(infoLCDs, $"Sending from {channel}");
-                WriteInfoLCDs(infoLCDs, message);
-            }
+            IGC.SendBroadcastMessage(channel, message.ToString());
+            WriteText($"Sending from {channel}", false);
+            WriteText(message);
         }
 
         List<T> GetBlocksOfType<T>(string name) where T : class, IMyTerminalBlock
@@ -94,14 +106,24 @@ namespace IngameScript
             GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && b.CustomName.Contains(name));
             return blocks;
         }
-        void WriteInfoLCDs(List<IMyTextPanel> lcds, string text, bool append = true)
+        void WriteText(string text, bool append = true)
         {
             Echo(text);
 
+            if (!append)
+            {
+                sb.Clear();
+            }
+
+            sb.AppendLine(text);
+        }
+        void WriteInfoLCDs(List<IMyTextPanel> lcds)
+        {
             foreach (var lcd in lcds)
             {
                 lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-                lcd.WriteText(text + Environment.NewLine, append);
+                lcd.WriteText($"Inventory Monitor. {DateTime.Now:HH:mm:ss}", false);
+                lcd.WriteText(sb.ToString());
             }
         }
 
@@ -110,7 +132,17 @@ namespace IngameScript
             string[] config = customData.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
 
             string cmdToken = $"{name}=";
-            return config.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";
+            return config.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "");
+        }
+        static int? ReadConfigInt(string customData, string name)
+        {
+            string value = ReadConfig(customData, name);
+            if (string.IsNullOrEmpty(value))
+            {
+                return null;
+            }
+
+            return int.Parse(value);
         }
         static Dictionary<string, int> ReadItemsFromCustomData(string customData)
         {

@@ -3,6 +3,7 @@ using SpaceEngineers.Game.ModAPI.Ingame;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using VRage.Game.ModAPI.Ingame;
 
 namespace IngameScript
@@ -14,6 +15,7 @@ namespace IngameScript
 
         readonly IMyBroadcastListener bl;
         readonly string channel;
+        readonly StringBuilder sb = new StringBuilder();
 
         public Program()
         {
@@ -23,7 +25,8 @@ namespace IngameScript
                     "Channel=name\n" +
                     "OutputCargo=name\n" +
                     "InventoryCargo=name\n" +
-                    "InventoryTimer=name";
+                    "InventoryTimer=name\n" +
+                    "WildcardLCDs=name(optional)";
 
                 Echo("CustomData not set.");
                 return;
@@ -53,31 +56,37 @@ namespace IngameScript
                 var msg = bl.AcceptMessage();
                 Prepare(msg.Data.ToString());
             }
+
+            string wildcard = ReadConfig(Me.CustomData, "WildcardLCDs") ?? WildcardLCDs;
+            var infoLCDs = GetBlocksOfType<IMyTextPanel>(wildcard);
+            WriteInfoLCDs(infoLCDs);
         }
         void Prepare(string data)
         {
-            var infoLCDs = GetBlocksOfType<IMyTextPanel>(WildcardLCDs);
-
-            WriteInfoLCDs(infoLCDs, $"Inventory Listener - {channel}", false);
+            if (string.IsNullOrWhiteSpace(data))
+            {
+                WriteText("No components Needed.", false);
+                return;
+            }
 
             string outputCargoName = ReadConfig(Me.CustomData, "OutputCargo");
             if (string.IsNullOrWhiteSpace(outputCargoName))
             {
-                WriteInfoLCDs(infoLCDs, "OutputCargo name not set.");
+                WriteText("OutputCargo name not set.", false);
                 return;
             }
 
             string inventoryCargoName = ReadConfig(Me.CustomData, "InventoryCargo");
             if (string.IsNullOrWhiteSpace(inventoryCargoName))
             {
-                WriteInfoLCDs(infoLCDs, "InventoryCargo name not set.");
+                WriteText("InventoryCargo name not set.", false);
                 return;
             }
 
             string timerName = ReadConfig(Me.CustomData, "InventoryTimer");
             if (string.IsNullOrWhiteSpace(timerName))
             {
-                WriteInfoLCDs(infoLCDs, "InventoryTimer name not set.");
+                WriteText("InventoryTimer name not set.", false);
                 return;
             }
 
@@ -85,7 +94,7 @@ namespace IngameScript
             var outputCargo = GetBlockWithName<IMyCargoContainer>(outputCargoName);
             if (outputCargo == null)
             {
-                WriteInfoLCDs(infoLCDs, $"No output cargo found with name {outputCargoName}");
+                WriteText($"No output cargo found with name {outputCargoName}", false);
                 return;
             }
 
@@ -93,13 +102,15 @@ namespace IngameScript
             var warehouseCargos = GetBlocksOfType<IMyCargoContainer>(inventoryCargoName);
             if (warehouseCargos.Count == 0)
             {
-                WriteInfoLCDs(infoLCDs, $"No warehouse cargo containers found with name {inventoryCargoName}");
+                WriteText($"No warehouse cargo containers found with name {inventoryCargoName}", false);
                 return;
             }
 
             var requestedItems = ReadItems(data);
             var outputInv = outputCargo.GetInventory();
             var orderItems = GetItemsFromCargo(outputInv);
+
+            WriteText("Preparing Cargo...", false);
 
             // Recorrer cada item solicitado
             bool anyMoved = false;
@@ -136,28 +147,28 @@ namespace IngameScript
                         {
                             anyMoved = true;
                             itemRemaining -= (int)toTransfer;
-                            WriteInfoLCDs(infoLCDs, $"Transfered {(int)toTransfer} of {item.Type}");
+                            WriteText($"Transfered {(int)toTransfer} of {item.Type}");
                         }
                     }
                 }
 
-                WriteInfoLCDs(infoLCDs, $"{itemType}: {(itemRemaining > 0 ? $"Missing {itemRemaining}" : "Transfered")}");
+                WriteText($"{itemType}: {(itemRemaining > 0 ? $"Missing {itemRemaining}" : "Transfered")}");
             }
 
             if (!anyMoved)
             {
-                WriteInfoLCDs(infoLCDs, "No items moved");
+                WriteText("No items moved");
                 return;
             }
 
             var timer = GetBlockWithName<IMyTimerBlock>(timerName);
             if (timer == null)
             {
-                WriteInfoLCDs(infoLCDs, $"No timer found with name {timerName}");
+                WriteText($"No timer found with name {timerName}");
             }
 
             timer.Trigger();
-            WriteInfoLCDs(infoLCDs, $"{timerName} triggered");
+            WriteText($"{timerName} triggered");
         }
         Dictionary<string, int> ReadItems(string data)
         {
@@ -198,14 +209,24 @@ namespace IngameScript
             GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && b.CustomName.Contains(filter));
             return blocks;
         }
-        void WriteInfoLCDs(List<IMyTextPanel> lcds, string text, bool append = true)
+        void WriteText(string text, bool append = true)
         {
             Echo(text);
 
+            if (!append)
+            {
+                sb.Clear();
+            }
+
+            sb.AppendLine(text);
+        }
+        void WriteInfoLCDs(List<IMyTextPanel> lcds)
+        {
             foreach (var lcd in lcds)
             {
                 lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-                lcd.WriteText(text + Environment.NewLine, append);
+                lcd.WriteText($"Inventory Listener - {channel}. {DateTime.Now:HH:mm:ss}", false);
+                lcd.WriteText(sb.ToString());
             }
         }
 

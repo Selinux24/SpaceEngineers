@@ -203,8 +203,7 @@ namespace Sandbox.ModAPI.Ingame
         ContentType ContentType { get; set; }
         string CustomData { get; }
 
-        void WriteText(string text, bool v);
-        void WriteText(string v);
+        void WriteText(string text, bool append = true);
     }
     public interface IMyShipConnector : IMyTerminalBlock
     {
