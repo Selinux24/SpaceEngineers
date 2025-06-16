@@ -513,6 +513,7 @@ namespace IngameScript
             else if (command == "REQUEST_UNLOAD") CmdRequestUnload(lines);
             else if (command == "UNLOADING") CmdUnloading(lines);
             else if (command == "UNLOADED") CmdUnloaded(lines);
+            else if (command == "ORDER_RECEIVED") CmdOrderReceived(lines);
         }
         /// <summary>
         /// Sec_A_3 - WH actualiza el estado de la nave
@@ -691,8 +692,9 @@ namespace IngameScript
             exchange.TimerUnload?.ApplyAction("Start");
         }
         /// <summary>
-        /// Sec_D_3 - BASEX registra que el pedido ID_PEDIDO ha sido descargado y lo elimina de la lista de descargas
+        /// Sec_D_3 - BASEX registra que el pedido ID_PEDIDO ha sido descargado y lo elimina de la lista de descargas. Lanza [ORDER_RECEIVED] a WH
         /// Request:  UNLOADED
+        /// Execute:  ORDER_RECEIVED
         /// </summary>
         void CmdUnloaded(string[] lines)
         {
@@ -702,16 +704,39 @@ namespace IngameScript
                 return;
             }
 
-            int orderId = Utils.ReadInt(lines, "Order");
+            string warehouse = Utils.ReadString(lines, "Warehouse");
 
             //Eliminar la orden de descarga del pedido
+            int orderId = Utils.ReadInt(lines, "Order");
             var req = exchangeRequests.FirstOrDefault(o => o.OrderId == orderId);
             if (req != null)
             {
                 exchangeRequests.Remove(req);
             }
 
+            //Enviar al WH el mensaje de que se ha recibido el pedido
+            List<string> parts = new List<string>()
+            {
+                $"Command=ORDER_RECEIVED",
+                $"To={warehouse}",
+                $"From={baseId}",
+                $"Order={orderId}",
+            };
+            BroadcastMessage(parts);
+        }
+        /// <summary>
+        /// Sec_D_4 - WH registra que el pedido ID_PEDIDO ha sido descargado y lo elimina de la lista de pedidos
+        /// </summary>
+        void CmdOrderReceived(string[] lines)
+        {
+            string to = Utils.ReadString(lines, "To");
+            if (to != baseId)
+            {
+                return;
+            }
+
             //Eliminar el pedido de la lista
+            int orderId = Utils.ReadInt(lines, "Order");
             var order = orders.FirstOrDefault(o => o.Id == orderId);
             if (order != null)
             {
