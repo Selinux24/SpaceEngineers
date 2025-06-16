@@ -31,6 +31,7 @@ namespace IngameScript
         const string ShipRemoteControlPilot = "Remote Control Pilot";
         const string ShipCameraPilot = "Camera Pilot";
         const string ShipRemoteControlAlign = "Remote Control Locking";
+        const string ShipRemoteControlLanding = "Remote Control Landing";
         const string ShipConnectorA = "Connector A";
         const string ShipBeaconName = "Distress Beacon";
         const string ShipAntennaName = "Compact Antenna";
@@ -56,9 +57,19 @@ namespace IngameScript
         const double CrusingEvadingWaypointDistance = 100.0;
         const double CrusingEvadingMaxSpeed = 19.5;
 
+        const double TakeOffMaxSpeed = 100.0; // Velocidad máxima de despegue
+        const double TakeOffToTargetDistanceThr = 100.0; // Rango de frenado hasta el objetivo
+        const double TakeOffAlignThr = 0.01; // Precisión de alineación
+
+        const double LangingMaxSpeed = 100.0; // Velocidad máxima de aterrizaje
+        const double LandingToTargetDistanceThr = 100.0; // Rango de frenado hasta el objetivo
+        const double LandingAlignThr = 0.01; // Precisión de alineación
+
         const int ArrivalTicks = 100;
         const int AlignTicks = 1;
         const int NavigationTicks = 1;
+        const int TakeOffTicks = 1;
+        const int LandingTicks = 1;
         #endregion
 
         #region Blocks
@@ -76,6 +87,8 @@ namespace IngameScript
 
         readonly IMyRemoteControl remoteAlign;
         readonly IMyShipConnector connectorA;
+
+        readonly IMyRemoteControl remoteLanding;
 
         readonly IMyRadioAntenna antenna;
         readonly IMyBeacon beacon;
@@ -95,16 +108,22 @@ namespace IngameScript
         readonly AlignData alignData = new AlignData();
         readonly ArrivalData arrivalData = new ArrivalData();
         readonly NavigationData navigationData = new NavigationData();
+        readonly TakeOffData takeOffData = new TakeOffData();
+        readonly LandingData landingData = new LandingData();
 
         bool paused;
 
         int alignTickCount = 0;
         int arrivalTickCount = 0;
         int navigationTickCount = 0;
+        int takeOffTickCount = 0;
+        int landingTickCount = 0;
 
         string alignStateMsg;
         string arrivalStateMsg;
         string navigationStateMsg;
+        string takeOffStateMsg;
+        string landingStateMsg;
 
         readonly StringBuilder sbLog = new StringBuilder();
         bool enableLogs = true;
@@ -191,6 +210,13 @@ namespace IngameScript
                 return;
             }
 
+            remoteLanding = GetBlockWithName<IMyRemoteControl>(ShipRemoteControlLanding);
+            if (remoteLanding == null)
+            {
+                Echo($"Remote Control '{ShipRemoteControlLanding}' not found.");
+                return;
+            }
+
             antenna = GetBlockWithName<IMyRadioAntenna>(ShipAntennaName);
             if (antenna == null)
             {
@@ -265,6 +291,8 @@ namespace IngameScript
             DoArrival();
             DoAlign();
             DoNavigation();
+            DoTakeOff();
+            DoLanding();
         }
 
         #region ALIGN
@@ -444,7 +472,7 @@ namespace IngameScript
         }
         void Locate()
         {
-            if (AlignToDirection(remotePilot.WorldMatrix.Forward, CruisingLocateAlignThr))
+            if (AlignToDirection(remotePilot.WorldMatrix.Forward, navigationData.DirectionToTarget, CruisingLocateAlignThr))
             {
                 BroadcastStatus("Destination located. Initializing acceleration.");
                 navigationData.CurrentState = NavigationStatus.Accelerating;
@@ -486,7 +514,7 @@ namespace IngameScript
             {
                 maxSpeed = CruisingMaxAccelerationSpeed;
             }
-            ThrustToTarget(maxSpeed);
+            ThrustToTarget(remotePilot, navigationData.DirectionToTarget, maxSpeed);
         }
         void Cruise()
         {
@@ -508,10 +536,10 @@ namespace IngameScript
 
             // Mantener velocidad
             bool inGravity = IsShipInGravity();
-            if (inGravity || !AlignToDirection(remotePilot.WorldMatrix.Forward, CruisingCruiseAlignThr))
+            if (inGravity || !AlignToDirection(remotePilot.WorldMatrix.Forward, navigationData.DirectionToTarget, CruisingCruiseAlignThr))
             {
                 // Encender los propulsores hasta alinear de nuevo el vector velocidad con el vector hasta el objetivo
-                ThrustToTarget(CruisingMaxSpeed);
+                ThrustToTarget(remotePilot, navigationData.DirectionToTarget, CruisingMaxSpeed);
                 navigationData.AlignThrustStart = DateTime.Now;
                 navigationData.Thrusting = true;
 
@@ -544,7 +572,7 @@ namespace IngameScript
             if (shipVelocity < CruisingMaxSpeed * CruisingMaxSpeedThr)
             {
                 // Por debajo de la velocidad deseada. Acelerar hasta alcanzarla
-                ThrustToTarget(CruisingMaxSpeed);
+                ThrustToTarget(remotePilot, navigationData.DirectionToTarget, CruisingMaxSpeed);
 
                 return;
             }
@@ -638,6 +666,161 @@ namespace IngameScript
         }
         #endregion
 
+        #region TAKEOFF
+        void DoTakeOff()
+        {
+            if (!takeOffData.HasTarget)
+            {
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(takeOffStateMsg)) Echo(takeOffStateMsg);
+
+            if (++takeOffTickCount < TakeOffTicks)
+            {
+                return;
+            }
+            takeOffTickCount = 0;
+
+            MonitorizeTakeOff();
+        }
+        void MonitorizeTakeOff()
+        {
+            takeOffData.UpdatePositionAndVelocity(cameraPilot.GetPosition(), remotePilot.GetShipSpeed());
+
+            takeOffStateMsg = $"Take-off state {takeOffData.CurrentState}";
+
+            WriteInfoLCDs($"Trip: {Utils.DistanceToStr(takeOffData.TotalDistance)}");
+            WriteInfoLCDs($"To target: {Utils.DistanceToStr(takeOffData.DistanceToTarget)}");
+            WriteInfoLCDs($"ETC: {takeOffData.EstimatedArrival:hh\\:mm\\:ss}");
+            WriteInfoLCDs($"Speed: {takeOffData.Speed:F2}");
+            WriteInfoLCDs($"Progress {takeOffData.Progress:P1}");
+
+            if (DoPause()) return;
+
+            switch (takeOffData.CurrentState)
+            {
+                case TakeOffStatus.Separating:
+                    TakeOffSeparating();
+                    break;
+                case TakeOffStatus.Accelerating:
+                    TakeOffAccelerate();
+                    break;
+                case TakeOffStatus.Braking:
+                    TakeOffBrake();
+                    break;
+            }
+        }
+        void TakeOffSeparating()
+        {
+            if (connectorA.Status == MyShipConnectorStatus.Connected)
+            {
+                // Esperar a que se desconecte
+                takeOffStateMsg = "Waiting for connector to unlock.";
+                return;
+            }
+
+            takeOffStateMsg = "Connector unlocked. Accelerating.";
+            takeOffData.CurrentState = TakeOffStatus.Accelerating;
+        }
+        void TakeOffAccelerate()
+        {
+            AlignToDirection(remotePilot.WorldMatrix.Forward, takeOffData.DirectionToTarget, TakeOffAlignThr);
+
+            if (takeOffData.DistanceToTarget < TakeOffToTargetDistanceThr)
+            {
+                BroadcastStatus("Destination reached. Braking.");
+                takeOffData.CurrentState = TakeOffStatus.Braking;
+                return;
+            }
+
+            // Acelerar
+            ThrustToTarget(remotePilot, takeOffData.DirectionToTarget, TakeOffMaxSpeed);
+        }
+        void TakeOffBrake()
+        {
+            ResetThrust();
+            ResetGyros();
+            var shipVelocity = remotePilot.GetShipVelocities().LinearVelocity.Length();
+            if (shipVelocity <= 0.1)
+            {
+                BroadcastStatus("Destination reached.");
+                ParseTerminalMessage(takeOffData.Command);
+                takeOffData.Clear();
+            }
+        }
+        #endregion
+
+        #region LANDING
+        void DoLanding()
+        {
+            if (!landingData.HasTarget)
+            {
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(landingStateMsg)) Echo(landingStateMsg);
+
+            if (++landingTickCount < LandingTicks)
+            {
+                return;
+            }
+            landingTickCount = 0;
+
+            MonitorizeLanding();
+        }
+        void MonitorizeLanding()
+        {
+            landingData.UpdatePositionAndVelocity(remoteLanding.GetPosition(), remoteLanding.GetShipSpeed());
+
+            landingStateMsg = $"Landing state {landingData.CurrentState}";
+
+            WriteInfoLCDs($"Trip: {Utils.DistanceToStr(landingData.TotalDistance)}");
+            WriteInfoLCDs($"To target: {Utils.DistanceToStr(landingData.DistanceToTarget)}");
+            WriteInfoLCDs($"ETC: {landingData.EstimatedArrival:hh\\:mm\\:ss}");
+            WriteInfoLCDs($"Speed: {landingData.Speed:F2}");
+            WriteInfoLCDs($"Progress {landingData.Progress:P1}");
+
+            if (DoPause()) return;
+
+            switch (landingData.CurrentState)
+            {
+                case LandingStatus.Descending:
+                    LandingDescending();
+                    break;
+                case LandingStatus.Decelerating:
+                    LandingDecelerating();
+                    break;
+            }
+        }
+        void LandingDescending()
+        {
+            AlignToDirection(remoteLanding.WorldMatrix.Forward, landingData.DirectionToTarget, LandingAlignThr);
+
+            if (landingData.DistanceToTarget < LandingToTargetDistanceThr)
+            {
+                BroadcastStatus("Destination reached. Decelerating.");
+                landingData.CurrentState = LandingStatus.Decelerating;
+                return;
+            }
+
+            // Acelerar
+            ThrustToTarget(remoteLanding, landingData.DirectionToTarget, LangingMaxSpeed);
+        }
+        void LandingDecelerating()
+        {
+            ResetThrust();
+            ResetGyros();
+            var shipVelocity = remoteLanding.GetShipVelocities().LinearVelocity.Length();
+            if (shipVelocity <= 0.1)
+            {
+                BroadcastStatus("Destination reached.");
+                ParseTerminalMessage(landingData.Command);
+                landingData.Clear();
+            }
+        }
+        #endregion
+
         #region TERMINAL COMMANDS
         void ParseTerminalMessage(string argument)
         {
@@ -646,6 +829,9 @@ namespace IngameScript
             if (argument == "RESET") Reset();
             else if (argument == "PAUSE") Pause();
             else if (argument == "RESUME") Resume();
+
+            else if (argument.StartsWith("TAKE_OFF")) TakeOff(argument);
+            else if (argument.StartsWith("LAND")) Land(argument);
 
             else if (argument.StartsWith("GOTO")) Goto(argument);
             else if (argument == "APPROACH_TO_PARKING") ApproachToParking();
@@ -675,6 +861,8 @@ namespace IngameScript
             alignData.Clear();
             arrivalData.Clear();
             navigationData.Clear();
+            takeOffData.Clear();
+            landingData.Clear();
 
             remotePilot.SetAutoPilotEnabled(false);
             remotePilot.ClearWaypoints();
@@ -698,6 +886,27 @@ namespace IngameScript
         void Resume()
         {
             paused = false;
+        }
+
+        /// <summary>
+        /// Take off to a position defined in the argument.
+        /// </summary>
+        void TakeOff(string argument)
+        {
+            string[] lines = argument.Split('|');
+            var destination = Utils.ReadVector(lines, "Destination");
+
+            takeOffData.Initialize(remotePilot.GetPosition(), destination, "WAITING");
+
+            timerUnlock?.ApplyAction("Start");
+        }
+
+        void Land(string argument)
+        {
+            string[] lines = argument.Split('|');
+            var destination = Utils.ReadVector(lines, "Destination");
+
+            landingData.Initialize(remoteLanding.GetPosition(), destination, "WAITING");
         }
 
         /// <summary>
@@ -1174,11 +1383,11 @@ namespace IngameScript
             IGC.SendBroadcastMessage(channel, message);
         }
 
-        void ThrustToTarget(double maxSpeed)
+        void ThrustToTarget(IMyRemoteControl remote, Vector3D toTarget, double maxSpeed)
         {
-            var currentVelocity = remotePilot.GetShipVelocities().LinearVelocity;
-            double mass = remotePilot.CalculateShipMass().PhysicalMass;
-            var force = Utils.CalculateThrustForce(navigationData.DirectionToTarget, maxSpeed, currentVelocity, mass);
+            var currentVelocity = remote.GetShipVelocities().LinearVelocity;
+            double mass = remote.CalculateShipMass().PhysicalMass;
+            var force = Utils.CalculateThrustForce(toTarget, maxSpeed, currentVelocity, mass);
             ApplyThrust(force);
         }
         void ThrustToPosition(Vector3D position, double maxSpeed)
@@ -1220,12 +1429,12 @@ namespace IngameScript
             }
         }
 
-        bool AlignToDirection(Vector3D direction, double thr)
+        bool AlignToDirection(Vector3D direction, Vector3D toTarget, double thr)
         {
-            double angle = Utils.AngleBetweenVectors(direction, navigationData.DirectionToTarget);
+            double angle = Utils.AngleBetweenVectors(direction, toTarget);
             WriteInfoLCDs($"Alineación: {angle:F4}");
 
-            var rotationAxis = Vector3D.Cross(direction, navigationData.DirectionToTarget);
+            var rotationAxis = Vector3D.Cross(direction, toTarget);
             if (Utils.IsZero(rotationAxis, thr))
             {
                 ResetGyros();
@@ -1345,6 +1554,8 @@ namespace IngameScript
             alignData.LoadFromStorage(Utils.ReadString(storageLines, "AlignData"));
             arrivalData.LoadFromStorage(Utils.ReadString(storageLines, "ArrivalData"));
             navigationData.LoadFromStorage(Utils.ReadString(storageLines, "NavigationData"));
+            takeOffData.LoadFromStorage(Utils.ReadString(storageLines, "TakeOffData"));
+            landingData.LoadFromStorage(Utils.ReadString(storageLines, "LandingData"));
             enableLogs = Utils.ReadInt(storageLines, "EnableLogs") == 1;
             paused = Utils.ReadInt(storageLines, "Paused", 0) == 1;
         }
@@ -1357,6 +1568,8 @@ namespace IngameScript
                 $"AlignData={alignData.SaveToStorage()}",
                 $"ArrivalData={arrivalData.SaveToStorage()}",
                 $"NavigationData={navigationData.SaveToStorage()}",
+                $"TakeOffData={takeOffData.SaveToStorage()}",
+                $"LandingData={landingData.SaveToStorage()}",
                 $"EnableLogs={(enableLogs ? 1 : 0)}",
                 $"Paused={(paused ? 1 : 0)}",
             };
