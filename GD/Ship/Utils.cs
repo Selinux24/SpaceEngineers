@@ -144,7 +144,7 @@ namespace IngameScript
             var desiredVelocity = desiredDirection * desiredSpeed;
             var velocityError = desiredVelocity - currentVelocity;
 
-            return velocityError * mass * 0.5;  // Ganancia ajustable.
+            return velocityError * mass * 10; // ganancia ajustable
         }
 
         public static bool IsZero(Vector3D v, double thr)

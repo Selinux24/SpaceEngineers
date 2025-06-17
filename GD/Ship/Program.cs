@@ -637,7 +637,8 @@ namespace IngameScript
         }
         void EvadingTo(Vector3D wayPoint, double maxSpeed)
         {
-            var d = Vector3D.Distance(wayPoint, cameraPilot.GetPosition());
+            var toTarget = wayPoint - cameraPilot.GetPosition();
+            var d = toTarget.Length();
             if (d <= CrusingEvadingWaypointDistance)
             {
                 // Waypoint alcanzado
@@ -649,7 +650,7 @@ namespace IngameScript
             WriteInfoLCDs($"Following evading route...");
             WriteInfoLCDs($"Distance to waypoint {Utils.DistanceToStr(d)}");
 
-            ThrustToPosition(wayPoint, maxSpeed);
+            ThrustToTarget(remotePilot, Vector3D.Normalize(toTarget), maxSpeed);
         }
         void EnterCruising()
         {
@@ -832,6 +833,7 @@ namespace IngameScript
 
             else if (argument.StartsWith("TAKE_OFF")) TakeOff(argument);
             else if (argument.StartsWith("LAND")) Land(argument);
+            else if (argument.StartsWith("REQUEST_DOCK")) RequestDock(argument);
 
             else if (argument.StartsWith("GOTO")) Goto(argument);
             else if (argument == "APPROACH_TO_PARKING") ApproachToParking();
@@ -900,13 +902,31 @@ namespace IngameScript
 
             timerUnlock?.ApplyAction("Start");
         }
-
+        /// <summary>
+        /// Landing to a position defined in the argument.
+        /// </summary>
         void Land(string argument)
         {
             string[] lines = argument.Split('|');
             var destination = Utils.ReadVector(lines, "Destination");
 
             landingData.Initialize(remoteLanding.GetPosition(), destination, "WAITING");
+        }
+        /// <summary>
+        /// Requests docking at a base defined in the argument.
+        /// </summary>
+        void RequestDock(string argument)
+        {
+            string[] lines = argument.Split('|');
+            var bse = Utils.ReadString(lines, "Base");
+
+            List<string> parts = new List<string>()
+            {
+                $"Command=REQUEST_DOCK",
+                $"To={bse}",
+                $"From={shipId}"
+            };
+            BroadcastMessage(parts);
         }
 
         /// <summary>
@@ -1387,15 +1407,6 @@ namespace IngameScript
         {
             var currentVelocity = remote.GetShipVelocities().LinearVelocity;
             double mass = remote.CalculateShipMass().PhysicalMass;
-            var force = Utils.CalculateThrustForce(toTarget, maxSpeed, currentVelocity, mass);
-            ApplyThrust(force);
-        }
-        void ThrustToPosition(Vector3D position, double maxSpeed)
-        {
-            // Vector normalizado desde la cámara al objetivo
-            var toTarget = Vector3D.Normalize(position - cameraPilot.GetPosition());
-            var currentVelocity = remotePilot.GetShipVelocities().LinearVelocity;
-            double mass = remotePilot.CalculateShipMass().PhysicalMass;
 
             var force = Utils.CalculateThrustForce(toTarget, maxSpeed, currentVelocity, mass);
             ApplyThrust(force);

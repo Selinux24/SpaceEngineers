@@ -514,6 +514,7 @@ namespace IngameScript
             else if (command == "UNLOADING") CmdUnloading(lines);
             else if (command == "UNLOADED") CmdUnloaded(lines);
             else if (command == "ORDER_RECEIVED") CmdOrderReceived(lines);
+            else if (command == "REQUEST_DOCK") CmdRequestDock(lines);
         }
         /// <summary>
         /// Sec_A_3 - WH actualiza el estado de la nave
@@ -743,6 +744,27 @@ namespace IngameScript
                 orders.Remove(order);
             }
         }
+        /// <summary>
+        /// Dock request from a ship to the base
+        /// </summary>
+        void CmdRequestDock(string[] lines)
+        {
+            string to = Utils.ReadString(lines, "To");
+            if (to != baseId)
+            {
+                return;
+            }
+
+            string from = Utils.ReadString(lines, "From");
+
+            exchangeRequests.Add(new ExchangeRequest
+            {
+                From = from,
+                OrderId = -1,
+                Idle = true,
+                Task = ExchangeTasks.Loading,
+            });
+        }
         #endregion
 
         #region UPDATE BASE STATE
@@ -837,7 +859,10 @@ namespace IngameScript
         }
         List<Ship> GetWaitingShips()
         {
-            return ships.Where(s => s.ShipStatus == ShipStatus.WaitingForLoad || s.ShipStatus == ShipStatus.WaitingForUnload).ToList();
+            return ships.Where(s =>
+                s.ShipStatus == ShipStatus.WaitingForLoad ||
+                s.ShipStatus == ShipStatus.WaitingForUnload ||
+                s.ShipStatus == ShipStatus.Idle).ToList();
         }
         List<ExchangeGroup> GetFreeExchanges()
         {

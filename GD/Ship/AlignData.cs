@@ -44,7 +44,7 @@ namespace IngameScript
             //Calcula velocidad deseada basada en distancia, cuando estemos avanzando hacia el último waypoint.
             double approachSpeed;
             if (CurrentTarget == 0) approachSpeed = maxApproachSpeed; //Velocidad hasta el primer punto de aproximación.
-            else if (CurrentTarget == Waypoints.Count - 1) approachSpeed = maxApproachSpeedLocking; //Velocidad desde el úlimo punto de aproximación.
+            else if (CurrentTarget == Waypoints.Count - 1) approachSpeed = maxApproachSpeedLocking; //Velocidad desde el último punto de aproximación.
             else approachSpeed = maxApproachSpeedAprox; //Velocidad entre puntos de aproximación.
 
             double desiredSpeed = approachSpeed;
