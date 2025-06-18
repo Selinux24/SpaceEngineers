@@ -3,10 +3,10 @@ namespace IngameScript
 {
     enum ExchangeTasks
     {
-        None,
-        Load,
-        Unload,
-        LandAndLoad,
-        LandAndUnload,
+        None = 0,
+        Load = 1,
+        Unload = 2,
+        RocketLoad = 3,
+        RocketUnload = 4,
     }
 }

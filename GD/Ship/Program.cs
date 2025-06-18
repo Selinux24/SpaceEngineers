@@ -710,6 +710,9 @@ namespace IngameScript
                 case TakeOffStatus.Braking:
                     TakeOffBrake();
                     break;
+                case TakeOffStatus.Docking:
+                    TakeOffDocking();
+                    break;
             }
         }
         void TakeOffSeparating()
@@ -745,10 +748,27 @@ namespace IngameScript
             var shipVelocity = remotePilot.GetShipVelocities().LinearVelocity.Length();
             if (shipVelocity <= 0.1)
             {
-                BroadcastStatus("Destination reached.");
-                ParseTerminalMessage(takeOffData.Command);
+                BroadcastStatus("Parking reached. Aproaching to dock...");
+                takeOffData.CurrentState = TakeOffStatus.Docking;
+
+                alignData.Initialize(
+                    takeOffData.ExchangeForward,
+                    takeOffData.ExchangeUp,
+                    takeOffData.ExchangeApproachingWaypoints,
+                    takeOffData.Command);
+
                 takeOffData.Clear();
             }
+        }
+        void TakeOffDocking()
+        {
+            if (connectorA.Status != MyShipConnectorStatus.Connected)
+            {
+                takeOffStateMsg = "Waiting for connector to lock.";
+                return;
+            }
+
+            takeOffStateMsg = "Connector locked. Take-off finished.";
         }
         #endregion
 
@@ -839,7 +859,6 @@ namespace IngameScript
             }
 
             landingStateMsg = "Connector locked. Landing finished.";
-            landingData.CurrentState = LandingStatus.Idle;
         }
         #endregion
 
@@ -855,7 +874,6 @@ namespace IngameScript
             else if (argument.StartsWith("TAKE_OFF")) TakeOff(argument);
             else if (argument.StartsWith("LAND")) Land(argument);
             else if (argument.StartsWith("REQUEST_DOCK")) RequestDock(argument);
-            else if (argument.StartsWith("REQUEST_LAND")) RequestLand(argument);
 
             else if (argument.StartsWith("GOTO")) Goto(argument);
             else if (argument == "APPROACH_TO_PARKING") ApproachToParking();
@@ -941,26 +959,14 @@ namespace IngameScript
         {
             string[] lines = argument.Split('|');
             var bse = Utils.ReadString(lines, "Base");
+            var task = Utils.ReadInt(lines, "Task");
 
             List<string> parts = new List<string>()
             {
                 $"Command=REQUEST_DOCK",
                 $"To={bse}",
-                $"From={shipId}"
-            };
-            BroadcastMessage(parts);
-        }
-        void RequestLand(string argument)
-        {
-            string[] lines = argument.Split('|');
-            var bse = Utils.ReadString(lines, "Base");
-
-            List<string> parts = new List<string>()
-            {
-                $"Command=REQUEST_LAND",
-                $"To={bse}",
                 $"From={shipId}",
-                $"Task={(int)ExchangeTasks.LandAndLoad}",
+                $"Task={task}",
             };
             BroadcastMessage(parts);
         }
@@ -1275,7 +1281,7 @@ namespace IngameScript
 
                 ApproachToExchange();
             }
-            else if (task == ExchangeTasks.LandAndLoad)
+            else if (task == ExchangeTasks.RocketLoad)
             {
                 status = ShipStatus.ApproachingWarehouse;
 
@@ -1290,20 +1296,22 @@ namespace IngameScript
                     Utils.ReadVector(lines, "Up"),
                     Utils.ReadVectorList(lines, "WayPoints"));
             }
-            else if (task == ExchangeTasks.LandAndUnload)
+            else if (task == ExchangeTasks.RocketUnload)
             {
                 status = ShipStatus.ApproachingCustomer;
 
-                landingData.Initialize(
+                takeOffData.Initialize(
                     remoteLanding.GetPosition(),
                     Utils.ReadVector(lines, "Parking"),
                     "START_UNLOADING");
 
-                landingData.SetExchange(
+                takeOffData.SetExchange(
                     Utils.ReadString(lines, "Exchange"),
                     Utils.ReadVector(lines, "Forward"),
                     Utils.ReadVector(lines, "Up"),
                     Utils.ReadVectorList(lines, "WayPoints"));
+
+                timerUnlock?.ApplyAction("Start");
             }
         }
 
