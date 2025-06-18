@@ -58,11 +58,11 @@ namespace IngameScript
         const double CrusingEvadingMaxSpeed = 19.5;
 
         const double TakeOffMaxSpeed = 100.0; // Velocidad máxima de despegue
-        const double TakeOffToTargetDistanceThr = 100.0; // Rango de frenado hasta el objetivo
+        const double TakeOffToTargetDistanceThr = 1000.0; // Rango de frenado hasta el objetivo
         const double TakeOffAlignThr = 0.01; // Precisión de alineación
 
         const double LangingMaxSpeed = 100.0; // Velocidad máxima de aterrizaje
-        const double LandingToTargetDistanceThr = 100.0; // Rango de frenado hasta el objetivo
+        const double LandingToTargetDistanceThr = 1000.0; // Rango de frenado hasta el objetivo
         const double LandingAlignThr = 0.01; // Precisión de alineación
 
         const int ArrivalTicks = 100;
