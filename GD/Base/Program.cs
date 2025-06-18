@@ -299,16 +299,17 @@ namespace IngameScript
                 request.Idle = false;
                 ship.ShipStatus = ShipStatus.ApproachingCustomer;
                 exchange.DockRequest(ship.Name);
-                string task = request.Task == ExchangeTasks.Loading ? "LOAD_ORDER" : "UNLOAD_ORDER";
 
                 List<string> parts = new List<string>()
                 {
-                    $"Command={task}",
+                    $"Command=DOCK",
                     $"To={request.From}",
                     $"From={baseId}",
+                    $"Parking={baseParking}",
                     $"Forward={Utils.VectorToStr(camera.WorldMatrix.Forward)}",
                     $"Up={Utils.VectorToStr(camera.WorldMatrix.Up)}",
                     $"WayPoints={Utils.VectorListToStr(exchange.CalculateRouteToConnector())}",
+                    $"Task={(int)request.Task}",
                     $"Exchange={exchange.Name}",
                 };
                 BroadcastMessage(parts);
@@ -514,7 +515,7 @@ namespace IngameScript
             else if (command == "UNLOADING") CmdUnloading(lines);
             else if (command == "UNLOADED") CmdUnloaded(lines);
             else if (command == "ORDER_RECEIVED") CmdOrderReceived(lines);
-            else if (command == "REQUEST_DOCK") CmdRequestDock(lines);
+            else if (command == "REQUEST_LAND") CmdRequestLand(lines);
         }
         /// <summary>
         /// Sec_A_3 - WH actualiza el estado de la nave
@@ -597,7 +598,9 @@ namespace IngameScript
 
             orders.Add(order);
         }
-
+        /// <summary>
+        /// 
+        /// </summary>
         void CmdRequestLoad(string[] lines)
         {
             string to = Utils.ReadString(lines, "To");
@@ -614,7 +617,7 @@ namespace IngameScript
                 From = from,
                 OrderId = orderId,
                 Idle = true,
-                Task = ExchangeTasks.Loading,
+                Task = ExchangeTasks.Load,
             });
         }
         /// <summary>
@@ -669,7 +672,7 @@ namespace IngameScript
                 From = from,
                 OrderId = orderId,
                 Idle = true,
-                Task = ExchangeTasks.Unloading,
+                Task = ExchangeTasks.Unload,
             });
         }
         /// <summary>
@@ -745,9 +748,9 @@ namespace IngameScript
             }
         }
         /// <summary>
-        /// Dock request from a ship to the base
+        /// 
         /// </summary>
-        void CmdRequestDock(string[] lines)
+        void CmdRequestLand(string[] lines)
         {
             string to = Utils.ReadString(lines, "To");
             if (to != baseId)
@@ -756,13 +759,14 @@ namespace IngameScript
             }
 
             string from = Utils.ReadString(lines, "From");
+            ExchangeTasks task = (ExchangeTasks)Utils.ReadInt(lines, "Task");
 
             exchangeRequests.Add(new ExchangeRequest
             {
                 From = from,
                 OrderId = -1,
                 Idle = true,
-                Task = ExchangeTasks.Loading,
+                Task = task,
             });
         }
         #endregion

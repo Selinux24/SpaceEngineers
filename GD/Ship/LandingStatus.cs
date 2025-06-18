@@ -3,6 +3,6 @@ namespace IngameScript
 {
     enum LandingStatus
     {
-        Idle, Descending, Decelerating
+        Idle, Descending, Decelerating, Docking
     }
 }

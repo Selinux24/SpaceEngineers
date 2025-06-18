@@ -792,6 +792,9 @@ namespace IngameScript
                 case LandingStatus.Decelerating:
                     LandingDecelerating();
                     break;
+                case LandingStatus.Docking:
+                    LandingDocking();
+                    break;
             }
         }
         void LandingDescending()
@@ -815,10 +818,28 @@ namespace IngameScript
             var shipVelocity = remoteLanding.GetShipVelocities().LinearVelocity.Length();
             if (shipVelocity <= 0.1)
             {
-                BroadcastStatus("Destination reached.");
-                ParseTerminalMessage(landingData.Command);
+                BroadcastStatus("Parking reached. Aproaching to dock...");
+                landingData.CurrentState = LandingStatus.Docking;
+
+                alignData.Initialize(
+                    landingData.ExchangeForward,
+                    landingData.ExchangeUp,
+                    landingData.ExchangeApproachingWaypoints,
+                    landingData.Command);
+
                 landingData.Clear();
             }
+        }
+        void LandingDocking()
+        {
+            if (connectorA.Status != MyShipConnectorStatus.Connected)
+            {
+                landingStateMsg = "Waiting for connector to lock.";
+                return;
+            }
+
+            landingStateMsg = "Connector locked. Landing finished.";
+            landingData.CurrentState = LandingStatus.Idle;
         }
         #endregion
 
@@ -834,6 +855,7 @@ namespace IngameScript
             else if (argument.StartsWith("TAKE_OFF")) TakeOff(argument);
             else if (argument.StartsWith("LAND")) Land(argument);
             else if (argument.StartsWith("REQUEST_DOCK")) RequestDock(argument);
+            else if (argument.StartsWith("REQUEST_LAND")) RequestLand(argument);
 
             else if (argument.StartsWith("GOTO")) Goto(argument);
             else if (argument == "APPROACH_TO_PARKING") ApproachToParking();
@@ -925,6 +947,20 @@ namespace IngameScript
                 $"Command=REQUEST_DOCK",
                 $"To={bse}",
                 $"From={shipId}"
+            };
+            BroadcastMessage(parts);
+        }
+        void RequestLand(string argument)
+        {
+            string[] lines = argument.Split('|');
+            var bse = Utils.ReadString(lines, "Base");
+
+            List<string> parts = new List<string>()
+            {
+                $"Command=REQUEST_LAND",
+                $"To={bse}",
+                $"From={shipId}",
+                $"Task={(int)ExchangeTasks.LandAndLoad}",
             };
             BroadcastMessage(parts);
         }
@@ -1123,9 +1159,9 @@ namespace IngameScript
             string command = Utils.ReadArgument(lines, "Command");
             if (command == "REQUEST_STATUS") CmdRequestStatus(lines);
             else if (command == "START_DELIVERY") CmdStartDelivery(lines);
-            else if (command == "LOAD_ORDER") CmdLoadOrder(lines);
+            else if (command == "DOCK") CmdDock(lines);
             else if (command == "LOADED") CmdLoaded(lines);
-            else if (command == "UNLOAD_ORDER") CmdUnloadOrder(lines);
+            else if (command == "TAKE_OFF") CmdTakeOff(lines);
         }
         /// <summary>
         /// Sec_A_2 - La nave responde con su estado
@@ -1180,12 +1216,8 @@ namespace IngameScript
             ApproachToParking();
         }
 
-        /// <summary>
-        /// Sec_xxxx - NAVEX comienza la navegación al conector especificado y atraca en MODO CARGA.
-        /// Execute:  START_LOADING
-        /// </summary>
-        /// <param name="lines"></param>
-        void CmdLoadOrder(string[] lines)
+
+        void CmdTakeOff(string[] lines)
         {
             string to = Utils.ReadString(lines, "To");
             if (to != shipId)
@@ -1193,18 +1225,88 @@ namespace IngameScript
                 return;
             }
 
-            status = ShipStatus.ApproachingWarehouse;
+            takeOffData.Initialize(
+                remotePilot.GetPosition(),
+                Utils.ReadVector(lines, "Destination"),
+                "WAITING");
 
-            deliveryData.SetExchange(
-                Utils.ReadString(lines, "Exchange"),
-                Utils.ReadVector(lines, "Forward"),
-                Utils.ReadVector(lines, "Up"),
-                Utils.ReadVectorList(lines, "WayPoints"));
-
-            deliveryData.PrepareNavigationToExchange("START_LOADING");
-
-            ApproachToExchange();
+            timerUnlock?.ApplyAction("Start");
         }
+        /// <summary>
+        /// Sec_xxxx / Sec_D_2a - NAVEX comienza la navegación al conector especificado y atraca en MODO CARGA o DESCARGA.
+        /// Execute:  START_LOADING o START_UNLOADING
+        /// </summary>
+        /// <param name="lines"></param>
+        void CmdDock(string[] lines)
+        {
+            string to = Utils.ReadString(lines, "To");
+            if (to != shipId)
+            {
+                return;
+            }
+
+            ExchangeTasks task = (ExchangeTasks)Utils.ReadInt(lines, "Task");
+
+            if (task == ExchangeTasks.Load)
+            {
+                status = ShipStatus.ApproachingWarehouse;
+
+                deliveryData.SetExchange(
+                    Utils.ReadString(lines, "Exchange"),
+                    Utils.ReadVector(lines, "Forward"),
+                    Utils.ReadVector(lines, "Up"),
+                    Utils.ReadVectorList(lines, "WayPoints"));
+
+                deliveryData.PrepareNavigationToExchange("START_LOADING");
+
+                ApproachToExchange();
+            }
+            else if (task == ExchangeTasks.Unload)
+            {
+                status = ShipStatus.ApproachingCustomer;
+
+                deliveryData.SetExchange(
+                    Utils.ReadString(lines, "Exchange"),
+                    Utils.ReadVector(lines, "Forward"),
+                    Utils.ReadVector(lines, "Up"),
+                    Utils.ReadVectorList(lines, "WayPoints"));
+
+                deliveryData.PrepareNavigationToExchange("START_UNLOADING");
+
+                ApproachToExchange();
+            }
+            else if (task == ExchangeTasks.LandAndLoad)
+            {
+                status = ShipStatus.ApproachingWarehouse;
+
+                landingData.Initialize(
+                    remoteLanding.GetPosition(),
+                    Utils.ReadVector(lines, "Parking"),
+                    "START_LOADING");
+
+                landingData.SetExchange(
+                    Utils.ReadString(lines, "Exchange"),
+                    Utils.ReadVector(lines, "Forward"),
+                    Utils.ReadVector(lines, "Up"),
+                    Utils.ReadVectorList(lines, "WayPoints"));
+            }
+            else if (task == ExchangeTasks.LandAndUnload)
+            {
+                status = ShipStatus.ApproachingCustomer;
+
+                landingData.Initialize(
+                    remoteLanding.GetPosition(),
+                    Utils.ReadVector(lines, "Parking"),
+                    "START_UNLOADING");
+
+                landingData.SetExchange(
+                    Utils.ReadString(lines, "Exchange"),
+                    Utils.ReadVector(lines, "Forward"),
+                    Utils.ReadVector(lines, "Up"),
+                    Utils.ReadVectorList(lines, "WayPoints"));
+            }
+        }
+
         /// <summary>
         /// Sec_C_4a - NAVEX carga la ruta hasta Parking_BASEX y comienza la maniobra de salida desde el conector de WH
         /// Request:  LOADED
@@ -1228,30 +1330,6 @@ namespace IngameScript
             deliveryData.PrepareNavigationToCustomer("REQUEST_UNLOAD_TO_CUSTOMER");
 
             Depart();
-        }
-        /// <summary>
-        /// Sec_D_2a - NAVEX comienza la navegación al conector especificado y atraca en MODO DESCARGA.
-        /// Execute:  START_UNLOADING
-        /// </summary>
-        void CmdUnloadOrder(string[] lines)
-        {
-            string to = Utils.ReadString(lines, "To");
-            if (to != shipId)
-            {
-                return;
-            }
-
-            status = ShipStatus.ApproachingCustomer;
-
-            deliveryData.SetExchange(
-                Utils.ReadString(lines, "Exchange"),
-                Utils.ReadVector(lines, "Forward"),
-                Utils.ReadVector(lines, "Up"),
-                Utils.ReadVectorList(lines, "WayPoints"));
-
-            deliveryData.PrepareNavigationToExchange("START_UNLOADING");
-
-            ApproachToExchange();
         }
 
         /// <summary>

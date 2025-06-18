@@ -9,6 +9,10 @@ namespace IngameScript
         public LandingStatus CurrentState = LandingStatus.Idle;
         public Vector3D Origin;
         public Vector3D Destination;
+        public string ExchangeName;
+        public Vector3D ExchangeForward;
+        public Vector3D ExchangeUp;
+        public readonly List<Vector3D> ExchangeApproachingWaypoints = new List<Vector3D>();
         public string Command = null;
         public bool HasTarget = false;
 
@@ -34,6 +38,22 @@ namespace IngameScript
             Command = null;
             HasTarget = false;
             CurrentState = LandingStatus.Idle;
+        }
+
+        public void SetExchange(string name, Vector3D forward, Vector3D up, List<Vector3D> waypoints)
+        {
+            ExchangeName = name;
+            ExchangeForward = forward;
+            ExchangeUp = up;
+            ExchangeApproachingWaypoints.Clear();
+            ExchangeApproachingWaypoints.AddRange(waypoints);
+        }
+        public void ClearExchange()
+        {
+            ExchangeName = null;
+            ExchangeForward = Vector3D.Zero;
+            ExchangeUp = Vector3D.Zero;
+            ExchangeApproachingWaypoints.Clear();
         }
 
         public void UpdatePositionAndVelocity(Vector3D position, double speed)
