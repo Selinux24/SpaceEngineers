@@ -17,61 +17,6 @@ namespace IngameScript
     /// </remarks>
     partial class Program : MyGridProgram
     {
-        #region Constants
-        const string WildcardShipId = "[shipId]";
-        const string WildcardShipInfo = "[DELIVERY_INFO]";
-        const string WildcardLogLCDs = "[DELIVERY_LOG]";
-
-        const string ShipTimerPilot = "Timer Block Pilot";
-        const string ShipTimerLock = "Timer Block Locking";
-        const string ShipTimerUnlock = "Timer Block Unlocking";
-        const string ShipTimerLoad = "Timer Block Load";
-        const string ShipTimerUnload = "Timer Block Unload";
-        const string ShipTimerWaiting = "Timer Block Waiting";
-        const string ShipRemoteControlPilot = "Remote Control Pilot";
-        const string ShipCameraPilot = "Camera Pilot";
-        const string ShipRemoteControlAlign = "Remote Control Locking";
-        const string ShipRemoteControlLanding = "Remote Control Landing";
-        const string ShipConnectorA = "Connector A";
-        const string ShipBeaconName = "Distress Beacon";
-        const string ShipAntennaName = "Compact Antenna";
-
-        const double GyrosThr = 0.001; //Precisión de alineación
-        const double GyrosSpeed = 2f; //Velocidad de los giroscopios
-
-        const double ExchangeMaxApproachingSpeed = 5; // Velocidad máxima de aproximación al conector
-        const double ExchangeDistanceThr = 200.0; //Precisión de aproximación al primer punto del conector
-        const double ExchangeWaypointDistanceThr = 0.5; //Precisión de aproximación entre waypoints
-
-        const double CruisingMaxSpeed = 100.0; // Velocidad máxima de crucero
-        const double CruisingMaxSpeedThr = 0.95;
-        const double CruisingMaxAccelerationSpeed = 19.5; // Velocidad máxima de crucero cerca de la base
-        const double CruisingToBasesDistanceThr = 2000.0; // Distancia al punto de salida para activar la velocidad máxima de crucero
-        const double CruisingToTargetDistanceThr = 3000.0; // Rango de frenado hasta el objetivo
-
-        const double CruisingThrustAlignSeconds = 5.0; // Tiempo de encendido de thrusters hasta alineación
-        const double CruisingLocateAlignThr = 0.001; // Precisión de alineación
-        const double CruisingCruiseAlignThr = 0.01; // Precisión de alineación
-
-        const double CrusingCollisionDetectRange = 10000.0; // Rango de detección de colisiones
-        const double CrusingEvadingWaypointDistance = 100.0;
-        const double CrusingEvadingMaxSpeed = 19.5;
-
-        const double TakeOffMaxSpeed = 100.0; // Velocidad máxima de despegue
-        const double TakeOffToTargetDistanceThr = 1000.0; // Rango de frenado hasta el objetivo
-        const double TakeOffAlignThr = 0.01; // Precisión de alineación
-
-        const double LangingMaxSpeed = 100.0; // Velocidad máxima de aterrizaje
-        const double LandingToTargetDistanceThr = 1000.0; // Rango de frenado hasta el objetivo
-        const double LandingAlignThr = 0.01; // Precisión de alineación
-
-        const int ArrivalTicks = 100;
-        const int AlignTicks = 1;
-        const int NavigationTicks = 1;
-        const int TakeOffTicks = 1;
-        const int LandingTicks = 1;
-        #endregion
-
         #region Blocks
         readonly IMyBroadcastListener bl;
 
@@ -101,132 +46,130 @@ namespace IngameScript
         #endregion
 
         readonly string shipId;
-        readonly string channel;
+        readonly Config config;
 
-        ShipStatus status = ShipStatus.Idle;
+        readonly StringBuilder sbLog = new StringBuilder();
+
         readonly DeliveryData deliveryData = new DeliveryData();
         readonly AlignData alignData = new AlignData();
         readonly ArrivalData arrivalData = new ArrivalData();
         readonly NavigationData navigationData = new NavigationData();
-        readonly TakeOffData takeOffData = new TakeOffData();
-        readonly LandingData landingData = new LandingData();
+        readonly AtmNavigationData atmNavigationData = new AtmNavigationData();
 
-        bool paused;
+        ShipStatus status = ShipStatus.Idle;
+        bool paused = false;
+        bool enableLogs = true;
 
         int alignTickCount = 0;
-        int arrivalTickCount = 0;
-        int navigationTickCount = 0;
-        int takeOffTickCount = 0;
-        int landingTickCount = 0;
-
         string alignStateMsg;
+      
+        int arrivalTickCount = 0;
         string arrivalStateMsg;
+     
+        int navigationTickCount = 0;
         string navigationStateMsg;
-        string takeOffStateMsg;
-        string landingStateMsg;
-
-        readonly StringBuilder sbLog = new StringBuilder();
-        bool enableLogs = true;
+      
+        int atmNavigationTickCount = 0;
+        string atmNavigationStateMsg;
 
         public Program()
         {
             if (string.IsNullOrWhiteSpace(Me.CustomData))
             {
-                Me.CustomData = "Channel=name";
+                Me.CustomData = Config.GetDefault();
 
                 Echo("CustomData not set.");
                 return;
             }
 
-            channel = Utils.ReadConfig(Me.CustomData, "Channel");
-            if (string.IsNullOrWhiteSpace(channel))
+            shipId = Me.CubeGrid.CustomName;
+            config = new Config(Me.CustomData);
+            if (!config.IsValid())
             {
-                Echo("Channel name not set.");
+                Echo(config.GetErrors());
                 return;
             }
 
-            shipId = Me.CubeGrid.CustomName;
-
-            timerPilot = GetBlockWithName<IMyTimerBlock>(ShipTimerPilot);
+            timerPilot = GetBlockWithName<IMyTimerBlock>(config.ShipTimerPilot);
             if (timerPilot == null)
             {
-                Echo($"Timer '{ShipTimerPilot}' no locallizado.");
+                Echo($"Timer '{config.ShipTimerPilot}' no locallizado.");
                 return;
             }
-            timerLock = GetBlockWithName<IMyTimerBlock>(ShipTimerLock);
+            timerLock = GetBlockWithName<IMyTimerBlock>(config.ShipTimerLock);
             if (timerLock == null)
             {
-                Echo($"Timer de atraque '{ShipTimerLock}' no locallizado.");
+                Echo($"Timer de atraque '{config.ShipTimerLock}' no locallizado.");
                 return;
             }
-            timerUnlock = GetBlockWithName<IMyTimerBlock>(ShipTimerUnlock);
+            timerUnlock = GetBlockWithName<IMyTimerBlock>(config.ShipTimerUnlock);
             if (timerUnlock == null)
             {
-                Echo($"Timer de separación '{ShipTimerUnlock}' no locallizado.");
+                Echo($"Timer de separación '{config.ShipTimerUnlock}' no locallizado.");
                 return;
             }
-            timerLoad = GetBlockWithName<IMyTimerBlock>(ShipTimerLoad);
+            timerLoad = GetBlockWithName<IMyTimerBlock>(config.ShipTimerLoad);
             if (timerLoad == null)
             {
-                Echo($"Timer de carga '{ShipTimerLoad}' no locallizado.");
+                Echo($"Timer de carga '{config.ShipTimerLoad}' no locallizado.");
                 return;
             }
-            timerUnload = GetBlockWithName<IMyTimerBlock>(ShipTimerUnload);
+            timerUnload = GetBlockWithName<IMyTimerBlock>(config.ShipTimerUnload);
             if (timerUnload == null)
             {
-                Echo($"Timer de descarga '{ShipTimerUnload}' no locallizado.");
+                Echo($"Timer de descarga '{config.ShipTimerUnload}' no locallizado.");
                 return;
             }
-            timerWaiting = GetBlockWithName<IMyTimerBlock>(ShipTimerWaiting);
+            timerWaiting = GetBlockWithName<IMyTimerBlock>(config.ShipTimerWaiting);
             if (timerWaiting == null)
             {
-                Echo($"Timer de espera '{ShipTimerWaiting}' no locallizado.");
+                Echo($"Timer de espera '{config.ShipTimerWaiting}' no locallizado.");
                 return;
             }
 
-            remotePilot = GetBlockWithName<IMyRemoteControl>(ShipRemoteControlPilot);
+            remotePilot = GetBlockWithName<IMyRemoteControl>(config.ShipRemoteControlPilot);
             if (remotePilot == null)
             {
-                Echo($"Control remoto de pilotaje '{ShipRemoteControlPilot}' no locallizado.");
+                Echo($"Control remoto de pilotaje '{config.ShipRemoteControlPilot}' no locallizado.");
                 return;
             }
-            cameraPilot = GetBlockWithName<IMyCameraBlock>(ShipCameraPilot);
+            cameraPilot = GetBlockWithName<IMyCameraBlock>(config.ShipCameraPilot);
             if (cameraPilot == null)
             {
-                Echo($"Camera {ShipCameraPilot} not found.");
+                Echo($"Camera {config.ShipCameraPilot} not found.");
                 return;
             }
 
-            remoteAlign = GetBlockWithName<IMyRemoteControl>(ShipRemoteControlAlign);
+            remoteAlign = GetBlockWithName<IMyRemoteControl>(config.ShipRemoteControlAlign);
             if (remoteAlign == null)
             {
-                Echo($"Remote Control '{ShipRemoteControlAlign}' not found.");
+                Echo($"Remote Control '{config.ShipRemoteControlAlign}' not found.");
                 return;
             }
-            connectorA = GetBlockWithName<IMyShipConnector>(ShipConnectorA);
+            connectorA = GetBlockWithName<IMyShipConnector>(config.ShipConnectorA);
             if (connectorA == null)
             {
-                Echo($"Connector '{ShipConnectorA}' not found.");
+                Echo($"Connector '{config.ShipConnectorA}' not found.");
                 return;
             }
 
-            remoteLanding = GetBlockWithName<IMyRemoteControl>(ShipRemoteControlLanding);
+            remoteLanding = GetBlockWithName<IMyRemoteControl>(config.ShipRemoteControlLanding);
             if (remoteLanding == null)
             {
-                Echo($"Remote Control '{ShipRemoteControlLanding}' not found.");
+                Echo($"Remote Control '{config.ShipRemoteControlLanding}' not found.");
                 return;
             }
 
-            antenna = GetBlockWithName<IMyRadioAntenna>(ShipAntennaName);
+            antenna = GetBlockWithName<IMyRadioAntenna>(config.ShipAntennaName);
             if (antenna == null)
             {
-                Echo($"Antenna {ShipAntennaName} not found.");
+                Echo($"Antenna {config.ShipAntennaName} not found.");
                 return;
             }
-            beacon = GetBlockWithName<IMyBeacon>(ShipBeaconName);
+            beacon = GetBlockWithName<IMyBeacon>(config.ShipBeaconName);
             if (beacon == null)
             {
-                Echo($"Beacon {ShipBeaconName} not found.");
+                Echo($"Beacon {config.ShipBeaconName} not found.");
                 return;
             }
 
@@ -243,14 +186,14 @@ namespace IngameScript
                 return;
             }
 
-            logLCDs = GetBlocksOfType<IMyTextPanel>(WildcardLogLCDs);
-            infoLCDs = GetBlocksOfType<IMyTextPanel>(WildcardShipInfo);
+            logLCDs = GetBlocksOfType<IMyTextPanel>(config.WildcardLogLCDs);
+            infoLCDs = GetBlocksOfType<IMyTextPanel>(config.WildcardShipInfo);
             shipCargos = GetBlocksOfType<IMyCargoContainer>();
 
-            WriteLCDs(WildcardShipId, shipId);
+            WriteLCDs(config.WildcardShipId, shipId);
 
-            bl = IGC.RegisterBroadcastListener(channel);
-            Echo($"Listening in channel {channel}");
+            bl = IGC.RegisterBroadcastListener(config.Channel);
+            Echo($"Listening in channel {config.Channel}");
 
             LoadFromStorage();
 
@@ -266,7 +209,7 @@ namespace IngameScript
 
         public void Main(string argument, UpdateType updateSource)
         {
-            WriteInfoLCDs($"{shipId} in channel {channel}", false);
+            WriteInfoLCDs($"{shipId} in channel {config.Channel}", false);
             WriteInfoLCDs($"{CalculateCargoPercentage():P1} cargo.");
             if (!string.IsNullOrEmpty(argument))
             {
@@ -291,8 +234,7 @@ namespace IngameScript
             DoArrival();
             DoAlign();
             DoNavigation();
-            DoTakeOff();
-            DoLanding();
+            DoAtmNavigation();
         }
 
         #region ALIGN
@@ -305,7 +247,7 @@ namespace IngameScript
 
             if (!string.IsNullOrWhiteSpace(alignStateMsg)) Echo(alignStateMsg);
 
-            if (++alignTickCount < AlignTicks)
+            if (++alignTickCount < config.AlignTicks)
             {
                 return;
             }
@@ -332,7 +274,7 @@ namespace IngameScript
 
             if (DoPause()) return;
 
-            bool corrected = AlignToVectors(alignData.TargetForward, alignData.TargetUp, GyrosThr);
+            bool corrected = AlignToVectors(alignData.TargetForward, alignData.TargetUp, config.GyrosThr);
             if (corrected)
             {
                 //Wait until aligned
@@ -356,7 +298,7 @@ namespace IngameScript
             WriteInfoLCDs($"Progress: {alignData.CurrentTarget + 1}/{alignData.Waypoints.Count}.");
             WriteInfoLCDs($"Has command? {!string.IsNullOrWhiteSpace(alignData.Command)}");
 
-            if (distance < ExchangeWaypointDistanceThr)
+            if (distance < config.ExchangeWaypointDistanceThr)
             {
                 alignData.Next();
                 ResetThrust();
@@ -381,7 +323,7 @@ namespace IngameScript
 
             if (!string.IsNullOrWhiteSpace(arrivalStateMsg)) Echo(arrivalStateMsg);
 
-            if (++arrivalTickCount < ArrivalTicks)
+            if (++arrivalTickCount < config.ArrivalTicks)
             {
                 return;
             }
@@ -416,7 +358,7 @@ namespace IngameScript
 
             if (!string.IsNullOrWhiteSpace(navigationStateMsg)) Echo(navigationStateMsg);
 
-            if (++navigationTickCount < NavigationTicks)
+            if (++navigationTickCount < config.NavigationTicks)
             {
                 return;
             }
@@ -472,7 +414,7 @@ namespace IngameScript
         }
         void Locate()
         {
-            if (AlignToDirection(remotePilot.WorldMatrix.Forward, navigationData.DirectionToTarget, CruisingLocateAlignThr))
+            if (AlignToDirection(remotePilot.WorldMatrix.Forward, navigationData.DirectionToTarget, config.CruisingLocateAlignThr))
             {
                 BroadcastStatus("Destination located. Initializing acceleration.");
                 navigationData.CurrentState = NavigationStatus.Accelerating;
@@ -484,14 +426,14 @@ namespace IngameScript
         }
         void Accelerate()
         {
-            if (navigationData.IsObstacleAhead(cameraPilot, CrusingCollisionDetectRange, remotePilot.GetShipVelocities().LinearVelocity))
+            if (navigationData.IsObstacleAhead(cameraPilot, config.CrusingCollisionDetectRange, remotePilot.GetShipVelocities().LinearVelocity))
             {
                 BroadcastStatus("Obstacle detected. Avoiding...");
                 navigationData.CurrentState = NavigationStatus.Avoiding;
                 return;
             }
 
-            if (navigationData.DistanceToTarget < CruisingToTargetDistanceThr)
+            if (navigationData.DistanceToTarget < config.CruisingToTargetDistanceThr)
             {
                 BroadcastStatus("Destination reached. Braking.");
                 navigationData.CurrentState = NavigationStatus.Braking;
@@ -501,7 +443,7 @@ namespace IngameScript
 
             bool inGravity = IsShipInGravity();
             var shipVelocity = remotePilot.GetShipVelocities().LinearVelocity.Length();
-            if (!inGravity && shipVelocity >= CruisingMaxSpeed * CruisingMaxSpeedThr)
+            if (!inGravity && shipVelocity >= config.CruisingMaxSpeed * config.CruisingMaxSpeedThr)
             {
                 BroadcastStatus("Reached cruise speed. Deactivating thrusters.");
                 navigationData.CurrentState = NavigationStatus.Cruising;
@@ -509,16 +451,16 @@ namespace IngameScript
             }
 
             // Acelerar
-            var maxSpeed = CruisingMaxSpeed;
-            if (Vector3D.Distance(navigationData.Origin, cameraPilot.GetPosition()) <= CruisingToBasesDistanceThr)
+            var maxSpeed = config.CruisingMaxSpeed;
+            if (Vector3D.Distance(navigationData.Origin, cameraPilot.GetPosition()) <= config.CruisingToBasesDistanceThr)
             {
-                maxSpeed = CruisingMaxAccelerationSpeed;
+                maxSpeed = config.CruisingMaxAccelerationSpeed;
             }
             ThrustToTarget(remotePilot, navigationData.DirectionToTarget, maxSpeed);
         }
         void Cruise()
         {
-            if (navigationData.IsObstacleAhead(cameraPilot, CrusingCollisionDetectRange, remotePilot.GetShipVelocities().LinearVelocity))
+            if (navigationData.IsObstacleAhead(cameraPilot, config.CrusingCollisionDetectRange, remotePilot.GetShipVelocities().LinearVelocity))
             {
                 BroadcastStatus("Obstacle detected. Avoiding...");
                 navigationData.CurrentState = NavigationStatus.Avoiding;
@@ -526,7 +468,7 @@ namespace IngameScript
                 return;
             }
 
-            if (navigationData.DistanceToTarget < CruisingToTargetDistanceThr)
+            if (navigationData.DistanceToTarget < config.CruisingToTargetDistanceThr)
             {
                 BroadcastStatus("Destination reached. Braking.");
                 navigationData.CurrentState = NavigationStatus.Braking;
@@ -536,10 +478,10 @@ namespace IngameScript
 
             // Mantener velocidad
             bool inGravity = IsShipInGravity();
-            if (inGravity || !AlignToDirection(remotePilot.WorldMatrix.Forward, navigationData.DirectionToTarget, CruisingCruiseAlignThr))
+            if (inGravity || !AlignToDirection(remotePilot.WorldMatrix.Forward, navigationData.DirectionToTarget, config.CruisingCruiseAlignThr))
             {
                 // Encender los propulsores hasta alinear de nuevo el vector velocidad con el vector hasta el objetivo
-                ThrustToTarget(remotePilot, navigationData.DirectionToTarget, CruisingMaxSpeed);
+                ThrustToTarget(remotePilot, navigationData.DirectionToTarget, config.CruisingMaxSpeed);
                 navigationData.AlignThrustStart = DateTime.Now;
                 navigationData.Thrusting = true;
 
@@ -549,7 +491,7 @@ namespace IngameScript
             if (navigationData.Thrusting)
             {
                 // Propulsores encendidos para recuperar la alineación
-                if (!inGravity && (DateTime.Now - navigationData.AlignThrustStart).TotalSeconds > CruisingThrustAlignSeconds)
+                if (!inGravity && (DateTime.Now - navigationData.AlignThrustStart).TotalSeconds > config.CruisingThrustAlignSeconds)
                 {
                     // Fuera de la gravedad y tiempo de alineación consumido. Desactivar propulsores
                     EnterCruising();
@@ -560,7 +502,7 @@ namespace IngameScript
             }
 
             var shipVelocity = remotePilot.GetShipVelocities().LinearVelocity.Length();
-            if (shipVelocity > CruisingMaxSpeed)
+            if (shipVelocity > config.CruisingMaxSpeed)
             {
                 // Velocidad máxima superada. Encender propulsores en neutro para frenar
                 ResetThrust();
@@ -569,10 +511,10 @@ namespace IngameScript
                 return;
             }
 
-            if (shipVelocity < CruisingMaxSpeed * CruisingMaxSpeedThr)
+            if (shipVelocity < config.CruisingMaxSpeed * config.CruisingMaxSpeedThr)
             {
                 // Por debajo de la velocidad deseada. Acelerar hasta alcanzarla
-                ThrustToTarget(remotePilot, navigationData.DirectionToTarget, CruisingMaxSpeed);
+                ThrustToTarget(remotePilot, navigationData.DirectionToTarget, config.CruisingMaxSpeed);
 
                 return;
             }
@@ -599,7 +541,7 @@ namespace IngameScript
         }
         void Avoid()
         {
-            if (navigationData.DistanceToTarget < CruisingToTargetDistanceThr)
+            if (navigationData.DistanceToTarget < config.CruisingToTargetDistanceThr)
             {
                 BroadcastStatus("Destination reached. Braking.");
                 navigationData.CurrentState = NavigationStatus.Braking;
@@ -608,7 +550,7 @@ namespace IngameScript
             }
 
             // Calcular los puntos de evasión
-            if (!navigationData.CalculateEvadingWaypoints(cameraPilot, CrusingCollisionDetectRange * 0.5))
+            if (!navigationData.CalculateEvadingWaypoints(cameraPilot, config.CrusingCollisionDetectRange * 0.5))
             {
                 //No se puede calcular un punto de evasión
                 navigationData.CurrentState = NavigationStatus.Braking;
@@ -619,7 +561,7 @@ namespace IngameScript
             // Navegar entre los puntos de evasión
             if (navigationData.EvadingPoints.Count > 0)
             {
-                EvadingTo(navigationData.EvadingPoints[0], CrusingEvadingMaxSpeed);
+                EvadingTo(navigationData.EvadingPoints[0], config.CrusingEvadingMaxSpeed);
 
                 if (navigationData.EvadingPoints.Count == 0)
                 {
@@ -639,7 +581,7 @@ namespace IngameScript
         {
             var toTarget = wayPoint - cameraPilot.GetPosition();
             var d = toTarget.Length();
-            if (d <= CrusingEvadingWaypointDistance)
+            if (d <= config.CrusingEvadingWaypointDistance)
             {
                 // Waypoint alcanzado
                 navigationData.EvadingPoints.RemoveAt(0);
@@ -667,198 +609,113 @@ namespace IngameScript
         }
         #endregion
 
-        #region TAKEOFF
-        void DoTakeOff()
+        #region ATMOSPHERIC NAVIGATION
+        void DoAtmNavigation()
         {
-            if (!takeOffData.HasTarget)
+            if (!atmNavigationData.HasTarget)
             {
                 return;
             }
 
-            if (!string.IsNullOrWhiteSpace(takeOffStateMsg)) Echo(takeOffStateMsg);
+            if (!string.IsNullOrWhiteSpace(atmNavigationStateMsg)) Echo(atmNavigationStateMsg);
 
-            if (++takeOffTickCount < TakeOffTicks)
+            if (++atmNavigationTickCount < config.AtmNavigationTicks)
             {
                 return;
             }
-            takeOffTickCount = 0;
+            atmNavigationTickCount = 0;
 
-            MonitorizeTakeOff();
+            MonitorizeAtmNavigation();
         }
-        void MonitorizeTakeOff()
+        void MonitorizeAtmNavigation()
         {
-            takeOffData.UpdatePositionAndVelocity(cameraPilot.GetPosition(), remotePilot.GetShipSpeed());
+            var remote = (atmNavigationData.Landing ? remoteLanding : remotePilot) ?? remotePilot;
 
-            takeOffStateMsg = $"Take-off state {takeOffData.CurrentState}";
+            atmNavigationData.UpdatePositionAndVelocity(remote.GetPosition(), remote.GetShipSpeed());
 
-            WriteInfoLCDs($"Trip: {Utils.DistanceToStr(takeOffData.TotalDistance)}");
-            WriteInfoLCDs($"To target: {Utils.DistanceToStr(takeOffData.DistanceToTarget)}");
-            WriteInfoLCDs($"ETC: {takeOffData.EstimatedArrival:hh\\:mm\\:ss}");
-            WriteInfoLCDs($"Speed: {takeOffData.Speed:F2}");
-            WriteInfoLCDs($"Progress {takeOffData.Progress:P1}");
+            atmNavigationStateMsg = $"Navigation state {atmNavigationData.CurrentState}";
+
+            WriteInfoLCDs($"Trip: {Utils.DistanceToStr(atmNavigationData.TotalDistance)}");
+            WriteInfoLCDs($"To target: {Utils.DistanceToStr(atmNavigationData.DistanceToTarget)}");
+            WriteInfoLCDs($"ETC: {atmNavigationData.EstimatedArrival:hh\\:mm\\:ss}");
+            WriteInfoLCDs($"Speed: {atmNavigationData.Speed:F2}");
+            WriteInfoLCDs($"Progress {atmNavigationData.Progress:P1}");
 
             if (DoPause()) return;
 
-            switch (takeOffData.CurrentState)
+            switch (atmNavigationData.CurrentState)
             {
-                case TakeOffStatus.Separating:
-                    TakeOffSeparating();
+                case AtmNavigationStatus.Separating:
+                    AtmNavigationSeparate();
                     break;
-                case TakeOffStatus.Accelerating:
-                    TakeOffAccelerate();
+                case AtmNavigationStatus.Accelerating:
+                    AtmNavigationAccelerate();
                     break;
-                case TakeOffStatus.Braking:
-                    TakeOffBrake();
+                case AtmNavigationStatus.Decelerating:
+                    AtmNavigationDecelerate();
                     break;
-                case TakeOffStatus.Docking:
-                    TakeOffDocking();
+                case AtmNavigationStatus.Docking:
+                    AtmNavigationDock();
                     break;
             }
         }
-        void TakeOffSeparating()
+        void AtmNavigationSeparate()
         {
             if (connectorA.Status == MyShipConnectorStatus.Connected)
             {
-                // Esperar a que se desconecte
-                takeOffStateMsg = "Waiting for connector to unlock.";
+                atmNavigationStateMsg = "Waiting for connector to unlock.";
                 return;
             }
 
-            takeOffStateMsg = "Connector unlocked. Accelerating.";
-            takeOffData.CurrentState = TakeOffStatus.Accelerating;
+            atmNavigationStateMsg = "Connector unlocked. Accelerating.";
+            atmNavigationData.CurrentState = AtmNavigationStatus.Accelerating;
         }
-        void TakeOffAccelerate()
+        void AtmNavigationAccelerate()
         {
-            AlignToDirection(remotePilot.WorldMatrix.Forward, takeOffData.DirectionToTarget, TakeOffAlignThr);
+            var remote = (atmNavigationData.Landing ? remoteLanding : remotePilot) ?? remotePilot;
 
-            if (takeOffData.DistanceToTarget < TakeOffToTargetDistanceThr)
-            {
-                BroadcastStatus("Destination reached. Braking.");
-                takeOffData.CurrentState = TakeOffStatus.Braking;
-                return;
-            }
+            AlignToDirection(remote.WorldMatrix.Forward, atmNavigationData.DirectionToTarget, config.AtmNavigationAlignThr);
 
-            // Acelerar
-            ThrustToTarget(remotePilot, takeOffData.DirectionToTarget, TakeOffMaxSpeed);
-        }
-        void TakeOffBrake()
-        {
-            ResetThrust();
-            ResetGyros();
-            var shipVelocity = remotePilot.GetShipVelocities().LinearVelocity.Length();
-            if (shipVelocity <= 0.1)
-            {
-                BroadcastStatus("Parking reached. Aproaching to dock...");
-                takeOffData.CurrentState = TakeOffStatus.Docking;
-
-                alignData.Initialize(
-                    takeOffData.ExchangeForward,
-                    takeOffData.ExchangeUp,
-                    takeOffData.ExchangeApproachingWaypoints,
-                    takeOffData.Command);
-
-                takeOffData.Clear();
-            }
-        }
-        void TakeOffDocking()
-        {
-            if (connectorA.Status != MyShipConnectorStatus.Connected)
-            {
-                takeOffStateMsg = "Waiting for connector to lock.";
-                return;
-            }
-
-            takeOffStateMsg = "Connector locked. Take-off finished.";
-        }
-        #endregion
-
-        #region LANDING
-        void DoLanding()
-        {
-            if (!landingData.HasTarget)
-            {
-                return;
-            }
-
-            if (!string.IsNullOrWhiteSpace(landingStateMsg)) Echo(landingStateMsg);
-
-            if (++landingTickCount < LandingTicks)
-            {
-                return;
-            }
-            landingTickCount = 0;
-
-            MonitorizeLanding();
-        }
-        void MonitorizeLanding()
-        {
-            landingData.UpdatePositionAndVelocity(remoteLanding.GetPosition(), remoteLanding.GetShipSpeed());
-
-            landingStateMsg = $"Landing state {landingData.CurrentState}";
-
-            WriteInfoLCDs($"Trip: {Utils.DistanceToStr(landingData.TotalDistance)}");
-            WriteInfoLCDs($"To target: {Utils.DistanceToStr(landingData.DistanceToTarget)}");
-            WriteInfoLCDs($"ETC: {landingData.EstimatedArrival:hh\\:mm\\:ss}");
-            WriteInfoLCDs($"Speed: {landingData.Speed:F2}");
-            WriteInfoLCDs($"Progress {landingData.Progress:P1}");
-
-            if (DoPause()) return;
-
-            switch (landingData.CurrentState)
-            {
-                case LandingStatus.Descending:
-                    LandingDescending();
-                    break;
-                case LandingStatus.Decelerating:
-                    LandingDecelerating();
-                    break;
-                case LandingStatus.Docking:
-                    LandingDocking();
-                    break;
-            }
-        }
-        void LandingDescending()
-        {
-            AlignToDirection(remoteLanding.WorldMatrix.Forward, landingData.DirectionToTarget, LandingAlignThr);
-
-            if (landingData.DistanceToTarget < LandingToTargetDistanceThr)
+            if (atmNavigationData.DistanceToTarget < config.AtmNavigationToTargetDistanceThr)
             {
                 BroadcastStatus("Destination reached. Decelerating.");
-                landingData.CurrentState = LandingStatus.Decelerating;
+                atmNavigationData.CurrentState = AtmNavigationStatus.Decelerating;
                 return;
             }
 
             // Acelerar
-            ThrustToTarget(remoteLanding, landingData.DirectionToTarget, LangingMaxSpeed);
+            ThrustToTarget(remote, atmNavigationData.DirectionToTarget, config.AtmNavigationMaxSpeed);
         }
-        void LandingDecelerating()
+        void AtmNavigationDecelerate()
         {
+            var remote = (atmNavigationData.Landing ? remoteLanding : remotePilot) ?? remotePilot;
+
             ResetThrust();
             ResetGyros();
-            var shipVelocity = remoteLanding.GetShipVelocities().LinearVelocity.Length();
+            var shipVelocity = remote.GetShipVelocities().LinearVelocity.Length();
             if (shipVelocity <= 0.1)
             {
                 BroadcastStatus("Parking reached. Aproaching to dock...");
-                landingData.CurrentState = LandingStatus.Docking;
+                atmNavigationData.CurrentState = AtmNavigationStatus.Docking;
 
                 alignData.Initialize(
-                    landingData.ExchangeForward,
-                    landingData.ExchangeUp,
-                    landingData.ExchangeApproachingWaypoints,
-                    landingData.Command);
+                    atmNavigationData.ExchangeForward,
+                    atmNavigationData.ExchangeUp,
+                    atmNavigationData.ExchangeApproachingWaypoints,
+                    atmNavigationData.Command);
 
-                landingData.Clear();
+                atmNavigationData.Clear();
             }
         }
-        void LandingDocking()
+        void AtmNavigationDock()
         {
             if (connectorA.Status != MyShipConnectorStatus.Connected)
             {
-                landingStateMsg = "Waiting for connector to lock.";
+                atmNavigationStateMsg = "Waiting for connector to lock.";
                 return;
             }
 
-            landingStateMsg = "Connector locked. Landing finished.";
+            atmNavigationStateMsg = "Connector locked. Navigation finished.";
         }
         #endregion
 
@@ -903,8 +760,7 @@ namespace IngameScript
             alignData.Clear();
             arrivalData.Clear();
             navigationData.Clear();
-            takeOffData.Clear();
-            landingData.Clear();
+            atmNavigationData.Clear();
 
             remotePilot.SetAutoPilotEnabled(false);
             remotePilot.ClearWaypoints();
@@ -938,7 +794,7 @@ namespace IngameScript
             string[] lines = argument.Split('|');
             var destination = Utils.ReadVector(lines, "Destination");
 
-            takeOffData.Initialize(remotePilot.GetPosition(), destination, "WAITING");
+            atmNavigationData.Initialize(false, remotePilot.GetPosition(), destination, "WAITING");
 
             timerUnlock?.ApplyAction("Start");
         }
@@ -950,7 +806,9 @@ namespace IngameScript
             string[] lines = argument.Split('|');
             var destination = Utils.ReadVector(lines, "Destination");
 
-            landingData.Initialize(remoteLanding.GetPosition(), destination, "WAITING");
+            atmNavigationData.Initialize(true, remoteLanding.GetPosition(), destination, "WAITING");
+
+            timerUnlock?.ApplyAction("Start");
         }
         /// <summary>
         /// Requests docking at a base defined in the argument.
@@ -995,7 +853,7 @@ namespace IngameScript
             if (distance < 5000)
             {
                 //Carga en el piloto automático
-                StartAutoPilot(destination, destinationName, ExchangeMaxApproachingSpeed, onArrival);
+                StartAutoPilot(destination, destinationName, config.ExchangeMaxApproachingSpeed, onArrival);
             }
             else
             {
@@ -1167,7 +1025,6 @@ namespace IngameScript
             else if (command == "START_DELIVERY") CmdStartDelivery(lines);
             else if (command == "DOCK") CmdDock(lines);
             else if (command == "LOADED") CmdLoaded(lines);
-            else if (command == "TAKE_OFF") CmdTakeOff(lines);
         }
         /// <summary>
         /// Sec_A_2 - La nave responde con su estado
@@ -1222,22 +1079,6 @@ namespace IngameScript
             ApproachToParking();
         }
 
-
-        void CmdTakeOff(string[] lines)
-        {
-            string to = Utils.ReadString(lines, "To");
-            if (to != shipId)
-            {
-                return;
-            }
-
-            takeOffData.Initialize(
-                remotePilot.GetPosition(),
-                Utils.ReadVector(lines, "Destination"),
-                "WAITING");
-
-            timerUnlock?.ApplyAction("Start");
-        }
         /// <summary>
         /// Sec_xxxx / Sec_D_2a - NAVEX comienza la navegación al conector especificado y atraca en MODO CARGA o DESCARGA.
         /// Execute:  START_LOADING o START_UNLOADING
@@ -1285,12 +1126,13 @@ namespace IngameScript
             {
                 status = ShipStatus.ApproachingWarehouse;
 
-                landingData.Initialize(
+                atmNavigationData.Initialize(
+                    Utils.ReadInt(lines, "Landing") == 1,
                     remoteLanding.GetPosition(),
                     Utils.ReadVector(lines, "Parking"),
                     "START_LOADING");
 
-                landingData.SetExchange(
+                atmNavigationData.SetExchange(
                     Utils.ReadString(lines, "Exchange"),
                     Utils.ReadVector(lines, "Forward"),
                     Utils.ReadVector(lines, "Up"),
@@ -1300,12 +1142,13 @@ namespace IngameScript
             {
                 status = ShipStatus.ApproachingCustomer;
 
-                takeOffData.Initialize(
+                atmNavigationData.Initialize(
+                    Utils.ReadInt(lines, "Landing") == 1,
                     remoteLanding.GetPosition(),
                     Utils.ReadVector(lines, "Parking"),
                     "START_UNLOADING");
 
-                takeOffData.SetExchange(
+                atmNavigationData.SetExchange(
                     Utils.ReadString(lines, "Exchange"),
                     Utils.ReadVector(lines, "Forward"),
                     Utils.ReadVector(lines, "Up"),
@@ -1352,7 +1195,7 @@ namespace IngameScript
             if (distance > 500)
             {
                 //Carga en el piloto automático hasta la posición del primer waypoint
-                StartAutoPilot(wp, "Path to Connector", ExchangeMaxApproachingSpeed, "START_APPROACH");
+                StartAutoPilot(wp, "Path to Connector", config.ExchangeMaxApproachingSpeed, "START_APPROACH");
             }
             else
             {
@@ -1384,7 +1227,7 @@ namespace IngameScript
         /// </summary>
         void StartAutoPilot(Vector3D destination, string destinationName, double velocity, string onArrival)
         {
-            arrivalData.Initialize(destination, ExchangeDistanceThr, onArrival);
+            arrivalData.Initialize(destination, config.ExchangeDistanceThr, onArrival);
 
             timerPilot.Trigger();
 
@@ -1480,13 +1323,13 @@ namespace IngameScript
 
             WriteLogLCDs($"BroadcastMessage: {message}");
 
-            IGC.SendBroadcastMessage(channel, message);
+            IGC.SendBroadcastMessage(config.Channel, message);
         }
         void BroadcastStatus(string message)
         {
             WriteLogLCDs($"BroadcastStatus: {message}");
 
-            IGC.SendBroadcastMessage(channel, message);
+            IGC.SendBroadcastMessage(config.Channel, message);
         }
 
         void ThrustToTarget(IMyRemoteControl remote, Vector3D toTarget, double maxSpeed)
@@ -1586,7 +1429,7 @@ namespace IngameScript
             foreach (var gyro in gyros)
             {
                 var localAxis = Vector3D.TransformNormal(axis, MatrixD.Transpose(gyro.WorldMatrix));
-                var gyroRot = localAxis * -GyrosSpeed;
+                var gyroRot = localAxis * -config.GyrosSpeed;
                 gyro.GyroOverride = true;
                 gyro.Pitch = (float)gyroRot.X;
                 gyro.Yaw = (float)gyroRot.Y;
@@ -1651,8 +1494,7 @@ namespace IngameScript
             alignData.LoadFromStorage(Utils.ReadString(storageLines, "AlignData"));
             arrivalData.LoadFromStorage(Utils.ReadString(storageLines, "ArrivalData"));
             navigationData.LoadFromStorage(Utils.ReadString(storageLines, "NavigationData"));
-            takeOffData.LoadFromStorage(Utils.ReadString(storageLines, "TakeOffData"));
-            landingData.LoadFromStorage(Utils.ReadString(storageLines, "LandingData"));
+            atmNavigationData.LoadFromStorage(Utils.ReadString(storageLines, "AtmNavigationData"));
             enableLogs = Utils.ReadInt(storageLines, "EnableLogs") == 1;
             paused = Utils.ReadInt(storageLines, "Paused", 0) == 1;
         }
@@ -1665,8 +1507,7 @@ namespace IngameScript
                 $"AlignData={alignData.SaveToStorage()}",
                 $"ArrivalData={arrivalData.SaveToStorage()}",
                 $"NavigationData={navigationData.SaveToStorage()}",
-                $"TakeOffData={takeOffData.SaveToStorage()}",
-                $"LandingData={landingData.SaveToStorage()}",
+                $"AtmNavigationData={atmNavigationData.SaveToStorage()}",
                 $"EnableLogs={(enableLogs ? 1 : 0)}",
                 $"Paused={(paused ? 1 : 0)}",
             };

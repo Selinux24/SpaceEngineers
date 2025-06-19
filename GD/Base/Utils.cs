@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using VRageMath;
 
@@ -11,14 +10,6 @@ namespace IngameScript
         const char VariableSep = ';';
         const char VariablePartSep = ':';
         const char AttributeSep = '=';
-
-        public static string ReadConfig(string customData, string name)
-        {
-            string[] lines = customData.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
-
-            string cmdToken = $"{name}=";
-            return lines.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";
-        }
 
         public static string ReadArgument(string[] arguments, string command, char sep = ArgumentSep)
         {

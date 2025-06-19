@@ -4,9 +4,13 @@ using VRageMath;
 
 namespace IngameScript
 {
-    class LandingData
+    /// <summary>
+    /// Atmospheric navigation data for ships, used to track take-off and landing operations.
+    /// </summary>
+    class AtmNavigationData
     {
-        public LandingStatus CurrentState = LandingStatus.Idle;
+        public AtmNavigationStatus CurrentState = AtmNavigationStatus.Idle;
+        public bool Landing = false;
         public Vector3D Origin;
         public Vector3D Destination;
         public string ExchangeName;
@@ -23,21 +27,25 @@ namespace IngameScript
         public double TotalDistance => Vector3D.Distance(Origin, Destination);
         public double Progress => DistanceToTarget > 0 ? 1 - (DistanceToTarget / TotalDistance) : 1;
 
-        public void Initialize(Vector3D origin, Vector3D destination, string commad)
+        public void Initialize(bool landing, Vector3D origin, Vector3D destination, string commad)
         {
+            CurrentState = AtmNavigationStatus.Separating;
+            Landing = landing;
             Origin = origin;
             Destination = destination;
             Command = commad;
             HasTarget = true;
-            CurrentState = LandingStatus.Descending;
         }
         public void Clear()
         {
+            CurrentState = AtmNavigationStatus.Idle;
+            Landing = false;
             Origin = Vector3D.Zero;
             Destination = Vector3D.Zero;
             Command = null;
             HasTarget = false;
-            CurrentState = LandingStatus.Idle;
+
+            ClearExchange();
         }
 
         public void SetExchange(string name, Vector3D forward, Vector3D up, List<Vector3D> waypoints)
@@ -68,21 +76,34 @@ namespace IngameScript
         {
             var parts = storageLine.Split('¬');
 
-            CurrentState = (LandingStatus)Utils.ReadInt(parts, "CurrentState");
+            CurrentState = (AtmNavigationStatus)Utils.ReadInt(parts, "CurrentState");
+            Landing = Utils.ReadInt(parts, "Landing") == 1;
             Origin = Utils.ReadVector(parts, "Origin");
             Destination = Utils.ReadVector(parts, "Destination");
             Command = Utils.ReadString(parts, "Command");
             HasTarget = Utils.ReadInt(parts, "HasTarget") == 1;
+
+            ExchangeName = Utils.ReadString(parts, "ExchangeName");
+            ExchangeForward = Utils.ReadVector(parts, "ExchangeForward");
+            ExchangeUp = Utils.ReadVector(parts, "ExchangeUp");
+            ExchangeApproachingWaypoints.Clear();
+            ExchangeApproachingWaypoints.AddRange(Utils.ReadVectorList(parts, "ExchangeApproachingWaypoints"));
         }
         public string SaveToStorage()
         {
             List<string> parts = new List<string>()
             {
                 $"CurrentState={(int)CurrentState}",
+                $"Landing={(Landing?1:0)}",
                 $"Origin={Utils.VectorToStr(Origin)}",
                 $"Destination={Utils.VectorToStr(Destination)}",
                 $"Command={Command}",
                 $"HasTarget={(HasTarget?1:0)}",
+
+                $"ExchangeName={ExchangeName}",
+                $"ExchangeForward={Utils.VectorToStr(ExchangeForward)}",
+                $"ExchangeUp={Utils.VectorToStr(ExchangeUp)}",
+                $"ExchangeApproachingWaypoints={Utils.VectorListToStr(ExchangeApproachingWaypoints)}",
             };
 
             return string.Join("¬", parts);

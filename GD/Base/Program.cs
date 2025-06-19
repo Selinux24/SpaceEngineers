@@ -13,25 +13,6 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        #region Constants
-        const string baseCamera = "Camera";
-        const string baseWarehouses = "Warehouse";
-        const string baseDataLCDs = "[DELIVERY_DATA]";
-        const string baseLogLCDs = "[DELIVERY_LOG]";
-
-        const string exchangeGroupName = @"GR_\w+";
-        const string exchangeUpperConnector = "Input";
-        const string exchangeLowerConnector = "Output";
-        const string exchangeSorterInput = "Input";
-        const string exchangeSorterOutput = "Output";
-        const string exchangeTimerPrepare = "Prepare";
-        const string exchangeTimerUnload = "Unload";
-
-        const int requestStatusInterval = 10; // seconds, how often to request status from ships
-        const int requestDeliveryInterval = 60; // seconds, how often to request deliveries
-        const int requestReceptionInterval = 60; // seconds, how often to request receptions
-        #endregion
-
         #region Blocks
         readonly IMyCameraBlock camera;
         readonly List<IMyCargoContainer> cargos = new List<IMyCargoContainer>();
@@ -40,78 +21,69 @@ namespace IngameScript
         readonly List<IMyTextPanel> logLCDs = new List<IMyTextPanel>();
         #endregion
 
+        readonly string baseId;
+        readonly Config config;
+
         readonly StringBuilder sbData = new StringBuilder();
         readonly StringBuilder sbLog = new StringBuilder();
 
-        readonly string baseId;
-        readonly string channel;
-        readonly string baseParking;
-        readonly System.Text.RegularExpressions.Regex exchangesRegex = new System.Text.RegularExpressions.Regex(exchangeGroupName);
         readonly List<ExchangeGroup> exchanges = new List<ExchangeGroup>();
         readonly List<Order> orders = new List<Order>();
         readonly List<Ship> ships = new List<Ship>();
         readonly List<ExchangeRequest> exchangeRequests = new List<ExchangeRequest>();
-        readonly bool fakeOrders = false;
 
         bool showExchanges = true;
         bool showShips = true;
         bool showOrders = true;
         bool showExchangeRequests = true;
         bool enableLogs = false;
-        bool requestStatus = true;
-        bool requestDelivery = true;
-        bool requestReception = true;
 
+        bool requestStatus = true;
         DateTime lastRequestStatus = DateTime.MinValue;
+
+        bool requestDelivery = true;
         DateTime lastRequestDelivery = DateTime.MinValue;
+      
+        bool requestReception = true;
         DateTime lastRequestReception = DateTime.MinValue;
 
         public Program()
         {
             if (string.IsNullOrWhiteSpace(Me.CustomData))
             {
-                Me.CustomData =
-                    "Channel=name\n" +
-                    "Parking=x:y:z\n";
+                Me.CustomData = Config.GetDefault();
 
                 Echo("CustomData not set.");
                 return;
             }
 
-            channel = Utils.ReadConfig(Me.CustomData, "Channel");
-            if (string.IsNullOrWhiteSpace(channel))
-            {
-                Echo("Channel name not set.");
-                return;
-            }
-            baseParking = Utils.ReadConfig(Me.CustomData, "Parking");
-            if (string.IsNullOrWhiteSpace(baseParking))
-            {
-                Echo("Parking position not set.");
-                return;
-            }
-
             baseId = Me.CubeGrid.CustomName;
+            config = new Config(Me.CustomData);
+            if (!config.IsValid())
+            {
+                Echo(config.GetErrors());
+                return;
+            }
 
             InitializeExchangeGroups();
 
             LoadFromStorage();
 
-            camera = GetBlockWithName<IMyCameraBlock>(baseCamera);
+            camera = GetBlockWithName<IMyCameraBlock>(config.BaseCamera);
             if (camera == null)
             {
                 Echo("Cámara no encontrada.");
                 return;
             }
 
-            GridTerminalSystem.GetBlocksOfType(cargos, cargo => cargo.CubeGrid == Me.CubeGrid && cargo.CustomName.Contains(baseWarehouses));
-            GridTerminalSystem.GetBlocksOfType(dataLCDs, lcd => lcd.CubeGrid == Me.CubeGrid && lcd.CustomName.Contains(baseDataLCDs));
-            GridTerminalSystem.GetBlocksOfType(logLCDs, lcd => lcd.CubeGrid == Me.CubeGrid && lcd.CustomName.Contains(baseLogLCDs));
+            GridTerminalSystem.GetBlocksOfType(cargos, cargo => cargo.CubeGrid == Me.CubeGrid && cargo.CustomName.Contains(config.BaseWarehouses));
+            GridTerminalSystem.GetBlocksOfType(dataLCDs, lcd => lcd.CubeGrid == Me.CubeGrid && lcd.CustomName.Contains(config.BaseDataLCDs));
+            GridTerminalSystem.GetBlocksOfType(logLCDs, lcd => lcd.CubeGrid == Me.CubeGrid && lcd.CustomName.Contains(config.BaseLogLCDs));
 
             WriteLCDs("[baseId]", baseId);
 
-            bl = IGC.RegisterBroadcastListener(channel);
-            Echo($"{baseId} in channel {channel}");
+            bl = IGC.RegisterBroadcastListener(config.Channel);
+            Echo($"{baseId} in channel {config.Channel}");
 
             Runtime.UpdateFrequency = UpdateFrequency.Update100; // Ejecuta cada ~1.6s
         }
@@ -141,7 +113,7 @@ namespace IngameScript
             UpdateBaseState();
 
             sbData.Clear();
-            sbData.AppendLine($"{baseId} in channel {channel}");
+            sbData.AppendLine($"{baseId} in channel {config.Channel}");
             PrintExchanges();
             PrintShipStatus();
             PrintOrders();
@@ -161,7 +133,7 @@ namespace IngameScript
                 return;
             }
 
-            if (DateTime.Now - lastRequestStatus < TimeSpan.FromSeconds(requestStatusInterval))
+            if (DateTime.Now - lastRequestStatus < TimeSpan.FromSeconds(config.RequestStatusInterval))
             {
                 return;
             }
@@ -188,7 +160,7 @@ namespace IngameScript
                 return;
             }
 
-            if (DateTime.Now - lastRequestDelivery < TimeSpan.FromSeconds(requestDeliveryInterval))
+            if (DateTime.Now - lastRequestDelivery < TimeSpan.FromSeconds(config.RequestDeliveryInterval))
             {
                 return;
             }
@@ -255,7 +227,7 @@ namespace IngameScript
                 return;
             }
 
-            if (DateTime.Now - lastRequestReception < TimeSpan.FromSeconds(requestReceptionInterval))
+            if (DateTime.Now - lastRequestReception < TimeSpan.FromSeconds(config.RequestReceptionInterval))
             {
                 return;
             }
@@ -305,7 +277,8 @@ namespace IngameScript
                     $"Command=DOCK",
                     $"To={request.From}",
                     $"From={baseId}",
-                    $"Parking={baseParking}",
+                    $"Parking={config.BaseParking}",
+                    $"Landing={(config.IsRocketBase?1:0)}",
                     $"Forward={Utils.VectorToStr(camera.WorldMatrix.Forward)}",
                     $"Up={Utils.VectorToStr(camera.WorldMatrix.Up)}",
                     $"WayPoints={Utils.VectorListToStr(exchange.CalculateRouteToConnector())}",
@@ -333,7 +306,6 @@ namespace IngameScript
             else if (argument == "ENABLE_STATUS_REQUEST") EnableStatusRequest();
             else if (argument == "ENABLE_DELIVERY_REQUEST") EnableDeliveryRequest();
             else if (argument == "ENABLE_RECEPTION_REQUEST") EnableReceptionRequest();
-            else if (argument == "FAKE_ORDER") FakeOrder();
             else if (argument.StartsWith("SHIP_LOADED")) ShipLoaded(argument);
             else if (argument.StartsWith("SET_ORDER")) SetOrder(argument);
         }
@@ -411,29 +383,6 @@ namespace IngameScript
             requestReception = !requestReception;
         }
         /// <summary>
-        /// Sec_B_1 - BASEX revisa el inventario y pide a WH
-        /// Execute:  REQUEST_ORDER
-        /// </summary>
-        void FakeOrder()
-        {
-            if (!fakeOrders)
-            {
-                return;
-            }
-
-            string warehouse = "BaseWarehouse1";
-
-            List<string> parts = new List<string>()
-            {
-                $"Command=REQUEST_ORDER",
-                $"To={warehouse}",
-                $"Customer={baseId}",
-                $"CustomerParking={baseParking}",
-                $"Items=SteelPlate:1000",
-            };
-            BroadcastMessage(parts);
-        }
-        /// <summary>
         /// Sec_C_3b - WH termina la carga y avisa a NAVEX
         /// Request:  SHIP_LOADED
         /// Execute:  LOADED
@@ -472,7 +421,7 @@ namespace IngameScript
                 Warehouse = warehouse,
                 WarehouseParking = Utils.StrToVector(warehouseParking),
                 Customer = baseId,
-                CustomerParking = Utils.StrToVector(baseParking),
+                CustomerParking = Utils.StrToVector(config.BaseParking),
             };
 
             orders.Add(order);
@@ -553,7 +502,7 @@ namespace IngameScript
             Order order = new Order
             {
                 Warehouse = baseId,
-                WarehouseParking = Utils.StrToVector(baseParking),
+                WarehouseParking = Utils.StrToVector(config.BaseParking),
                 Customer = customer,
                 CustomerParking = customerParking,
             };
@@ -770,7 +719,7 @@ namespace IngameScript
         {
             //Busca todos los bloques que tengan en el nombre la regex de exchanges
             List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
-            GridTerminalSystem.GetBlocksOfType(blocks, i => i.CubeGrid == Me.CubeGrid && exchangesRegex.IsMatch(i.CustomName));
+            GridTerminalSystem.GetBlocksOfType(blocks, i => i.CubeGrid == Me.CubeGrid && config.ExchangesRegex.IsMatch(i.CustomName));
 
             //Group them by the group name
             var groups = blocks.GroupBy(b => ExtractGroupName(b.CustomName)).ToList();
@@ -788,8 +737,8 @@ namespace IngameScript
                     var connector = block as IMyShipConnector;
                     if (connector != null)
                     {
-                        if (connector.CustomName.Contains(exchangeUpperConnector)) exchangeGroup.UpperConnector = connector;
-                        else if (connector.CustomName.Contains(exchangeLowerConnector)) exchangeGroup.LowerConnector = connector;
+                        if (connector.CustomName.Contains(config.ExchangeUpperConnector)) exchangeGroup.UpperConnector = connector;
+                        else if (connector.CustomName.Contains(config.ExchangeLowerConnector)) exchangeGroup.LowerConnector = connector;
 
                         continue;
                     }
@@ -804,16 +753,16 @@ namespace IngameScript
                     var sorter = block as IMyConveyorSorter;
                     if (sorter != null)
                     {
-                        if (sorter.CustomName.Contains(exchangeSorterInput)) exchangeGroup.SorterInput = sorter;
-                        else if (sorter.CustomName.Contains(exchangeSorterOutput)) exchangeGroup.SorterOutput = sorter;
+                        if (sorter.CustomName.Contains(config.ExchangeSorterInput)) exchangeGroup.SorterInput = sorter;
+                        else if (sorter.CustomName.Contains(config.ExchangeSorterOutput)) exchangeGroup.SorterOutput = sorter;
                         continue;
                     }
 
                     var timer = block as IMyTimerBlock;
                     if (timer != null)
                     {
-                        if (timer.CustomName.Contains(exchangeTimerPrepare)) exchangeGroup.TimerPrepare = timer;
-                        else if (timer.CustomName.Contains(exchangeTimerUnload)) exchangeGroup.TimerUnload = timer;
+                        if (timer.CustomName.Contains(config.ExchangeTimerPrepare)) exchangeGroup.TimerPrepare = timer;
+                        else if (timer.CustomName.Contains(config.ExchangeTimerUnload)) exchangeGroup.TimerUnload = timer;
                     }
                 }
 
@@ -980,7 +929,7 @@ namespace IngameScript
 
         string ExtractGroupName(string input)
         {
-            var match = exchangesRegex.Match(input);
+            var match = config.ExchangesRegex.Match(input);
             if (match.Success)
             {
                 return match.Value;
@@ -1048,7 +997,7 @@ namespace IngameScript
 
             WriteLogLCDs($"SendIGCMessage: {message}");
 
-            IGC.SendBroadcastMessage(channel, message);
+            IGC.SendBroadcastMessage(config.Channel, message);
         }
         #endregion
 
