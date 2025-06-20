@@ -12,22 +12,22 @@ namespace IngameScript
         public readonly string BaseParking;
         public readonly bool IsRocketBase;
 
-        public readonly string BaseCamera = "Camera";
-        public readonly string BaseWarehouses = "Warehouse";
-        public readonly string BaseDataLCDs = "[DELIVERY_DATA]";
-        public readonly string BaseLogLCDs = "[DELIVERY_LOG]";
+        public readonly string BaseCamera;
+        public readonly string BaseWarehouses;
+        public readonly string BaseDataLCDs;
+        public readonly string BaseLogLCDs;
 
-        public readonly System.Text.RegularExpressions.Regex ExchangesRegex = new System.Text.RegularExpressions.Regex(@"GR_\w+");
-        public readonly string ExchangeUpperConnector = "Input";
-        public readonly string ExchangeLowerConnector = "Output";
-        public readonly string ExchangeSorterInput = "Input";
-        public readonly string ExchangeSorterOutput = "Output";
-        public readonly string ExchangeTimerPrepare = "Prepare";
-        public readonly string ExchangeTimerUnload = "Unload";
+        public readonly System.Text.RegularExpressions.Regex ExchangesRegex;
+        public readonly string ExchangeUpperConnector;
+        public readonly string ExchangeLowerConnector;
+        public readonly string ExchangeSorterInput;
+        public readonly string ExchangeSorterOutput;
+        public readonly string ExchangeTimerPrepare;
+        public readonly string ExchangeTimerUnload;
 
-        public readonly int RequestStatusInterval = 10; // seconds, how often to request status from ships
-        public readonly int RequestDeliveryInterval = 60; // seconds, how often to request deliveries
-        public readonly int RequestReceptionInterval = 60; // seconds, how often to request receptions
+        public readonly int RequestStatusInterval; // seconds, how often to request status from ships
+        public readonly int RequestDeliveryInterval; // seconds, how often to request deliveries
+        public readonly int RequestReceptionInterval; // seconds, how often to request receptions
 
         public Config(string customData)
         {
@@ -105,7 +105,7 @@ namespace IngameScript
                 "Camera=Camera\n" +
                 "Warehouses=Warehouse\n" +
                 "\n" +
-                @"ExchangeGroupName=GR_\w+" + "\n" +
+                $"ExchangeGroupName={@"GR_\w+"}\n" +
                 "ExchangeUpperConnector=Input\n" +
                 "ExchangeLowerConnector=Output\n" +
                 "ExchangeSorterInput=Input\n" +

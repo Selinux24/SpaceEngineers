@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Linq;
-using System.Runtime.Remoting.Channels;
 using System.Text;
 
 namespace IngameScript
@@ -11,53 +10,58 @@ namespace IngameScript
 
         public readonly string Channel;
 
-        public readonly string WildcardShipId = "[shipId]";
-        public readonly string WildcardShipInfo = "[DELIVERY_INFO]";
-        public readonly string WildcardLogLCDs = "[DELIVERY_LOG]";
+        public readonly string WildcardShipId;
+        public readonly string WildcardShipInfo;
+        public readonly string WildcardLogLCDs;
 
-        public readonly string ShipTimerPilot = "Timer Block Pilot";
-        public readonly string ShipTimerLock = "Timer Block Locking";
-        public readonly string ShipTimerUnlock = "Timer Block Unlocking";
-        public readonly string ShipTimerLoad = "Timer Block Load";
-        public readonly string ShipTimerUnload = "Timer Block Unload";
-        public readonly string ShipTimerWaiting = "Timer Block Waiting";
-        public readonly string ShipRemoteControlPilot = "Remote Control Pilot";
-        public readonly string ShipCameraPilot = "Camera Pilot";
-        public readonly string ShipRemoteControlAlign = "Remote Control Locking";
-        public readonly string ShipRemoteControlLanding = "Remote Control Landing";
-        public readonly string ShipConnectorA = "Connector A";
-        public readonly string ShipBeaconName = "Distress Beacon";
-        public readonly string ShipAntennaName = "Compact Antenna";
+        public readonly string ShipTimerPilot;
+        public readonly string ShipTimerLock;
+        public readonly string ShipTimerUnlock;
+        public readonly string ShipTimerLoad;
+        public readonly string ShipTimerUnload;
+        public readonly string ShipTimerWaiting;
+        public readonly string ShipRemoteControlPilot;
+        public readonly string ShipCameraPilot;
+        public readonly string ShipRemoteControlAlign;
+        public readonly string ShipRemoteControlLanding;
+        public readonly string ShipConnectorA;
+        public readonly string ShipBeaconName;
+        public readonly string ShipAntennaName;
 
-        public readonly double GyrosThr = 0.001; //Precisión de alineación
-        public readonly double GyrosSpeed = 2f; //Velocidad de los giroscopios
+        public readonly double GyrosThr; //Precisión de alineación
+        public readonly double GyrosSpeed; //Velocidad de los giroscopios
 
-        public readonly double ExchangeMaxApproachingSpeed = 5; // Velocidad máxima de aproximación al conector
-        public readonly double ExchangeDistanceThr = 200.0; //Precisión de aproximación al primer punto del conector
-        public readonly double ExchangeWaypointDistanceThr = 0.5; //Precisión de aproximación entre waypoints
+        public readonly double ExchangeMaxApproachingSpeed; // Velocidad máxima de aproximación al conector
+        public readonly double ExchangeDistanceThr; //Precisión de aproximación al primer punto del conector
+        public readonly double ExchangeWaypointDistanceThr; //Precisión de aproximación entre waypoints
 
-        public readonly double CruisingMaxSpeed = 100.0; // Velocidad máxima de crucero
-        public readonly double CruisingMaxSpeedThr = 0.95;
-        public readonly double CruisingMaxAccelerationSpeed = 19.5; // Velocidad máxima de crucero cerca de la base
-        public readonly double CruisingToBasesDistanceThr = 2000.0; // Distancia al punto de salida para activar la velocidad máxima de crucero
-        public readonly double CruisingToTargetDistanceThr = 3000.0; // Rango de frenado hasta el objetivo
+        public readonly double AlignMaxApproachSpeed = 10.0; //Velocidad máxima de llegada
+        public readonly double AlignMaxApproachSpeedAprox = 5.0; //Velocidad máxima de aproximación
+        public readonly double AlignMaxApproachSpeedLocking = 1.0; //Velocidad máxima en el último waypoint
+        public readonly double AlignSlowdownDistance = 50.0; //Distancia de frenada
 
-        public readonly double CruisingThrustAlignSeconds = 5.0; // Tiempo de encendido de thrusters hasta alineación
-        public readonly double CruisingLocateAlignThr = 0.001; // Precisión de alineación
-        public readonly double CruisingCruiseAlignThr = 0.01; // Precisión de alineación
+        public readonly double CruisingMaxSpeed; // Velocidad máxima de crucero
+        public readonly double CruisingMaxSpeedThr;
+        public readonly double CruisingMaxAccelerationSpeed; // Velocidad máxima de crucero cerca de la base
+        public readonly double CruisingToBasesDistanceThr; // Distancia al punto de salida para activar la velocidad máxima de crucero
+        public readonly double CruisingToTargetDistanceThr; // Rango de frenado hasta el objetivo
 
-        public readonly double CrusingCollisionDetectRange = 10000.0; // Rango de detección de colisiones
-        public readonly double CrusingEvadingWaypointDistance = 100.0;
-        public readonly double CrusingEvadingMaxSpeed = 19.5;
+        public readonly double CruisingThrustAlignSeconds; // Tiempo de encendido de thrusters hasta alineación
+        public readonly double CruisingLocateAlignThr; // Precisión de alineación
+        public readonly double CruisingCruiseAlignThr; // Precisión de alineación
 
-        public readonly double AtmNavigationMaxSpeed = 100.0; // Velocidad máxima de despegue
-        public readonly double AtmNavigationToTargetDistanceThr = 1000.0; // Rango de frenado hasta el objetivo
-        public readonly double AtmNavigationAlignThr = 0.01; // Precisión de alineación
+        public readonly double CrusingCollisionDetectRange; // Rango de detección de colisiones
+        public readonly double CrusingEvadingWaypointDistance;
+        public readonly double CrusingEvadingMaxSpeed;
 
-        public readonly int ArrivalTicks = 100;
-        public readonly int AlignTicks = 1;
-        public readonly int NavigationTicks = 1;
-        public readonly int AtmNavigationTicks = 1;
+        public readonly double AtmNavigationMaxSpeed; // Velocidad máxima de despegue
+        public readonly double AtmNavigationToTargetDistanceThr; // Rango de frenado hasta el objetivo
+        public readonly double AtmNavigationAlignThr; // Precisión de alineación
+
+        public readonly int ArrivalTicks;
+        public readonly int AlignTicks;
+        public readonly int NavigationTicks;
+        public readonly int AtmNavigationTicks;
 
         public Config(string customData)
         {
@@ -87,6 +91,11 @@ namespace IngameScript
             ExchangeMaxApproachingSpeed = ReadConfigDouble(customData, "ExchangeMaxApproachingSpeed");
             ExchangeDistanceThr = ReadConfigDouble(customData, "ExchangeDistanceThr");
             ExchangeWaypointDistanceThr = ReadConfigDouble(customData, "ExchangeWaypointDistanceThr");
+
+            AlignMaxApproachSpeed = ReadConfigDouble(customData, "AlignMaxApproachSpeed");
+            AlignMaxApproachSpeedAprox = ReadConfigDouble(customData, "AlignMaxApproachSpeedAprox");
+            AlignMaxApproachSpeedLocking = ReadConfigDouble(customData, "AlignMaxApproachSpeedLocking");
+            AlignSlowdownDistance = ReadConfigDouble(customData, "AlignSlowdownDistance");
 
             CruisingMaxSpeed = ReadConfigDouble(customData, "CruisingMaxSpeed");
             CruisingMaxSpeedThr = ReadConfigDouble(customData, "CruisingMaxSpeedThr");
@@ -131,7 +140,7 @@ namespace IngameScript
                 return defaultValue;
             }
 
-            return int.Parse(value);
+            return int.Parse(value.Trim());
         }
         double ReadConfigDouble(string customData, string name, double defaultValue = 0)
         {
@@ -143,7 +152,7 @@ namespace IngameScript
                 return defaultValue;
             }
 
-            return double.Parse(value);
+            return double.Parse(value.Trim());
         }
         static string ReadConfigLine(string customData, string name)
         {
@@ -186,11 +195,16 @@ namespace IngameScript
                 "ShipAntennaName=Compact Antenna\n" +
                 "\n" +
                 "GyrosThr=0.001\n" +
-                "GyrosSpeed=2f\n" +
+                "GyrosSpeed=2.0\n" +
                 "\n" +
                 "ExchangeMaxApproachingSpeed=5\n" +
                 "ExchangeDistanceThr=200.0\n" +
                 "ExchangeWaypointDistanceThr=0.5\n" +
+                "\n" +
+                "AlignMaxApproachSpeed=10.0\n" +
+                "AlignMaxApproachSpeedAprox=5.0\n" +
+                "AlignMaxApproachSpeedLocking=1.0\n" +
+                "AlignSlowdownDistance=50.0\n" +
                 "\n" +
                 "CruisingMaxSpeed=100.0\n" +
                 "CruisingMaxSpeedThr=0.95\n" +

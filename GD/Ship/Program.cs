@@ -50,11 +50,11 @@ namespace IngameScript
 
         readonly StringBuilder sbLog = new StringBuilder();
 
-        readonly DeliveryData deliveryData = new DeliveryData();
-        readonly AlignData alignData = new AlignData();
-        readonly ArrivalData arrivalData = new ArrivalData();
-        readonly NavigationData navigationData = new NavigationData();
-        readonly AtmNavigationData atmNavigationData = new AtmNavigationData();
+        readonly DeliveryData deliveryData;
+        readonly AlignData alignData;
+        readonly ArrivalData arrivalData;
+        readonly NavigationData navigationData;
+        readonly AtmNavigationData atmNavigationData;
 
         ShipStatus status = ShipStatus.Idle;
         bool paused = false;
@@ -62,13 +62,13 @@ namespace IngameScript
 
         int alignTickCount = 0;
         string alignStateMsg;
-      
+
         int arrivalTickCount = 0;
         string arrivalStateMsg;
-     
+
         int navigationTickCount = 0;
         string navigationStateMsg;
-      
+
         int atmNavigationTickCount = 0;
         string atmNavigationStateMsg;
 
@@ -89,6 +89,12 @@ namespace IngameScript
                 Echo(config.GetErrors());
                 return;
             }
+
+            deliveryData = new DeliveryData();
+            alignData = new AlignData(config);
+            arrivalData = new ArrivalData();
+            navigationData = new NavigationData();
+            atmNavigationData = new AtmNavigationData();
 
             timerPilot = GetBlockWithName<IMyTimerBlock>(config.ShipTimerPilot);
             if (timerPilot == null)
@@ -156,8 +162,7 @@ namespace IngameScript
             remoteLanding = GetBlockWithName<IMyRemoteControl>(config.ShipRemoteControlLanding);
             if (remoteLanding == null)
             {
-                Echo($"Remote Control '{config.ShipRemoteControlLanding}' not found.");
-                return;
+                Echo($"Remote Control '{config.ShipRemoteControlLanding}' not found. This ship is not available for landing.");
             }
 
             antenna = GetBlockWithName<IMyRadioAntenna>(config.ShipAntennaName);
@@ -728,8 +733,6 @@ namespace IngameScript
             else if (argument == "PAUSE") Pause();
             else if (argument == "RESUME") Resume();
 
-            else if (argument.StartsWith("TAKE_OFF")) TakeOff(argument);
-            else if (argument.StartsWith("LAND")) Land(argument);
             else if (argument.StartsWith("REQUEST_DOCK")) RequestDock(argument);
 
             else if (argument.StartsWith("GOTO")) Goto(argument);
@@ -786,30 +789,6 @@ namespace IngameScript
             paused = false;
         }
 
-        /// <summary>
-        /// Take off to a position defined in the argument.
-        /// </summary>
-        void TakeOff(string argument)
-        {
-            string[] lines = argument.Split('|');
-            var destination = Utils.ReadVector(lines, "Destination");
-
-            atmNavigationData.Initialize(false, remotePilot.GetPosition(), destination, "WAITING");
-
-            timerUnlock?.ApplyAction("Start");
-        }
-        /// <summary>
-        /// Landing to a position defined in the argument.
-        /// </summary>
-        void Land(string argument)
-        {
-            string[] lines = argument.Split('|');
-            var destination = Utils.ReadVector(lines, "Destination");
-
-            atmNavigationData.Initialize(true, remoteLanding.GetPosition(), destination, "WAITING");
-
-            timerUnlock?.ApplyAction("Start");
-        }
         /// <summary>
         /// Requests docking at a base defined in the argument.
         /// </summary>
@@ -1128,7 +1107,7 @@ namespace IngameScript
 
                 atmNavigationData.Initialize(
                     Utils.ReadInt(lines, "Landing") == 1,
-                    remoteLanding.GetPosition(),
+                    remotePilot.GetPosition(),
                     Utils.ReadVector(lines, "Parking"),
                     "START_LOADING");
 
@@ -1144,7 +1123,7 @@ namespace IngameScript
 
                 atmNavigationData.Initialize(
                     Utils.ReadInt(lines, "Landing") == 1,
-                    remoteLanding.GetPosition(),
+                    remotePilot.GetPosition(),
                     Utils.ReadVector(lines, "Parking"),
                     "START_UNLOADING");
 
