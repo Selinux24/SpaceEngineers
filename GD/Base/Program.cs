@@ -541,6 +541,12 @@ namespace IngameScript
             string from = Utils.ReadString(lines, "From");
             int orderId = Utils.ReadInt(lines, "Order");
 
+            if (exchangeRequests.Any(r => r.Ship == from && r.OrderId == orderId && r.Task == ExchangeTasks.Load))
+            {
+                // Ya hay una petición de carga para esta nave y orden
+                return;
+            }
+
             exchangeRequests.Add(new ExchangeRequest
             {
                 Ship = from,
@@ -595,6 +601,12 @@ namespace IngameScript
 
             string from = Utils.ReadString(lines, "From");
             int orderId = Utils.ReadInt(lines, "Order");
+
+            if (exchangeRequests.Any(r => r.Ship == from && r.OrderId == orderId && r.Task == ExchangeTasks.Unload))
+            {
+                // Ya hay una petición de descarga para esta nave y orden
+                return;
+            }
 
             exchangeRequests.Add(new ExchangeRequest
             {
