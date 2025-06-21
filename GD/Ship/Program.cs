@@ -798,6 +798,8 @@ namespace IngameScript
             var bse = Utils.ReadString(lines, "Base");
             var task = Utils.ReadInt(lines, "Task");
 
+            status = ShipStatus.Idle;
+
             List<string> parts = new List<string>()
             {
                 $"Command=REQUEST_DOCK",
