@@ -1,6 +1,5 @@
 ﻿using Sandbox.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -27,6 +26,10 @@ namespace IngameScript
         public IMyTimerBlock TimerUnload;
 
         public string DockedShipName { get; private set; }
+        public bool UpperConnected => UpperConnector.Status == MyShipConnectorStatus.Connected;
+        public bool LowerConnected => LowerConnector == null || LowerConnector.Status == MyShipConnectorStatus.Connected;
+        public string UpperShipName => UpperConnected ? UpperConnector.OtherConnector.CubeGrid.CustomName : null;
+        public string LowerShipName => LowerConnected ? LowerConnector?.OtherConnector.CubeGrid.CustomName : UpperShipName;
 
         public bool IsValid()
         {
@@ -47,20 +50,19 @@ namespace IngameScript
         {
             dockRequestTime += time;
 
-            bool upperConnected = false;
-            bool lowerConnected = false;
-            string newShipU = null;
-            string newShipL = null;
+            bool upperConnected = UpperConnected;
+            bool lowerConnected = LowerConnected;
 
-            if (UpperConnector.Status == MyShipConnectorStatus.Connected)
+            string newShipU = null;
+            if (upperConnected)
             {
                 newShipU = UpperConnector.OtherConnector.CubeGrid.CustomName;
-                upperConnected = true;
             }
-            if (LowerConnector != null && LowerConnector.Status == MyShipConnectorStatus.Connected)
+          
+            string newShipL = null;
+            if (lowerConnected)
             {
-                newShipL = LowerConnector.OtherConnector.CubeGrid.CustomName;
-                lowerConnected = true;
+                newShipL = LowerConnector?.OtherConnector.CubeGrid.CustomName ?? DockedShipName;
             }
 
             bool hasDockRequested = !string.IsNullOrWhiteSpace(DockedShipName) && dockRequestTime <= DockRequestTimeThr;

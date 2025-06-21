@@ -969,7 +969,7 @@ namespace IngameScript
 
             Depart();
 
-            status = ShipStatus.RouteToWarehouse;
+            status = ShipStatus.RouteToLoad;
         }
 
         /// <summary>
@@ -1046,7 +1046,7 @@ namespace IngameScript
                 return;
             }
 
-            status = ShipStatus.RouteToWarehouse;
+            status = ShipStatus.RouteToLoad;
 
             deliveryData.SetOrder(
                 Utils.ReadInt(lines, "Order"),
@@ -1077,7 +1077,7 @@ namespace IngameScript
 
             if (task == ExchangeTasks.Load)
             {
-                status = ShipStatus.ApproachingWarehouse;
+                status = ShipStatus.ApproachingLoad;
 
                 deliveryData.SetExchange(
                     Utils.ReadString(lines, "Exchange"),
@@ -1091,7 +1091,7 @@ namespace IngameScript
             }
             else if (task == ExchangeTasks.Unload)
             {
-                status = ShipStatus.ApproachingCustomer;
+                status = ShipStatus.ApproachingUnload;
 
                 deliveryData.SetExchange(
                     Utils.ReadString(lines, "Exchange"),
@@ -1105,7 +1105,7 @@ namespace IngameScript
             }
             else if (task == ExchangeTasks.RocketLoad)
             {
-                status = ShipStatus.ApproachingWarehouse;
+                status = ShipStatus.ApproachingLoad;
 
                 atmNavigationData.Initialize(
                     Utils.ReadInt(lines, "Landing") == 1,
@@ -1118,10 +1118,12 @@ namespace IngameScript
                     Utils.ReadVector(lines, "Forward"),
                     Utils.ReadVector(lines, "Up"),
                     Utils.ReadVectorList(lines, "WayPoints"));
+          
+                timerUnlock?.ApplyAction("Start");
             }
             else if (task == ExchangeTasks.RocketUnload)
             {
-                status = ShipStatus.ApproachingCustomer;
+                status = ShipStatus.ApproachingUnload;
 
                 atmNavigationData.Initialize(
                     Utils.ReadInt(lines, "Landing") == 1,
@@ -1153,7 +1155,7 @@ namespace IngameScript
                 return;
             }
 
-            status = ShipStatus.RouteToCustomer;
+            status = ShipStatus.RouteToUnload;
 
             //Carga la ruta de salida y al llegar al último waypoint del conector, ejecutará APPROACH_TO_PARKING, que activará la navegación al Customer
             deliveryData.PrepareNavigationFromExchange("APPROACH_TO_PARKING");

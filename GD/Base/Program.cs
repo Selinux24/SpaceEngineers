@@ -43,7 +43,7 @@ namespace IngameScript
 
         bool requestDelivery = true;
         DateTime lastRequestDelivery = DateTime.MinValue;
-      
+
         bool requestReception = true;
         DateTime lastRequestReception = DateTime.MinValue;
 
@@ -117,7 +117,7 @@ namespace IngameScript
             PrintExchanges();
             PrintShipStatus();
             PrintOrders();
-            PrintReceptions();
+            PrintExchangeRequests();
             WriteDataLCDs(sbData.ToString(), false);
         }
 
@@ -195,7 +195,7 @@ namespace IngameScript
             var exchange = shipExchangePair.Exchange;
 
             order.AssignedShip = ship.Name;
-            ship.ShipStatus = ShipStatus.ApproachingWarehouse;
+            ship.ShipStatus = ShipStatus.ApproachingLoad;
             exchange.DockRequest(ship.Name);
 
             List<string> parts = new List<string>()
@@ -259,7 +259,7 @@ namespace IngameScript
 
             foreach (var request in exRequest)
             {
-                var pair = shipExchangePairs.FirstOrDefault(s => s.Ship.Name == request.From);
+                var pair = shipExchangePairs.FirstOrDefault(s => s.Ship.Name == request.Ship);
                 if (pair == null)
                 {
                     continue;
@@ -269,13 +269,13 @@ namespace IngameScript
                 var exchange = pair.Exchange;
 
                 request.Idle = false;
-                ship.ShipStatus = ShipStatus.ApproachingCustomer;
+                ship.ShipStatus = ShipStatus.ApproachingUnload;
                 exchange.DockRequest(ship.Name);
 
                 List<string> parts = new List<string>()
                 {
                     $"Command=DOCK",
-                    $"To={request.From}",
+                    $"To={request.Ship}",
                     $"From={baseId}",
                     $"Parking={config.BaseParking}",
                     $"Landing={(config.IsRocketBase?1:0)}",
@@ -543,7 +543,7 @@ namespace IngameScript
 
             exchangeRequests.Add(new ExchangeRequest
             {
-                From = from,
+                Ship = from,
                 OrderId = orderId,
                 Idle = true,
                 Task = ExchangeTasks.Load,
@@ -598,7 +598,7 @@ namespace IngameScript
 
             exchangeRequests.Add(new ExchangeRequest
             {
-                From = from,
+                Ship = from,
                 OrderId = orderId,
                 Idle = true,
                 Task = ExchangeTasks.Unload,
@@ -692,7 +692,7 @@ namespace IngameScript
 
             exchangeRequests.Add(new ExchangeRequest
             {
-                From = from,
+                Ship = from,
                 OrderId = -1,
                 Idle = true,
                 Task = task,
@@ -711,6 +711,14 @@ namespace IngameScript
 
                 //TODO: Si hay una petición de dock y no coincide con las naves conectadas, abortar y devolver la nave al parking, y ponerla en espera
             }
+
+            var dockedShips = exchanges
+                .Select(e => e.UpperShipName)
+                .Concat(exchanges.Select(e => e.LowerShipName))
+                .Where(e => !string.IsNullOrEmpty(e))
+                .ToList();
+
+            exchangeRequests.RemoveAll(e => dockedShips.Contains(e.Ship));
         }
         #endregion
 
@@ -870,14 +878,14 @@ namespace IngameScript
             foreach (var ship in ships)
             {
                 sbData.AppendLine($"+ {ship.Name} {ship.ShipStatus}. Last update: {(DateTime.Now - ship.UpdateTime).TotalSeconds:F0}secs");
-                if (ship.ShipStatus != ShipStatus.RouteToCustomer && ship.ShipStatus != ShipStatus.RouteToWarehouse) continue;
+                if (ship.ShipStatus != ShipStatus.RouteToUnload && ship.ShipStatus != ShipStatus.RouteToLoad) continue;
 
-                string origin = ship.ShipStatus == ShipStatus.RouteToCustomer ? ship.Warehouse : ship.Customer;
-                string destination = ship.ShipStatus == ShipStatus.RouteToCustomer ? ship.Customer : ship.Warehouse;
+                string origin = ship.ShipStatus == ShipStatus.RouteToUnload ? ship.Warehouse : ship.Customer;
+                string destination = ship.ShipStatus == ShipStatus.RouteToUnload ? ship.Customer : ship.Warehouse;
                 sbData.AppendLine($"  - On route from [{origin}] to [{destination}]");
 
-                Vector3D originPosition = ship.ShipStatus == ShipStatus.RouteToCustomer ? ship.WarehousePosition : ship.CustomerPosition;
-                Vector3D destinationPosition = ship.ShipStatus == ShipStatus.RouteToCustomer ? ship.CustomerPosition : ship.WarehousePosition;
+                Vector3D originPosition = ship.ShipStatus == ShipStatus.RouteToUnload ? ship.WarehousePosition : ship.CustomerPosition;
+                Vector3D destinationPosition = ship.ShipStatus == ShipStatus.RouteToUnload ? ship.CustomerPosition : ship.WarehousePosition;
                 double distanceToOrigin = Vector3D.Distance(ship.Position, originPosition);
                 double distanceToDestination = Vector3D.Distance(ship.Position, destinationPosition);
                 TimeSpan time = TimeSpan.FromSeconds(distanceToDestination / ship.Speed);
@@ -907,23 +915,30 @@ namespace IngameScript
                 sbData.AppendLine($"Id[{order.Id}]. {order.AssignedShip} shipping from {order.Customer} to {order.Warehouse}");
             }
         }
-        void PrintReceptions()
+        void PrintExchangeRequests()
         {
             if (!showExchangeRequests) return;
 
             sbData.AppendLine();
-            sbData.AppendLine("RECEPTIONS STATUS");
+            sbData.AppendLine("EXCHANGE REQUESTS");
 
             if (exchangeRequests.Count == 0)
             {
-                sbData.AppendLine("No reception requests available.");
+                sbData.AppendLine("No requests available.");
                 return;
             }
 
-            foreach (var unload in exchangeRequests)
+            foreach (var req in exchangeRequests)
             {
-                string unloadStatus = unload.Idle ? "Pending" : "On route";
-                sbData.AppendLine($"Order {unload.OrderId} from {unload.From}. {unloadStatus}");
+                string unloadStatus = req.Idle ? "Pending" : "On route";
+                if (req.OrderId > 0)
+                {
+                    sbData.AppendLine($"{req.Ship} {req.Task}. {unloadStatus} order {req.OrderId}");
+                }
+                else
+                {
+                    sbData.AppendLine($"{req.Ship} {req.Task}. {unloadStatus}");
+                }
             }
         }
 
