@@ -639,7 +639,7 @@ namespace IngameScript
             atmNavigationData.UpdatePositionAndVelocity(remote.GetPosition(), remote.GetShipSpeed());
 
             atmNavigationStateMsg = $"Navigation state {atmNavigationData.CurrentState}";
-
+            
             WriteInfoLCDs($"Trip: {Utils.DistanceToStr(atmNavigationData.TotalDistance)}");
             WriteInfoLCDs($"To target: {Utils.DistanceToStr(atmNavigationData.DistanceToTarget)}");
             WriteInfoLCDs($"ETC: {atmNavigationData.EstimatedArrival:hh\\:mm\\:ss}");
@@ -654,10 +654,10 @@ namespace IngameScript
                     AtmNavigationSeparate();
                     break;
                 case AtmNavigationStatus.Accelerating:
-                    AtmNavigationAccelerate();
+                    AtmNavigationAccelerate(remote);
                     break;
                 case AtmNavigationStatus.Decelerating:
-                    AtmNavigationDecelerate();
+                    AtmNavigationDecelerate(remote);
                     break;
                 case AtmNavigationStatus.Docking:
                     AtmNavigationDock();
@@ -675,10 +675,8 @@ namespace IngameScript
             atmNavigationStateMsg = "Connector unlocked. Accelerating.";
             atmNavigationData.CurrentState = AtmNavigationStatus.Accelerating;
         }
-        void AtmNavigationAccelerate()
+        void AtmNavigationAccelerate(IMyRemoteControl remote)
         {
-            var remote = (atmNavigationData.Landing ? remoteLanding : remotePilot) ?? remotePilot;
-
             AlignToDirection(remote.WorldMatrix.Forward, atmNavigationData.DirectionToTarget, config.AtmNavigationAlignThr);
 
             if (atmNavigationData.DistanceToTarget < config.AtmNavigationToTargetDistanceThr)
@@ -691,10 +689,8 @@ namespace IngameScript
             // Acelerar
             ThrustToTarget(remote, atmNavigationData.DirectionToTarget, config.AtmNavigationMaxSpeed);
         }
-        void AtmNavigationDecelerate()
+        void AtmNavigationDecelerate(IMyRemoteControl remote)
         {
-            var remote = (atmNavigationData.Landing ? remoteLanding : remotePilot) ?? remotePilot;
-
             ResetThrust();
             ResetGyros();
             var shipVelocity = remote.GetShipVelocities().LinearVelocity.Length();
@@ -1118,7 +1114,7 @@ namespace IngameScript
                     Utils.ReadVector(lines, "Forward"),
                     Utils.ReadVector(lines, "Up"),
                     Utils.ReadVectorList(lines, "WayPoints"));
-          
+
                 timerUnlock?.ApplyAction("Start");
             }
             else if (task == ExchangeTasks.RocketUnload)
@@ -1355,20 +1351,21 @@ namespace IngameScript
         bool AlignToDirection(Vector3D direction, Vector3D toTarget, double thr)
         {
             double angle = Utils.AngleBetweenVectors(direction, toTarget);
-            WriteInfoLCDs($"Alineación: {angle:F4}");
+            WriteInfoLCDs($"Target angle: {angle:F4}");
 
-            var rotationAxis = Vector3D.Cross(direction, toTarget);
-            if (Utils.IsZero(rotationAxis, thr))
+            if (angle <= thr)
             {
                 ResetGyros();
-                WriteInfoLCDs("Alineado con el objetivo.");
-                return true;
+                WriteInfoLCDs("Aligned.");
+                return false;
             }
+            WriteInfoLCDs("Aligning...");
 
-            WriteInfoLCDs("Alineando...");
+            var rotationAxis = Vector3D.Cross(direction, toTarget);
+            if (rotationAxis.Length() <= 0.001) rotationAxis = new Vector3D(1, 0, 0);
             ApplyGyroOverride(rotationAxis);
 
-            return false;
+            return true;
         }
         bool AlignToVectors(Vector3D targetForward, Vector3D targetUp, double thr)
         {
