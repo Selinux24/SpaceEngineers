@@ -15,6 +15,8 @@ namespace IngameScript
         public bool HasTarget = false;
         public string Command = null;
 
+        public bool Done => HasTarget && CurrentTarget >= Waypoints.Count;
+
         public AlignData(Config config)
         {
             this.config = config;

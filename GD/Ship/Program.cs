@@ -638,20 +638,23 @@ namespace IngameScript
 
             atmNavigationData.UpdatePositionAndVelocity(remote.GetPosition(), remote.GetShipSpeed());
 
-            atmNavigationStateMsg = $"Navigation state {atmNavigationData.CurrentState}";
-            
+            WriteInfoLCDs($"Navigation state {atmNavigationData.CurrentState}");
             WriteInfoLCDs($"Trip: {Utils.DistanceToStr(atmNavigationData.TotalDistance)}");
             WriteInfoLCDs($"To target: {Utils.DistanceToStr(atmNavigationData.DistanceToTarget)}");
-            WriteInfoLCDs($"ETC: {atmNavigationData.EstimatedArrival:hh\\:mm\\:ss}");
             WriteInfoLCDs($"Speed: {atmNavigationData.Speed:F2}");
+            WriteInfoLCDs($"ETC: {atmNavigationData.EstimatedArrival:hh\\:mm\\:ss}");
             WriteInfoLCDs($"Progress {atmNavigationData.Progress:P1}");
+            WriteInfoLCDs(errDebug);
 
             if (DoPause()) return;
 
             switch (atmNavigationData.CurrentState)
             {
+                case AtmNavigationStatus.Undocking:
+                    AtmNavigationUndock();
+                    break;
                 case AtmNavigationStatus.Separating:
-                    AtmNavigationSeparate();
+                    AtmNavigationSeparate(remote);
                     break;
                 case AtmNavigationStatus.Accelerating:
                     AtmNavigationAccelerate(remote);
@@ -664,7 +667,8 @@ namespace IngameScript
                     break;
             }
         }
-        void AtmNavigationSeparate()
+        string errDebug = null;
+        void AtmNavigationUndock()
         {
             if (connectorA.Status == MyShipConnectorStatus.Connected)
             {
@@ -672,7 +676,36 @@ namespace IngameScript
                 return;
             }
 
-            atmNavigationStateMsg = "Connector unlocked. Accelerating.";
+            try
+            {
+                //Find a postion backward the remote control, separated from the connector
+                var toTarget = remoteAlign.WorldMatrix.Backward;
+                double mass = remoteAlign.CalculateShipMass().PhysicalMass;
+                var force = Utils.CalculateThrustForce(toTarget, 100, Vector3D.Zero, mass);
+                ApplyThrust(force);
+            }
+            catch (Exception ex)
+            {
+                errDebug = $"Error undocking: {ex.Message}";
+                paused = true;
+                return;
+            }
+
+            atmNavigationStateMsg = "Connector unlocked. Separating.";
+            atmNavigationData.CurrentState = AtmNavigationStatus.Separating;
+        }
+        void AtmNavigationSeparate(IMyRemoteControl remote)
+        {
+            ResetThrust();
+            ResetGyros();
+            var shipVelocity = remote.GetShipVelocities().LinearVelocity.Length();
+            if (shipVelocity > 0.1)
+            {
+                atmNavigationStateMsg = "Separating.";
+                return;
+            }
+
+            BroadcastStatus("Separated. Accelerating...");
             atmNavigationData.CurrentState = AtmNavigationStatus.Accelerating;
         }
         void AtmNavigationAccelerate(IMyRemoteControl remote)

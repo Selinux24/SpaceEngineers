@@ -23,13 +23,13 @@ namespace IngameScript
         public Vector3D DirectionToTarget { get; private set; }
         public double DistanceToTarget { get; private set; }
         public double Speed { get; private set; } = 0;
-        public TimeSpan EstimatedArrival => Speed > 0 ? TimeSpan.FromSeconds(DistanceToTarget / Speed) : TimeSpan.Zero;
+        public TimeSpan EstimatedArrival => Speed > 0.01 ? TimeSpan.FromSeconds(DistanceToTarget / Speed) : TimeSpan.Zero;
         public double TotalDistance => Vector3D.Distance(Origin, Destination);
         public double Progress => DistanceToTarget > 0 ? 1 - (DistanceToTarget / TotalDistance) : 1;
 
         public void Initialize(bool landing, Vector3D origin, Vector3D destination, string commad)
         {
-            CurrentState = AtmNavigationStatus.Separating;
+            CurrentState = AtmNavigationStatus.Undocking;
             Landing = landing;
             Origin = origin;
             Destination = destination;
