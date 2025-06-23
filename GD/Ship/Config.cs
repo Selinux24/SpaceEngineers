@@ -62,6 +62,10 @@ namespace IngameScript
         public readonly int AlignTicks;
         public readonly int NavigationTicks;
         public readonly int AtmNavigationTicks;
+        public readonly double AtmNavigationMinLoad;
+        public readonly double AtmNavigationMaxLoad;
+        public readonly string AtmNavigationLoadBase;
+        public readonly string AtmNavigationUnloadBase;
 
         public Config(string customData)
         {
@@ -119,6 +123,10 @@ namespace IngameScript
             AlignTicks = ReadConfigInt(customData, "AlignTicks");
             NavigationTicks = ReadConfigInt(customData, "NavigationTicks");
             AtmNavigationTicks = ReadConfigInt(customData, "AtmNavigationTicks");
+            AtmNavigationMinLoad = ReadConfigDouble(customData, "AtmNavigationMinLoad", 0.1);
+            AtmNavigationMaxLoad = ReadConfigDouble(customData, "AtmNavigationMaxLoad", 0.9);
+            AtmNavigationLoadBase = ReadConfig(customData, "AtmNavigationLoadBase");
+            AtmNavigationUnloadBase = ReadConfig(customData, "AtmNavigationUnloadBase");
         }
         string ReadConfig(string customData, string name)
         {
@@ -227,7 +235,11 @@ namespace IngameScript
                 "ArrivalTicks=100\n" +
                 "AlignTicks=1\n" +
                 "NavigationTicks=1\n" +
-                "AtmNavigationTicks=1";
+                "AtmNavigationTicks=1\n" +
+                "AtmNavigationMinLoad=0.1\n" +
+                "AtmNavigationMaxLoad=0.9\n" +
+                "AtmNavigationLoadBase=name\n" +
+                "AtmNavigationUnloadBase=name";
         }
     }
 }

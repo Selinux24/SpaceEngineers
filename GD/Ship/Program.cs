@@ -640,12 +640,7 @@ namespace IngameScript
 
             atmNavigationData.UpdatePositionAndVelocity(remote.GetPosition(), remote.GetShipSpeed());
 
-            WriteInfoLCDs($"Navigation state {atmNavigationData.CurrentState}");
-            WriteInfoLCDs($"Trip: {Utils.DistanceToStr(atmNavigationData.TotalDistance)}");
-            WriteInfoLCDs($"To target: {Utils.DistanceToStr(atmNavigationData.DistanceToTarget)}");
-            WriteInfoLCDs($"Speed: {atmNavigationData.Speed:F2}");
-            WriteInfoLCDs($"ETC: {atmNavigationData.EstimatedArrival:hh\\:mm\\:ss}");
-            WriteInfoLCDs($"Progress {atmNavigationData.Progress:P1}");
+            atmNavigationStateMsg = $"Navigation state {atmNavigationData.CurrentState}";
 
             if (DoPause()) return;
 
@@ -666,17 +661,20 @@ namespace IngameScript
                 case AtmNavigationStatus.Docking:
                     AtmNavigationDock();
                     break;
+                case AtmNavigationStatus.Exchanging:
+                    AtmNavigationExchange();
+                    break;
             }
         }
         void AtmNavigationUndock()
         {
             if (connectorA.Status == MyShipConnectorStatus.Connected)
             {
-                atmNavigationStateMsg = "Waiting for connector to unlock...";
+                WriteInfoLCDs("Waiting for connector to unlock...");
                 return;
             }
 
-            atmNavigationStateMsg = "Connector unlocked. Separating.";
+            WriteInfoLCDs("Connector unlocked. Separating.");
             atmNavigationData.CurrentState = AtmNavigationStatus.Separating;
             atmNavigationSeparationTime = DateTime.Now;
         }
@@ -701,11 +699,11 @@ namespace IngameScript
             var shipVelocity = remoteAlign.GetShipVelocities().LinearVelocity.Length();
             if (shipVelocity > 0.1)
             {
-                atmNavigationStateMsg = "Separating...";
+                WriteInfoLCDs("Separating...");
                 return;
             }
 
-            BroadcastStatus("Separated. Accelerating...");
+            WriteInfoLCDs("Separated. Accelerating...");
             atmNavigationData.CurrentState = AtmNavigationStatus.Accelerating;
         }
         void AtmNavigationAccelerate(IMyRemoteControl remote)
@@ -714,12 +712,18 @@ namespace IngameScript
 
             if (atmNavigationData.DistanceToTarget < config.AtmNavigationToTargetDistanceThr)
             {
-                BroadcastStatus("Destination reached. Decelerating.");
+                WriteInfoLCDs("Destination reached. Decelerating.");
                 atmNavigationData.CurrentState = AtmNavigationStatus.Decelerating;
                 return;
             }
 
             // Acelerar
+            WriteInfoLCDs($"Trip: {Utils.DistanceToStr(atmNavigationData.TotalDistance)}");
+            WriteInfoLCDs($"To target: {Utils.DistanceToStr(atmNavigationData.DistanceToTarget)}");
+            WriteInfoLCDs($"Speed: {atmNavigationData.Speed:F2}");
+            WriteInfoLCDs($"ETC: {atmNavigationData.EstimatedArrival:hh\\:mm\\:ss}");
+            WriteInfoLCDs($"Progress {atmNavigationData.Progress:P1}");
+            
             ThrustToTarget(remote, atmNavigationData.DirectionToTarget, config.AtmNavigationMaxSpeed);
         }
         void AtmNavigationDecelerate(IMyRemoteControl remote)
@@ -729,7 +733,7 @@ namespace IngameScript
             var shipVelocity = remote.GetShipVelocities().LinearVelocity.Length();
             if (shipVelocity <= 0.1)
             {
-                BroadcastStatus("Parking reached. Aproaching to dock...");
+                WriteInfoLCDs("Parking reached. Aproaching to dock...");
                 atmNavigationData.CurrentState = AtmNavigationStatus.Docking;
 
                 alignData.Initialize(
@@ -737,19 +741,57 @@ namespace IngameScript
                     atmNavigationData.ExchangeUp,
                     atmNavigationData.ExchangeApproachingWaypoints,
                     atmNavigationData.Command);
-
-                atmNavigationData.Clear();
             }
         }
         void AtmNavigationDock()
         {
             if (connectorA.Status != MyShipConnectorStatus.Connected)
             {
-                atmNavigationStateMsg = "Waiting for connector to lock.";
+                WriteInfoLCDs("Waiting for connector to lock.");
                 return;
             }
 
-            atmNavigationStateMsg = "Connector locked. Navigation finished.";
+            WriteInfoLCDs("Connector locked. Navigation finished.");
+            atmNavigationData.CurrentState = AtmNavigationStatus.Exchanging;
+        }
+        void AtmNavigationExchange()
+        {
+            WriteInfoLCDs($"{atmNavigationData.ExchangeTask}");
+
+            //Monitorize the cargo capacity of the ship
+            var capacity = CalculateCargoPercentage();
+            if (atmNavigationData.ExchangeTask == ExchangeTasks.RocketLoad && capacity >= config.AtmNavigationMaxLoad)
+            {
+                status = ShipStatus.Idle;
+                atmNavigationData.CurrentState = AtmNavigationStatus.Idle;
+
+                List<string> parts = new List<string>()
+                {
+                    $"Command=REQUEST_DOCK",
+                    $"To={config.AtmNavigationUnloadBase}",
+                    $"From={shipId}",
+                    $"Task={(int)ExchangeTasks.RocketUnload}",
+                };
+                BroadcastMessage(parts);
+
+                atmNavigationData.Clear();
+            }
+            else if (atmNavigationData.ExchangeTask == ExchangeTasks.RocketUnload && capacity < config.AtmNavigationMinLoad)
+            {
+                status = ShipStatus.Idle;
+                atmNavigationData.CurrentState = AtmNavigationStatus.Idle;
+
+                List<string> parts = new List<string>()
+                {
+                    $"Command=REQUEST_DOCK",
+                    $"To={config.AtmNavigationLoadBase}",
+                    $"From={shipId}",
+                    $"Task={(int)ExchangeTasks.RocketLoad}",
+                };
+                BroadcastMessage(parts);
+          
+                atmNavigationData.Clear();
+            }
         }
         #endregion
 
@@ -1146,7 +1188,8 @@ namespace IngameScript
                     Utils.ReadString(lines, "Exchange"),
                     Utils.ReadVector(lines, "Forward"),
                     Utils.ReadVector(lines, "Up"),
-                    Utils.ReadVectorList(lines, "WayPoints"));
+                    Utils.ReadVectorList(lines, "WayPoints"),
+                    task);
 
                 timerUnlock?.ApplyAction("Start");
             }
@@ -1164,7 +1207,8 @@ namespace IngameScript
                     Utils.ReadString(lines, "Exchange"),
                     Utils.ReadVector(lines, "Forward"),
                     Utils.ReadVector(lines, "Up"),
-                    Utils.ReadVectorList(lines, "WayPoints"));
+                    Utils.ReadVectorList(lines, "WayPoints"),
+                    task);
 
                 timerUnlock?.ApplyAction("Start");
             }

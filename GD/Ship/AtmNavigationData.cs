@@ -17,6 +17,7 @@ namespace IngameScript
         public Vector3D ExchangeForward;
         public Vector3D ExchangeUp;
         public readonly List<Vector3D> ExchangeApproachingWaypoints = new List<Vector3D>();
+        public ExchangeTasks ExchangeTask = ExchangeTasks.None;
         public string Command = null;
         public bool HasTarget = false;
 
@@ -48,13 +49,14 @@ namespace IngameScript
             ClearExchange();
         }
 
-        public void SetExchange(string name, Vector3D forward, Vector3D up, List<Vector3D> waypoints)
+        public void SetExchange(string name, Vector3D forward, Vector3D up, List<Vector3D> waypoints, ExchangeTasks task)
         {
             ExchangeName = name;
             ExchangeForward = forward;
             ExchangeUp = up;
             ExchangeApproachingWaypoints.Clear();
             ExchangeApproachingWaypoints.AddRange(waypoints);
+            ExchangeTask = task;
         }
         public void ClearExchange()
         {
@@ -62,6 +64,7 @@ namespace IngameScript
             ExchangeForward = Vector3D.Zero;
             ExchangeUp = Vector3D.Zero;
             ExchangeApproachingWaypoints.Clear();
+            ExchangeTask = ExchangeTasks.None;
         }
 
         public void UpdatePositionAndVelocity(Vector3D position, double speed)
@@ -88,6 +91,7 @@ namespace IngameScript
             ExchangeUp = Utils.ReadVector(parts, "ExchangeUp");
             ExchangeApproachingWaypoints.Clear();
             ExchangeApproachingWaypoints.AddRange(Utils.ReadVectorList(parts, "ExchangeApproachingWaypoints"));
+            ExchangeTask = (ExchangeTasks)Utils.ReadInt(parts, "ExchangeTask");
         }
         public string SaveToStorage()
         {
@@ -104,6 +108,7 @@ namespace IngameScript
                 $"ExchangeForward={Utils.VectorToStr(ExchangeForward)}",
                 $"ExchangeUp={Utils.VectorToStr(ExchangeUp)}",
                 $"ExchangeApproachingWaypoints={Utils.VectorListToStr(ExchangeApproachingWaypoints)}",
+                $"ExchangeTask={(int)ExchangeTask}"
             };
 
             return string.Join("¬", parts);
