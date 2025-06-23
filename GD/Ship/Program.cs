@@ -644,7 +644,6 @@ namespace IngameScript
             WriteInfoLCDs($"Speed: {atmNavigationData.Speed:F2}");
             WriteInfoLCDs($"ETC: {atmNavigationData.EstimatedArrival:hh\\:mm\\:ss}");
             WriteInfoLCDs($"Progress {atmNavigationData.Progress:P1}");
-            WriteInfoLCDs(errDebug);
 
             if (DoPause()) return;
 
@@ -667,29 +666,21 @@ namespace IngameScript
                     break;
             }
         }
-        string errDebug = null;
         void AtmNavigationUndock()
         {
             if (connectorA.Status == MyShipConnectorStatus.Connected)
             {
-                atmNavigationStateMsg = "Waiting for connector to unlock.";
+                atmNavigationStateMsg = "Waiting for connector to unlock...";
                 return;
             }
 
-            try
-            {
-                //Find a postion backward the remote control, separated from the connector
-                var toTarget = remoteAlign.WorldMatrix.Backward;
-                double mass = remoteAlign.CalculateShipMass().PhysicalMass;
-                var force = Utils.CalculateThrustForce(toTarget, 100, Vector3D.Zero, mass);
-                ApplyThrust(force);
-            }
-            catch (Exception ex)
-            {
-                errDebug = $"Error undocking: {ex.Message}";
-                paused = true;
-                return;
-            }
+            var force = Utils.CalculateThrustForce(
+                remoteAlign.WorldMatrix.Backward,
+                config.AtmNavigationMaxSpeed,
+                Vector3D.Zero,
+                remoteAlign.CalculateShipMass().PhysicalMass);
+
+            ApplyThrust(force);
 
             atmNavigationStateMsg = "Connector unlocked. Separating.";
             atmNavigationData.CurrentState = AtmNavigationStatus.Separating;
@@ -701,7 +692,7 @@ namespace IngameScript
             var shipVelocity = remote.GetShipVelocities().LinearVelocity.Length();
             if (shipVelocity > 0.1)
             {
-                atmNavigationStateMsg = "Separating.";
+                atmNavigationStateMsg = "Separating...";
                 return;
             }
 
