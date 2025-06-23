@@ -71,6 +71,8 @@ namespace IngameScript
 
         int atmNavigationTickCount = 0;
         string atmNavigationStateMsg;
+        TimeSpan atmNavigationSeparationSecs = TimeSpan.FromSeconds(1);
+        DateTime atmNavigationSeparationTime = DateTime.MinValue;
 
         public Program()
         {
@@ -653,7 +655,7 @@ namespace IngameScript
                     AtmNavigationUndock();
                     break;
                 case AtmNavigationStatus.Separating:
-                    AtmNavigationSeparate(remote);
+                    AtmNavigationSeparate();
                     break;
                 case AtmNavigationStatus.Accelerating:
                     AtmNavigationAccelerate(remote);
@@ -674,22 +676,29 @@ namespace IngameScript
                 return;
             }
 
-            var force = Utils.CalculateThrustForce(
-                remoteAlign.WorldMatrix.Backward,
-                config.AtmNavigationMaxSpeed,
-                Vector3D.Zero,
-                remoteAlign.CalculateShipMass().PhysicalMass);
-
-            ApplyThrust(force);
-
             atmNavigationStateMsg = "Connector unlocked. Separating.";
             atmNavigationData.CurrentState = AtmNavigationStatus.Separating;
+            atmNavigationSeparationTime = DateTime.Now;
         }
-        void AtmNavigationSeparate(IMyRemoteControl remote)
+        void AtmNavigationSeparate()
         {
+            var elapsed = DateTime.Now - atmNavigationSeparationTime;
+            if (elapsed < atmNavigationSeparationSecs)
+            {
+                var force = Utils.CalculateThrustForce(
+                    remoteAlign.WorldMatrix.Backward,
+                    config.AtmNavigationMaxSpeed,
+                    Vector3D.Zero,
+                    remoteAlign.CalculateShipMass().PhysicalMass);
+
+                ApplyThrust(force);
+
+                return;
+            }
+
             ResetThrust();
             ResetGyros();
-            var shipVelocity = remote.GetShipVelocities().LinearVelocity.Length();
+            var shipVelocity = remoteAlign.GetShipVelocities().LinearVelocity.Length();
             if (shipVelocity > 0.1)
             {
                 atmNavigationStateMsg = "Separating...";
