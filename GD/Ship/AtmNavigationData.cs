@@ -9,6 +9,9 @@ namespace IngameScript
     /// </summary>
     class AtmNavigationData
     {
+        readonly Config config;
+        int tickCount = 0;
+
         public AtmNavigationStatus CurrentState = AtmNavigationStatus.Idle;
         public bool Landing = false;
         public Vector3D Origin;
@@ -20,6 +23,9 @@ namespace IngameScript
         public ExchangeTasks ExchangeTask = ExchangeTasks.None;
         public string Command = null;
         public bool HasTarget = false;
+        public string StateMsg;
+        public TimeSpan SeparationSecs = TimeSpan.FromSeconds(1);
+        public DateTime SeparationTime = DateTime.MinValue;
 
         public Vector3D DirectionToTarget { get; private set; }
         public double DistanceToTarget { get; private set; }
@@ -27,6 +33,21 @@ namespace IngameScript
         public TimeSpan EstimatedArrival => Speed > 0.01 ? TimeSpan.FromSeconds(DistanceToTarget / Speed) : TimeSpan.Zero;
         public double TotalDistance => Vector3D.Distance(Origin, Destination);
         public double Progress => DistanceToTarget > 0 ? 1 - (DistanceToTarget / TotalDistance) : 1;
+
+        public AtmNavigationData(Config config)
+        {
+            this.config = config;
+        }
+
+        public bool Tick()
+        {
+            if (++tickCount < config.AtmNavigationTicks)
+            {
+                return false;
+            }
+            tickCount = 0;
+            return true;
+        }
 
         public void Initialize(bool landing, Vector3D origin, Vector3D destination, string commad)
         {

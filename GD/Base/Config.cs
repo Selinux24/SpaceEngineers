@@ -17,6 +17,8 @@ namespace IngameScript
         public readonly string BaseDataLCDs;
         public readonly string BaseLogLCDs;
 
+        public readonly int ExchangeNumWaypoints;
+        public readonly double ExchangeDockRequestTimeThr; //Seconds
         public readonly System.Text.RegularExpressions.Regex ExchangesRegex;
         public readonly string ExchangeUpperConnector;
         public readonly string ExchangeLowerConnector;
@@ -41,6 +43,8 @@ namespace IngameScript
             BaseDataLCDs = ReadConfig(customData, "DataLCDs");
             BaseLogLCDs = ReadConfig(customData, "LogLCDs");
 
+            ExchangeNumWaypoints = ReadConfigInt(customData, "ExchangeNumWaypoints");
+            ExchangeDockRequestTimeThr = ReadConfigDouble(customData, "ExchangeDockRequestTimeThr");
             ExchangesRegex = new System.Text.RegularExpressions.Regex(ReadConfig(customData, "ExchangeGroupName"));
             ExchangeUpperConnector = ReadConfig(customData, "ExchangeUpperConnector");
             ExchangeLowerConnector = ReadConfig(customData, "ExchangeLowerConnector");
@@ -75,6 +79,18 @@ namespace IngameScript
 
             return int.Parse(value);
         }
+        double ReadConfigDouble(string customData, string name, double defaultValue = 0)
+        {
+            var value = ReadConfigLine(customData, name);
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                errors.AppendLine($"{name} not set.");
+
+                return defaultValue;
+            }
+
+            return double.Parse(value.Trim());
+        }
         static string ReadConfigLine(string customData, string name)
         {
             string[] lines = customData.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
@@ -105,6 +121,8 @@ namespace IngameScript
                 "Camera=Camera\n" +
                 "Warehouses=Warehouse\n" +
                 "\n" +
+                "ExchangeNumWaypoints=5\n" +
+                $"ExchangeDockRequestTimeThr={15 * 60}\n" +
                 $"ExchangeGroupName={@"GR_\w+"}\n" +
                 "ExchangeUpperConnector=Input\n" +
                 "ExchangeLowerConnector=Output\n" +

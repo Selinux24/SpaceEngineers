@@ -1,7 +1,7 @@
 ﻿
 namespace IngameScript
 {
-    enum NavigationStatus
+    enum CruisingStatus
     {
         Idle, Locating, Accelerating, Braking, Cruising, Avoiding, Distress
     }

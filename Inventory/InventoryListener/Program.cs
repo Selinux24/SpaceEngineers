@@ -95,7 +95,7 @@ namespace IngameScript
                 return;
             }
 
-            // Obtener el contenedor de salida
+            //Get the output container
             var outputCargo = GetBlockWithName<IMyCargoContainer>(outputCargoName);
             if (outputCargo == null)
             {
@@ -103,7 +103,7 @@ namespace IngameScript
                 return;
             }
 
-            // Obtener todos los contenedores de entrada
+            //Get all input containers
             var warehouseCargos = GetBlocksOfType<IMyCargoContainer>(inventoryCargoName);
             if (warehouseCargos.Count == 0)
             {
@@ -117,7 +117,7 @@ namespace IngameScript
 
             WriteText("Preparing Cargo...", false);
 
-            // Recorrer cada item solicitado
+            //Go through each requested item
             bool anyMoved = false;
             foreach (var reqItem in requestedItems)
             {
@@ -131,7 +131,7 @@ namespace IngameScript
                     itemRemaining -= c;
                 }
 
-                // Buscar ese item en los contenedores
+                //Search for that item in the containers
                 foreach (var cargo in warehouseCargos)
                 {
                     if (itemRemaining <= 0) break;

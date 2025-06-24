@@ -5,9 +5,12 @@ using VRageMath;
 
 namespace IngameScript
 {
-    class NavigationData
+    class CruisingData
     {
-        public NavigationStatus CurrentState = NavigationStatus.Idle;
+        readonly Config config;
+        int tickCount = 0;
+
+        public CruisingStatus CurrentState = CruisingStatus.Idle;
         public Vector3D Origin;
         public Vector3D Destination;
         public string Command = null;
@@ -15,6 +18,7 @@ namespace IngameScript
         public bool Thrusting = false;
         public readonly List<Vector3D> EvadingPoints = new List<Vector3D>();
         public DateTime AlignThrustStart = DateTime.Now;
+        public string StateMsg;
 
         public Vector3D DirectionToTarget { get; private set; }
         public double DistanceToTarget { get; private set; }
@@ -25,6 +29,21 @@ namespace IngameScript
 
         private MyDetectedEntityInfo lastHit;
 
+        public CruisingData(Config config)
+        {
+            this.config = config;
+        }
+
+        public bool Tick()
+        {
+            if (++tickCount < config.CruisingTicks)
+            {
+                return false;
+            }
+            tickCount = 0;
+            return true;
+        }
+
         public void Initialize(Vector3D origin, Vector3D destination, string commad)
         {
             Origin = origin;
@@ -32,7 +51,7 @@ namespace IngameScript
             Command = commad;
             HasTarget = true;
             EvadingPoints.Clear();
-            CurrentState = NavigationStatus.Locating;
+            CurrentState = CruisingStatus.Locating;
             Thrusting = false;
             EvadingPoints.Clear();
 
@@ -45,7 +64,7 @@ namespace IngameScript
             Command = null;
             HasTarget = false;
             EvadingPoints.Clear();
-            CurrentState = NavigationStatus.Idle;
+            CurrentState = CruisingStatus.Idle;
             Thrusting = false;
             EvadingPoints.Clear();
             lastHit = new MyDetectedEntityInfo();
@@ -68,9 +87,9 @@ namespace IngameScript
             if (camera.CanScan(collisionDetectRange, localDirection))
             {
                 lastHit = camera.Raycast(collisionDetectRange, localDirection);
-                return 
-                    !lastHit.IsEmpty() && 
-                    lastHit.Type != MyDetectedEntityType.Planet && 
+                return
+                    !lastHit.IsEmpty() &&
+                    lastHit.Type != MyDetectedEntityType.Planet &&
                     Vector3D.Distance(lastHit.HitPosition.Value, camera.GetPosition()) <= collisionDetectRange;
             }
 
@@ -89,7 +108,7 @@ namespace IngameScript
         {
             if (EvadingPoints.Count > 0)
             {
-                // Ya se han calculado los puntos de evasión
+                //Evading points have already been calculated
                 return true;
             }
 
@@ -101,11 +120,11 @@ namespace IngameScript
             var obstacleCenter = lastHit.Position;
             var obstacleSize = Math.Max(lastHit.BoundingBox.Extents.X, Math.Max(lastHit.BoundingBox.Extents.Y, lastHit.BoundingBox.Extents.Z));
 
-            //Punto sobre el obstáculo desde el punto de vista de la nave
+            //Point on the obstacle from the ship's point of view
             var p1 = obstacleCenter + (camera.WorldMatrix.Up * obstacleSize);
             EvadingPoints.Add(p1);
 
-            //Punto al otro lado del obstáculo desde el punto de vista de la nave
+            //Point on the other side of the obstacle from the ship's point of view
             var p2 = obstacleCenter + (camera.WorldMatrix.Forward * (obstacleSize + safetyDistance));
             EvadingPoints.Add(p2);
 
@@ -120,7 +139,7 @@ namespace IngameScript
         {
             var parts = storageLine.Split('¬');
 
-            CurrentState = (NavigationStatus)Utils.ReadInt(parts, "CurrentState");
+            CurrentState = (CruisingStatus)Utils.ReadInt(parts, "CurrentState");
             Origin = Utils.ReadVector(parts, "Origin");
             Destination = Utils.ReadVector(parts, "Destination");
             Command = Utils.ReadString(parts, "Command");

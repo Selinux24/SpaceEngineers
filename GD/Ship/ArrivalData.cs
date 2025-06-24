@@ -5,10 +5,29 @@ namespace IngameScript
 {
     class ArrivalData
     {
+        readonly Config config;
+        int tickCount = 0;
+
         public Vector3D Destination = Vector3D.Zero;
         public double Distance = 0;
         public string Command = null;
         public bool HasPosition = false;
+        public string StateMsg;
+
+        public ArrivalData(Config config)
+        {
+            this.config = config;
+        }
+
+        public bool Tick()
+        {
+            if (++tickCount < config.ArrivalTicks)
+            {
+                return false;
+            }
+            tickCount = 0;
+            return true;
+        }
 
         public void Initialize(Vector3D destination, double distance, string commad)
         {

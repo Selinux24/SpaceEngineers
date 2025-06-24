@@ -28,40 +28,38 @@ namespace IngameScript
         public readonly string ShipBeaconName;
         public readonly string ShipAntennaName;
 
-        public readonly double GyrosThr; //Precisión de alineación
-        public readonly double GyrosSpeed; //Velocidad de los giroscopios
+        public readonly double GyrosThr; //Alignment accuracy
+        public readonly double GyrosSpeed; //Gyroscope speed
 
-        public readonly double ExchangeMaxApproachingSpeed; // Velocidad máxima de aproximación al conector
-        public readonly double ExchangeDistanceThr; //Precisión de aproximación al primer punto del conector
-        public readonly double ExchangeWaypointDistanceThr; //Precisión de aproximación entre waypoints
-
-        public readonly double AlignMaxApproachSpeed = 10.0; //Velocidad máxima de llegada
-        public readonly double AlignMaxApproachSpeedAprox = 5.0; //Velocidad máxima de aproximación
-        public readonly double AlignMaxApproachSpeedLocking = 1.0; //Velocidad máxima en el último waypoint
-        public readonly double AlignSlowdownDistance = 50.0; //Distancia de frenada
-
-        public readonly double CruisingMaxSpeed; // Velocidad máxima de crucero
-        public readonly double CruisingMaxSpeedThr;
-        public readonly double CruisingMaxAccelerationSpeed; // Velocidad máxima de crucero cerca de la base
-        public readonly double CruisingToBasesDistanceThr; // Distancia al punto de salida para activar la velocidad máxima de crucero
-        public readonly double CruisingToTargetDistanceThr; // Rango de frenado hasta el objetivo
-
-        public readonly double CruisingThrustAlignSeconds; // Tiempo de encendido de thrusters hasta alineación
-        public readonly double CruisingLocateAlignThr; // Precisión de alineación
-        public readonly double CruisingCruiseAlignThr; // Precisión de alineación
-
-        public readonly double CrusingCollisionDetectRange; // Rango de detección de colisiones
-        public readonly double CrusingEvadingWaypointDistance;
-        public readonly double CrusingEvadingMaxSpeed;
-
-        public readonly double AtmNavigationMaxSpeed; // Velocidad máxima de despegue
-        public readonly double AtmNavigationToTargetDistanceThr; // Rango de frenado hasta el objetivo
-        public readonly double AtmNavigationAlignThr; // Precisión de alineación
 
         public readonly int ArrivalTicks;
+
         public readonly int AlignTicks;
-        public readonly int NavigationTicks;
+        public readonly double AlignExchangeApproachingSpeed; //Maximum approach speed to the connector
+        public readonly double AlignExchangeSlowdownDistance = 50.0; //Braking distance to the first point of the connector
+        public readonly double AlignExchangeDistanceThr; //Accuracy of approximation to the first point of the connector
+        public readonly double AlignSpeedWaypointFirst = 10.0; //Maximum speed at first waypoint
+        public readonly double AlignSpeedWaypoints = 5.0; //Maximum speed between waypoints
+        public readonly double AlignSpeedWaypointLast = 1.0; //Maximum speed at the last waypoint
+        public readonly double AlignDistanceThrWaypoints; //Approximation accuracy between waypoints
+
+        public readonly int CruisingTicks;
+        public readonly double CruisingMaxSpeed; //Maximum cruising speed
+        public readonly double CruisingMaxSpeedThr;
+        public readonly double CruisingMaxAccelerationSpeed; //Maximum cruising speed near base
+        public readonly double CruisingToBasesDistanceThr; //Distance to the departure point to activate maximum cruising speed
+        public readonly double CruisingToTargetDistanceThr; //Braking range to target
+        public readonly double CruisingThrustAlignSeconds; //Thruster ignition time until alignment
+        public readonly double CruisingLocateAlignThr; //Alignment accuracy
+        public readonly double CruisingCruiseAlignThr; //Alignment accuracy
+        public readonly double CruisingCollisionDetectRange; //Collision detection range
+        public readonly double CruisingEvadingWaypointDistance;
+        public readonly double CruisingEvadingMaxSpeed;
+
         public readonly int AtmNavigationTicks;
+        public readonly double AtmNavigationMaxSpeed; //Maximum takeoff speed
+        public readonly double AtmNavigationToTargetDistanceThr; //Braking range to target
+        public readonly double AtmNavigationAlignThr; //Alignment accuracy
         public readonly double AtmNavigationMinLoad;
         public readonly double AtmNavigationMaxLoad;
         public readonly string AtmNavigationLoadBase;
@@ -92,37 +90,34 @@ namespace IngameScript
             GyrosThr = ReadConfigDouble(customData, "GyrosThr");
             GyrosSpeed = ReadConfigDouble(customData, "GyrosSpeed");
 
-            ExchangeMaxApproachingSpeed = ReadConfigDouble(customData, "ExchangeMaxApproachingSpeed");
-            ExchangeDistanceThr = ReadConfigDouble(customData, "ExchangeDistanceThr");
-            ExchangeWaypointDistanceThr = ReadConfigDouble(customData, "ExchangeWaypointDistanceThr");
+            ArrivalTicks = ReadConfigInt(customData, "ArrivalTicks");
 
-            AlignMaxApproachSpeed = ReadConfigDouble(customData, "AlignMaxApproachSpeed");
-            AlignMaxApproachSpeedAprox = ReadConfigDouble(customData, "AlignMaxApproachSpeedAprox");
-            AlignMaxApproachSpeedLocking = ReadConfigDouble(customData, "AlignMaxApproachSpeedLocking");
-            AlignSlowdownDistance = ReadConfigDouble(customData, "AlignSlowdownDistance");
+            AlignTicks = ReadConfigInt(customData, "AlignTicks");
+            AlignExchangeApproachingSpeed = ReadConfigDouble(customData, "AlignExchangeApproachingSpeed");
+            AlignExchangeSlowdownDistance = ReadConfigDouble(customData, "AlignExchangeSlowdownDistance");
+            AlignExchangeDistanceThr = ReadConfigDouble(customData, "AlignExchangeDistanceThr");
+            AlignSpeedWaypointFirst = ReadConfigDouble(customData, "AlignSpeedWaypointFirst");
+            AlignSpeedWaypoints = ReadConfigDouble(customData, "AlignSpeedWaypoints");
+            AlignSpeedWaypointLast = ReadConfigDouble(customData, "AlignSpeedWaypointLast");
+            AlignDistanceThrWaypoints = ReadConfigDouble(customData, "AlignDistanceThrWaypoints");
 
+            CruisingTicks = ReadConfigInt(customData, "CruisingTicks");
             CruisingMaxSpeed = ReadConfigDouble(customData, "CruisingMaxSpeed");
             CruisingMaxSpeedThr = ReadConfigDouble(customData, "CruisingMaxSpeedThr");
             CruisingMaxAccelerationSpeed = ReadConfigDouble(customData, "CruisingMaxAccelerationSpeed");
             CruisingToBasesDistanceThr = ReadConfigDouble(customData, "CruisingToBasesDistanceThr");
             CruisingToTargetDistanceThr = ReadConfigDouble(customData, "CruisingToTargetDistanceThr");
-
             CruisingThrustAlignSeconds = ReadConfigDouble(customData, "CruisingThrustAlignSeconds");
             CruisingLocateAlignThr = ReadConfigDouble(customData, "CruisingLocateAlignThr");
             CruisingCruiseAlignThr = ReadConfigDouble(customData, "CruisingCruiseAlignThr");
+            CruisingCollisionDetectRange = ReadConfigDouble(customData, "CruisingCollisionDetectRange");
+            CruisingEvadingWaypointDistance = ReadConfigDouble(customData, "CruisingEvadingWaypointDistance");
+            CruisingEvadingMaxSpeed = ReadConfigDouble(customData, "CruisingEvadingMaxSpeed");
 
-            CrusingCollisionDetectRange = ReadConfigDouble(customData, "CrusingCollisionDetectRange");
-            CrusingEvadingWaypointDistance = ReadConfigDouble(customData, "CrusingEvadingWaypointDistance");
-            CrusingEvadingMaxSpeed = ReadConfigDouble(customData, "CrusingEvadingMaxSpeed");
-
+            AtmNavigationTicks = ReadConfigInt(customData, "AtmNavigationTicks");
             AtmNavigationMaxSpeed = ReadConfigDouble(customData, "AtmNavigationMaxSpeed");
             AtmNavigationToTargetDistanceThr = ReadConfigDouble(customData, "AtmNavigationToTargetDistanceThr");
             AtmNavigationAlignThr = ReadConfigDouble(customData, "AtmNavigationAlignThr");
-
-            ArrivalTicks = ReadConfigInt(customData, "ArrivalTicks");
-            AlignTicks = ReadConfigInt(customData, "AlignTicks");
-            NavigationTicks = ReadConfigInt(customData, "NavigationTicks");
-            AtmNavigationTicks = ReadConfigInt(customData, "AtmNavigationTicks");
             AtmNavigationMinLoad = ReadConfigDouble(customData, "AtmNavigationMinLoad", 0.1);
             AtmNavigationMaxLoad = ReadConfigDouble(customData, "AtmNavigationMaxLoad", 0.9);
             AtmNavigationLoadBase = ReadConfig(customData, "AtmNavigationLoadBase");
@@ -205,37 +200,34 @@ namespace IngameScript
                 "GyrosThr=0.001\n" +
                 "GyrosSpeed=2.0\n" +
                 "\n" +
-                "ExchangeMaxApproachingSpeed=5\n" +
-                "ExchangeDistanceThr=200.0\n" +
-                "ExchangeWaypointDistanceThr=0.5\n" +
+                "ArrivalTicks=100\n" +
                 "\n" +
-                "AlignMaxApproachSpeed=10.0\n" +
-                "AlignMaxApproachSpeedAprox=5.0\n" +
-                "AlignMaxApproachSpeedLocking=1.0\n" +
-                "AlignSlowdownDistance=50.0\n" +
+                "AlignTicks=1\n" +
+                "AlignExchangeApproachingSpeed=5\n" +
+                "AlignExchangeSlowdownDistance=50.0\n" +
+                "AlignExchangeDistanceThr=200.0\n" +
+                "AlignSpeedWaypointFirst=10.0\n" +
+                "AlignSpeedWaypoints=5.0\n" +
+                "AlignSpeedWaypointLast=1.0\n" +
+                "AlignDistanceThrWaypoints=0.5\n" +
                 "\n" +
+                "CruisingTicks=1\n" +
                 "CruisingMaxSpeed=100.0\n" +
                 "CruisingMaxSpeedThr=0.95\n" +
                 "CruisingMaxAccelerationSpeed=19.5\n" +
                 "CruisingToBasesDistanceThr=2000.0\n" +
                 "CruisingToTargetDistanceThr=3000.0\n" +
-                "\n" +
                 "CruisingThrustAlignSeconds=5.0\n" +
                 "CruisingLocateAlignThr=0.001\n" +
                 "CruisingCruiseAlignThr=0.01\n" +
+                "CruisingCollisionDetectRange=10000.0\n" +
+                "CruisingEvadingWaypointDistance=100.0\n" +
+                "CruisingEvadingMaxSpeed=19.5\n" +
                 "\n" +
-                "CrusingCollisionDetectRange=10000.0\n" +
-                "CrusingEvadingWaypointDistance=100.0\n" +
-                "CrusingEvadingMaxSpeed=19.5\n" +
-                "\n" +
+                "AtmNavigationTicks=1\n" +
                 "AtmNavigationMaxSpeed=100.0\n" +
                 "AtmNavigationToTargetDistanceThr=1000.0\n" +
                 "AtmNavigationAlignThr=0.01\n" +
-                "\n" +
-                "ArrivalTicks=100\n" +
-                "AlignTicks=1\n" +
-                "NavigationTicks=1\n" +
-                "AtmNavigationTicks=1\n" +
                 "AtmNavigationMinLoad=0.1\n" +
                 "AtmNavigationMaxLoad=0.9\n" +
                 "AtmNavigationLoadBase=name\n" +

@@ -7,6 +7,7 @@ namespace IngameScript
     class AlignData
     {
         readonly Config config;
+        int tickCount = 0;
 
         public readonly List<Vector3D> Waypoints = new List<Vector3D>();
         public int CurrentTarget = 0;
@@ -14,12 +15,23 @@ namespace IngameScript
         public Vector3D TargetUp = new Vector3D(0, 1, 0);
         public bool HasTarget = false;
         public string Command = null;
+        public string StateMsg;
 
         public bool Done => HasTarget && CurrentTarget >= Waypoints.Count;
 
         public AlignData(Config config)
         {
             this.config = config;
+        }
+
+        public bool Tick()
+        {
+            if (++tickCount < config.AlignTicks)
+            {
+                return false;
+            }
+            tickCount = 0;
+            return true;
         }
 
         public void Initialize(Vector3D forward, Vector3D up, List<Vector3D> wayPoints, string command)
@@ -45,16 +57,16 @@ namespace IngameScript
         }
         public double CalculateDesiredSpeed(double distance)
         {
-            //Calcula velocidad deseada basada en distancia, cuando estemos avanzando hacia el último waypoint.
+            //Calculates desired speed based on distance, when we are moving towards the last waypoint.
             double approachSpeed;
-            if (CurrentTarget == 0) approachSpeed = config.AlignMaxApproachSpeed; //Velocidad hasta el primer punto de aproximación.
-            else if (CurrentTarget == Waypoints.Count - 1) approachSpeed = config.AlignMaxApproachSpeedLocking; //Velocidad desde el último punto de aproximación.
-            else approachSpeed = config.AlignMaxApproachSpeedAprox; //Velocidad entre puntos de aproximación.
+            if (CurrentTarget == 0) approachSpeed = config.AlignSpeedWaypointFirst; //Speed ​​to the first approach point.
+            else if (CurrentTarget == Waypoints.Count - 1) approachSpeed = config.AlignSpeedWaypointLast; //Speed ​​from the last approach point.
+            else approachSpeed = config.AlignSpeedWaypoints; //Speed ​​between approach points.
 
             double desiredSpeed = approachSpeed;
-            if (distance < config.AlignSlowdownDistance && (CurrentTarget == 0 || CurrentTarget == Waypoints.Count - 1))
+            if (distance < config.AlignExchangeSlowdownDistance && (CurrentTarget == 0 || CurrentTarget == Waypoints.Count - 1))
             {
-                desiredSpeed = Math.Max(distance / config.AlignSlowdownDistance * approachSpeed, 0.5);
+                desiredSpeed = Math.Max(distance / config.AlignExchangeSlowdownDistance * approachSpeed, 0.5);
             }
 
             return desiredSpeed;

@@ -44,8 +44,8 @@ namespace IngameScript
         bool requestDelivery = true;
         DateTime lastRequestDelivery = DateTime.MinValue;
 
-        bool requestReception = true;
-        DateTime lastRequestReception = DateTime.MinValue;
+        bool requestExchange = true;
+        DateTime lastExchangeRequest = DateTime.MinValue;
 
         public Program()
         {
@@ -72,7 +72,7 @@ namespace IngameScript
             camera = GetBlockWithName<IMyCameraBlock>(config.BaseCamera);
             if (camera == null)
             {
-                Echo("Cámara no encontrada.");
+                Echo("Camera not found.");
                 return;
             }
 
@@ -95,9 +95,9 @@ namespace IngameScript
 
         public void Main(string argument, UpdateType updateSource)
         {
-            RequestStatus();
-            RequestDelivery();
-            RequestReception();
+            DoRequestStatus();
+            DoRequestDelivery();
+            DoRequestExchange();
 
             if (!string.IsNullOrEmpty(argument))
             {
@@ -123,10 +123,10 @@ namespace IngameScript
 
         #region STATUS
         /// <summary>
-        /// Sec_A_1 - WH pide situación a todas las naves
+        /// Seq_A_1 - WH requests status from all ships
         /// Execute:  REQUEST_STATUS
         /// </summary>
-        void RequestStatus()
+        void DoRequestStatus()
         {
             if (!requestStatus)
             {
@@ -150,10 +150,10 @@ namespace IngameScript
 
         #region DELIVERY
         /// <summary>
-        /// Sec_C_1 - WH revisa los pedidos. Para cada pedido, busca una nave libre y le da la orden de carga en un conector para NAVEX
+        /// Seq_C_1 - WH reviews the orders. For each order, it searches for a free ship and gives the loading order to NAVEX on that connector.
         /// Execute:  START_DELIVERY
         /// </summary>
-        void RequestDelivery()
+        void DoRequestDelivery()
         {
             if (!requestDelivery)
             {
@@ -179,7 +179,7 @@ namespace IngameScript
             var freeShips = GetFreeShips();
             if (freeShips.Count == 0)
             {
-                RequestStatus();
+                DoRequestStatus();
                 return;
             }
             WriteLogLCDs($"Deliveries: {pendantOrders.Count}; Free exchanges: {freeExchanges.Count}; Free ships: {freeShips.Count}");
@@ -210,28 +210,28 @@ namespace IngameScript
             };
             BroadcastMessage(parts);
 
-            //Pone el exchange en modo preparar pedido
-            exchange.TimerPrepare?.ApplyAction("TriggerNow");
+            //Puts the exchange in prepare order mode
+            exchange.TimerPrepare?.StartCountdown();
         }
         #endregion
 
-        #region RECEPTION
+        #region EXCHANGE REQUEST
         /// <summary>
-        /// Sec_D_1 - BASEX revisa las peticiones de descarga. Busca conectores libres y da la orden de descarga a NAVEX en el conector especificado
+        /// Seq_D_1 - BASEX reviews exchange requests. It searches for free connectors and gives SHIPX the exchange command on the specified connector.
         /// Execute:  UNLOAD_ORDER
         /// </summary>
-        void RequestReception()
+        void DoRequestExchange()
         {
-            if (!requestReception)
+            if (!requestExchange)
             {
                 return;
             }
 
-            if (DateTime.Now - lastRequestReception < TimeSpan.FromSeconds(config.RequestReceptionInterval))
+            if (DateTime.Now - lastExchangeRequest < TimeSpan.FromSeconds(config.RequestReceptionInterval))
             {
                 return;
             }
-            lastRequestReception = DateTime.Now;
+            lastExchangeRequest = DateTime.Now;
 
             var exRequest = GetPendingExchangeRequests();
             if (exRequest.Count == 0)
@@ -246,7 +246,7 @@ namespace IngameScript
             var waitingShips = GetWaitingShips();
             if (waitingShips.Count == 0)
             {
-                RequestStatus();
+                DoRequestStatus();
                 return;
             }
             WriteLogLCDs($"Exchange requests: {exRequest.Count}; Free exchanges: {freeExchanges.Count}; Free ships: {waitingShips.Count}");
@@ -301,11 +301,11 @@ namespace IngameScript
             else if (argument == "LIST_EXCHANGES") ListExchanges();
             else if (argument == "LIST_SHIPS") ListShips();
             else if (argument == "LIST_ORDERS") ListOrders();
-            else if (argument == "LIST_RECEPTIONS") ListReceptions();
+            else if (argument == "LIST_EXCHANGE_REQUESTS") ListExchangeRequests();
             else if (argument == "ENABLE_LOGS") EnableLogs();
             else if (argument == "ENABLE_STATUS_REQUEST") EnableStatusRequest();
             else if (argument == "ENABLE_DELIVERY_REQUEST") EnableDeliveryRequest();
-            else if (argument == "ENABLE_RECEPTION_REQUEST") EnableReceptionRequest();
+            else if (argument == "ENABLE_EXCHANGE_REQUEST") EnableExchangeRequest();
             else if (argument.StartsWith("SHIP_LOADED")) ShipLoaded(argument);
             else if (argument.StartsWith("SET_ORDER")) SetOrder(argument);
         }
@@ -327,63 +327,63 @@ namespace IngameScript
             InitializeExchangeGroups();
         }
         /// <summary>
-        /// Cambia el estado de la variable que controla la visualización de los exchanges
+        /// Changes the state of the variable that controls the display of exchanges
         /// </summary>
         void ListExchanges()
         {
             showExchanges = !showExchanges;
         }
         /// <summary>
-        /// Cambia el estado de la variable que controla la visualización de las naves
+        /// Changes the state of the variable that controls the display of ships
         /// </summary>
         void ListShips()
         {
             showShips = !showShips;
         }
         /// <summary>
-        /// Cambia el estado de la variable que controla la visualización de los pedidos
+        /// Changes the state of the variable that controls the display of orders
         /// </summary>
         void ListOrders()
         {
             showOrders = !showOrders;
         }
         /// <summary>
-        /// Cambia el estado de la variable que controla la visualización de las recepciones
+        /// Changes the state of the variable that controls the display of exchange requests
         /// </summary>
-        void ListReceptions()
+        void ListExchangeRequests()
         {
             showExchangeRequests = !showExchangeRequests;
         }
         /// <summary>
-        /// Cambia el estado de la variable que controla la visualización de los logs
+        /// Changes the state of the variable that controls the display of logs
         /// </summary>
         void EnableLogs()
         {
             enableLogs = !enableLogs;
         }
         /// <summary>
-        /// Cambia el estado de la variable que controla la petición de estado a las naves
+        /// Changes the state of the variable that controls the status request to the ships
         /// </summary>
         void EnableStatusRequest()
         {
             requestStatus = !requestStatus;
         }
         /// <summary>
-        /// Cambia el estado de la variable que controla la petición de entrega de pedidos
+        /// Changes the state of the variable that controls the order delivery request
         /// </summary>
         void EnableDeliveryRequest()
         {
             requestDelivery = !requestDelivery;
         }
         /// <summary>
-        /// Cambia el estado de la variable que controla la petición de recepción de pedidos
+        /// Changes the state of the variable that controls the exchange requests
         /// </summary>
-        void EnableReceptionRequest()
+        void EnableExchangeRequest()
         {
-            requestReception = !requestReception;
+            requestExchange = !requestExchange;
         }
         /// <summary>
-        /// Sec_C_3b - WH termina la carga y avisa a NAVEX
+        /// Seq_C_3b - WH completes loading and notifies SHIPX
         /// Request:  SHIP_LOADED
         /// Execute:  LOADED
         /// </summary>
@@ -447,7 +447,7 @@ namespace IngameScript
             else if (command == "REQUEST_DOCK") CmdRequestDock(lines);
         }
         /// <summary>
-        /// Sec_A_3 - WH actualiza el estado de la nave
+        /// Seq_A_3 - WH updates the ship's status
         /// Request:  RESPONSE_STATUS
         /// </summary>
         void CmdResponseStatus(string[] lines)
@@ -484,7 +484,7 @@ namespace IngameScript
             ship.UpdateTime = DateTime.Now;
         }
         /// <summary>
-        /// Sec_B_2 - WH registra el pedido (lista de pedidos)
+        /// Seq_B_2 - WH records the order (order list)
         /// Request:  REQUEST_ORDER
         /// </summary>
         void CmdRequestOrder(string[] lines)
@@ -528,7 +528,8 @@ namespace IngameScript
             orders.Add(order);
         }
         /// <summary>
-        /// 
+        /// Seq_XXX - BASEX registers exchange request (exchange request list)
+        /// Request:  REQUEST_LOAD
         /// </summary>
         void CmdRequestLoad(string[] lines)
         {
@@ -541,22 +542,18 @@ namespace IngameScript
             string from = Utils.ReadString(lines, "From");
             int orderId = Utils.ReadInt(lines, "Order");
 
-            if (exchangeRequests.Any(r => r.Ship == from && r.OrderId == orderId && r.Task == ExchangeTasks.Load))
-            {
-                // Ya hay una petición de carga para esta nave y orden
-                return;
-            }
+            exchangeRequests.RemoveAll(r => r.Ship == from);
 
             exchangeRequests.Add(new ExchangeRequest
             {
                 Ship = from,
                 OrderId = orderId,
                 Idle = true,
-                Task = ExchangeTasks.Load,
+                Task = ExchangeTasks.DeliveryLoad,
             });
         }
         /// <summary>
-        /// Sec_C_3a - NAVEX avisa a WH que ha llegado para cargar el ID_PEDIDO en el connector y WH hace la carga
+        /// Seq_C_3a - SHIPX notifies WH that it has arrived to load the ORDER_ID into the connector and WH does the loading.
         /// Request:  LOADING
         /// </summary>
         void CmdLoading(string[] lines)
@@ -585,10 +582,10 @@ namespace IngameScript
             string moveLog = exchange.MoveCargo(order, cargos);
             WriteLogLCDs(moveLog);
 
-            exchange.TimerUnload?.ApplyAction("Start");
+            exchange.TimerUnload?.StartCountdown();
         }
         /// <summary>
-        /// Sec_C_5 - BASEX registra petición de descarga (lista de descargas)
+        /// Seq_C_5 - BASEX registers exchange request (exchange request list)
         /// Request:  REQUEST_UNLOAD
         /// </summary>
         void CmdRequestUnload(string[] lines)
@@ -602,22 +599,18 @@ namespace IngameScript
             string from = Utils.ReadString(lines, "From");
             int orderId = Utils.ReadInt(lines, "Order");
 
-            if (exchangeRequests.Any(r => r.Ship == from && r.OrderId == orderId && r.Task == ExchangeTasks.Unload))
-            {
-                // Ya hay una petición de descarga para esta nave y orden
-                return;
-            }
+            exchangeRequests.RemoveAll(r => r.Ship == from);
 
             exchangeRequests.Add(new ExchangeRequest
             {
                 Ship = from,
                 OrderId = orderId,
                 Idle = true,
-                Task = ExchangeTasks.Unload,
+                Task = ExchangeTasks.DeliveryUnload,
             });
         }
         /// <summary>
-        /// Sec_D_2c - BASEX pone el exchange en modo descargar
+        /// Seq_D_2c - BASEX puts the exchange in unload mode
         /// </summary>
         void CmdUnloading(string[] lines)
         {
@@ -634,10 +627,10 @@ namespace IngameScript
                 return;
             }
 
-            exchange.TimerUnload?.ApplyAction("Start");
+            exchange.TimerUnload?.StartCountdown();
         }
         /// <summary>
-        /// Sec_D_3 - BASEX registra que el pedido ID_PEDIDO ha sido descargado y lo elimina de la lista de descargas. Lanza [ORDER_RECEIVED] a WH
+        /// Seq_D_3 - BASEX records that order ORDER_ID has been unloaded and removes it from the exchange requests list. It sends [ORDER_RECEIVED] to WH
         /// Request:  UNLOADED
         /// Execute:  ORDER_RECEIVED
         /// </summary>
@@ -670,7 +663,7 @@ namespace IngameScript
             BroadcastMessage(parts);
         }
         /// <summary>
-        /// Sec_D_4 - WH registra que el pedido ID_PEDIDO ha sido descargado y lo elimina de la lista de pedidos
+        /// Seq_D_4 - WH records that order ORDER_ID has been unloaded and removes it from the order list
         /// </summary>
         void CmdOrderReceived(string[] lines)
         {
@@ -721,7 +714,7 @@ namespace IngameScript
             {
                 if (exchange.Update(time)) continue;
 
-                //TODO: Si hay una petición de dock y no coincide con las naves conectadas, abortar y devolver la nave al parking, y ponerla en espera
+                //TODO: If there is a dock request and it does not match the connected ships, abort and return the ship to the parking position, and put it on hold.
             }
 
             var dockedShips = exchanges
@@ -737,17 +730,17 @@ namespace IngameScript
         #region UTILITY
         void InitializeExchangeGroups()
         {
-            //Busca todos los bloques que tengan en el nombre la regex de exchanges
+            //Find all blocks that have the exchange regex in their name
             List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
             GridTerminalSystem.GetBlocksOfType(blocks, i => i.CubeGrid == Me.CubeGrid && config.ExchangesRegex.IsMatch(i.CustomName));
 
             //Group them by the group name
             var groups = blocks.GroupBy(b => ExtractGroupName(b.CustomName)).ToList();
 
-            //Por cada grupo, inicializa los bloques de la clase ExchangeGroup
+            //For each group, initialize the blocks of the ExchangeGroup class
             foreach (var group in groups)
             {
-                var exchangeGroup = new ExchangeGroup()
+                var exchangeGroup = new ExchangeGroup(config)
                 {
                     Name = group.Key,
                 };
@@ -1046,7 +1039,7 @@ namespace IngameScript
             enableLogs = Utils.ReadInt(storageLines, "EnableLogs") == 1;
             requestStatus = Utils.ReadInt(storageLines, "RequestStatus", 1) == 1;
             requestDelivery = Utils.ReadInt(storageLines, "RequestDelivery", 1) == 1;
-            requestReception = Utils.ReadInt(storageLines, "RequestReception", 1) == 1;
+            requestExchange = Utils.ReadInt(storageLines, "RequestReception", 1) == 1;
         }
         void SaveToStorage()
         {
@@ -1061,7 +1054,7 @@ namespace IngameScript
             parts.Add($"EnableLogs={(enableLogs ? 1 : 0)}");
             parts.Add($"RequestStatus={(requestStatus ? 1 : 0)}");
             parts.Add($"RequestDelivery={(requestDelivery ? 1 : 0)}");
-            parts.Add($"RequestReception={(requestReception ? 1 : 0)}");
+            parts.Add($"RequestReception={(requestExchange ? 1 : 0)}");
 
             Storage = string.Join(Environment.NewLine, parts);
         }

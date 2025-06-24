@@ -11,9 +11,7 @@ namespace IngameScript
 {
     class ExchangeGroup
     {
-        const int NumWaypoints = 5;
-        const double DockRequestTimeThr = 15 * 60; //Seconds
-
+        private readonly Config config;
         private double dockRequestTime = 0;
 
         public string Name;
@@ -30,6 +28,11 @@ namespace IngameScript
         public bool LowerConnected => LowerConnector == null || LowerConnector.Status == MyShipConnectorStatus.Connected;
         public string UpperShipName => UpperConnected ? UpperConnector.OtherConnector.CubeGrid.CustomName : null;
         public string LowerShipName => LowerConnected ? LowerConnector?.OtherConnector.CubeGrid.CustomName : UpperShipName;
+
+        public ExchangeGroup(Config config)
+        {
+            this.config = config;
+        }
 
         public bool IsValid()
         {
@@ -58,14 +61,14 @@ namespace IngameScript
             {
                 newShipU = UpperConnector.OtherConnector.CubeGrid.CustomName;
             }
-          
+
             string newShipL = null;
             if (lowerConnected)
             {
                 newShipL = LowerConnector?.OtherConnector.CubeGrid.CustomName ?? DockedShipName;
             }
 
-            bool hasDockRequested = !string.IsNullOrWhiteSpace(DockedShipName) && dockRequestTime <= DockRequestTimeThr;
+            bool hasDockRequested = !string.IsNullOrWhiteSpace(DockedShipName) && dockRequestTime <= config.ExchangeDockRequestTimeThr;
             if (hasDockRequested)
             {
                 if ((upperConnected && DockedShipName != newShipU) || (lowerConnected && DockedShipName != newShipL))
@@ -75,7 +78,7 @@ namespace IngameScript
             }
             else
             {
-                //Actualizar el nombre de la nave
+                //Update ship name
                 DockedShipName = newShipU ?? newShipL;
             }
 
@@ -92,13 +95,13 @@ namespace IngameScript
         {
             List<Vector3D> waypoints = new List<Vector3D>();
 
-            Vector3D targetDock = UpperConnector.GetPosition();   // Punto final
+            Vector3D targetDock = UpperConnector.GetPosition();   //Last point
             Vector3D forward = UpperConnector.WorldMatrix.Forward;
-            Vector3D approachStart = targetDock + forward * 150;  // Punto de aproximación inicial
+            Vector3D approachStart = targetDock + forward * 150;  //Initial approach point
 
-            for (int i = 0; i <= NumWaypoints; i++)
+            for (int i = 0; i <= config.ExchangeNumWaypoints; i++)
             {
-                double t = i / (double)NumWaypoints;
+                double t = i / (double)config.ExchangeNumWaypoints;
                 Vector3D point = Vector3D.Lerp(approachStart, targetDock, t) + forward * 2.3;
                 waypoints.Add(point);
             }
@@ -118,7 +121,7 @@ namespace IngameScript
 
             sb.AppendLine($"## Destination Cargo: {Cargo.CustomName}. Warehouse cargos: {sourceCargos.Count}");
 
-            //Cargo del exchange a donde tienen que ir los items del pedido
+            //Exchange charge where the order items have to go
             var dstInv = Cargo.GetInventory();
 
             foreach (var orderItem in order.Items)
@@ -126,7 +129,7 @@ namespace IngameScript
                 var amountRemaining = orderItem.Value;
                 sb.AppendLine($"## Item {orderItem.Key}: {orderItem.Value}.");
 
-                // Buscar ítem en los contenedores de la base
+                //Search for items in the base containers
                 foreach (var srcCargo in sourceCargos)
                 {
                     var srcInv = srcCargo.GetInventory();
