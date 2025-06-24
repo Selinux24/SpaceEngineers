@@ -753,7 +753,7 @@ namespace IngameScript
 
                 atmNavigationData.Clear();
             }
-            else if (atmNavigationData.ExchangeTask == ExchangeTasks.RocketUnload && capacity < config.AtmNavigationMinLoad)
+            else if (atmNavigationData.ExchangeTask == ExchangeTasks.RocketUnload && capacity <= config.AtmNavigationMinLoad)
             {
                 status = ShipStatus.Idle;
                 atmNavigationData.CurrentState = AtmNavigationStatus.Idle;
