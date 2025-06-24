@@ -18,6 +18,7 @@ namespace IngameScript
         public readonly string BaseLogLCDs;
 
         public readonly int ExchangeNumWaypoints;
+        public readonly double ExchangePathDistance; //Meters, distance from the dock to the first waypoint
         public readonly double ExchangeDockRequestTimeThr; //Seconds
         public readonly System.Text.RegularExpressions.Regex ExchangesRegex;
         public readonly string ExchangeUpperConnector;
@@ -44,6 +45,7 @@ namespace IngameScript
             BaseLogLCDs = ReadConfig(customData, "LogLCDs");
 
             ExchangeNumWaypoints = ReadConfigInt(customData, "ExchangeNumWaypoints");
+            ExchangePathDistance = ReadConfigDouble(customData, "ExchangePathDistance");
             ExchangeDockRequestTimeThr = ReadConfigDouble(customData, "ExchangeDockRequestTimeThr");
             ExchangesRegex = new System.Text.RegularExpressions.Regex(ReadConfig(customData, "ExchangeGroupName"));
             ExchangeUpperConnector = ReadConfig(customData, "ExchangeUpperConnector");
@@ -122,7 +124,8 @@ namespace IngameScript
                 "Warehouses=Warehouse\n" +
                 "\n" +
                 "ExchangeNumWaypoints=5\n" +
-                $"ExchangeDockRequestTimeThr={15 * 60}\n" +
+                "ExchangePathDistance=150\n" +
+                "ExchangeDockRequestTimeThr=900\n" +
                 $"ExchangeGroupName={@"GR_\w+"}\n" +
                 "ExchangeUpperConnector=Input\n" +
                 "ExchangeLowerConnector=Output\n" +

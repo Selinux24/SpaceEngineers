@@ -97,7 +97,7 @@ namespace IngameScript
 
             Vector3D targetDock = UpperConnector.GetPosition();   //Last point
             Vector3D forward = UpperConnector.WorldMatrix.Forward;
-            Vector3D approachStart = targetDock + forward * 150;  //Initial approach point
+            Vector3D approachStart = targetDock + forward * config.ExchangePathDistance;  //Initial approach point
 
             for (int i = 0; i <= config.ExchangeNumWaypoints; i++)
             {
