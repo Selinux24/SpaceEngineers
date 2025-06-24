@@ -466,6 +466,7 @@ namespace IngameScript
             Vector3D customerPosition = Utils.ReadVector(lines, "CustomerPosition");
             Vector3D position = Utils.ReadVector(lines, "Position");
             double speed = Utils.ReadDouble(lines, "Speed");
+            double capacity = Utils.ReadDouble(lines, "Capacity", 0);
 
             var ship = ships.Find(s => s.Name == from);
             if (ship == null)
@@ -481,6 +482,7 @@ namespace IngameScript
             ship.CustomerPosition = customerPosition;
             ship.Position = position;
             ship.Speed = speed;
+            ship.Capacity = capacity;
             ship.UpdateTime = DateTime.Now;
         }
         /// <summary>
@@ -882,7 +884,7 @@ namespace IngameScript
 
             foreach (var ship in ships)
             {
-                sbData.AppendLine($"+ {ship.Name} {ship.ShipStatus}. Last update: {(DateTime.Now - ship.UpdateTime).TotalSeconds:F0}secs");
+                sbData.AppendLine($"+ {ship.Name} {ship.ShipStatus}. Capacity {ship.Capacity:P1}. Last update: {(DateTime.Now - ship.UpdateTime).TotalSeconds:F0}secs");
                 if (ship.ShipStatus != ShipStatus.RouteToUnload && ship.ShipStatus != ShipStatus.RouteToLoad) continue;
 
                 string origin = ship.ShipStatus == ShipStatus.RouteToUnload ? ship.Warehouse : ship.Customer;

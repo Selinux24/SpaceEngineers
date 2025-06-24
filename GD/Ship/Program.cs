@@ -1077,6 +1077,7 @@ namespace IngameScript
                 $"Customer={deliveryData.OrderCustomer}",
                 $"CustomerPosition={Utils.VectorToStr(deliveryData.OrderCustomerParking)}",
                 $"Position={Utils.VectorToStr(position)}",
+                $"Capacity={CalculateCargoPercentage():F2}",
                 $"Speed={speed:F2}",
             };
             BroadcastMessage(parts);

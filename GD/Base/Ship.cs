@@ -13,6 +13,7 @@ namespace IngameScript
         public string Customer;
         public Vector3D CustomerPosition;
         public double Speed;
+        public double Capacity;
         public DateTime UpdateTime;
     }
 }
