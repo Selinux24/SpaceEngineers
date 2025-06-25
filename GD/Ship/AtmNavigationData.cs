@@ -24,7 +24,6 @@ namespace IngameScript
         public string Command = null;
         public bool HasTarget = false;
         public string StateMsg;
-        public TimeSpan SeparationSecs = TimeSpan.FromSeconds(3);
         public DateTime SeparationTime = DateTime.MinValue;
 
         public Vector3D DirectionToTarget { get; private set; }
@@ -33,6 +32,7 @@ namespace IngameScript
         public TimeSpan EstimatedArrival => Speed > 0.01 ? TimeSpan.FromSeconds(DistanceToTarget / Speed) : TimeSpan.Zero;
         public double TotalDistance => Vector3D.Distance(Origin, Destination);
         public double Progress => DistanceToTarget > 0 ? 1 - (DistanceToTarget / TotalDistance) : 1;
+        public TimeSpan SeparationSecs => TimeSpan.FromSeconds(config.AtmNavigationSeparationSecs);
 
         public AtmNavigationData(Config config)
         {

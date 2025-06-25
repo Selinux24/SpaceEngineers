@@ -64,6 +64,7 @@ namespace IngameScript
         public readonly double AtmNavigationMaxLoad;
         public readonly string AtmNavigationLoadBase;
         public readonly string AtmNavigationUnloadBase;
+        public readonly double AtmNavigationSeparationSecs; //Separation thrust time before acceleration
 
         public Config(string customData)
         {
@@ -122,6 +123,7 @@ namespace IngameScript
             AtmNavigationMaxLoad = ReadConfigDouble(customData, "AtmNavigationMaxLoad", 0.9);
             AtmNavigationLoadBase = ReadConfig(customData, "AtmNavigationLoadBase");
             AtmNavigationUnloadBase = ReadConfig(customData, "AtmNavigationUnloadBase");
+            AtmNavigationSeparationSecs = ReadConfigDouble(customData, "AtmNavigationSeparationSecs");
         }
         string ReadConfig(string customData, string name)
         {
@@ -231,7 +233,8 @@ namespace IngameScript
                 "AtmNavigationMinLoad=0.1\n" +
                 "AtmNavigationMaxLoad=0.9\n" +
                 "AtmNavigationLoadBase=name\n" +
-                "AtmNavigationUnloadBase=name";
+                "AtmNavigationUnloadBase=name\n" +
+                "AtmNavigationSeparationSecs=3";
         }
     }
 }
