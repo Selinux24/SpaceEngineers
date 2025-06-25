@@ -660,23 +660,17 @@ namespace IngameScript
             var elapsed = DateTime.Now - atmNavigationData.SeparationTime;
             if (elapsed < atmNavigationData.SeparationSecs)
             {
+                var gravity = remoteAlign.GetNaturalGravity();
+                var mass = remoteAlign.CalculateShipMass().PhysicalMass;
+
                 var force = Utils.CalculateThrustForce(
                     remoteAlign.WorldMatrix.Backward,
                     config.AtmNavigationMaxSpeed,
                     Vector3D.Zero,
-                    remoteAlign.CalculateShipMass().PhysicalMass);
+                    mass);
 
-                ApplyThrust(force);
+                ApplyThrust(force, gravity, mass);
 
-                return;
-            }
-
-            ResetThrust();
-            ResetGyros();
-            var shipVelocity = remoteAlign.GetShipVelocities().LinearVelocity.Length();
-            if (shipVelocity > 0.1)
-            {
-                WriteInfoLCDs("Separating...");
                 return;
             }
 
@@ -733,41 +727,50 @@ namespace IngameScript
         }
         void AtmNavigationExchange()
         {
-            WriteInfoLCDs($"{atmNavigationData.ExchangeTask}");
-
             //Monitorize the cargo capacity of the ship
             var capacity = CalculateCargoPercentage();
-            if (atmNavigationData.ExchangeTask == ExchangeTasks.RocketLoad && capacity >= config.AtmNavigationMaxLoad)
+            if (atmNavigationData.ExchangeTask == ExchangeTasks.RocketLoad)
             {
-                status = ShipStatus.Idle;
-                atmNavigationData.CurrentState = AtmNavigationStatus.Idle;
+                WriteInfoLCDs($"Loading to {config.AtmNavigationMaxLoad:P1}");
 
-                List<string> parts = new List<string>()
+                if (capacity >= config.AtmNavigationMaxLoad)
                 {
-                    $"Command=REQUEST_DOCK",
-                    $"To={config.AtmNavigationUnloadBase}",
-                    $"From={shipId}",
-                    $"Task={(int)ExchangeTasks.RocketUnload}",
-                };
-                BroadcastMessage(parts);
+                    List<string> parts = new List<string>()
+                    {
+                        $"Command=REQUEST_DOCK",
+                        $"To={config.AtmNavigationUnloadBase}",
+                        $"From={shipId}",
+                        $"Task={(int)ExchangeTasks.RocketUnload}",
+                    };
+                    BroadcastMessage(parts);
 
-                atmNavigationData.Clear();
+                    atmNavigationData.Clear();
+                    status = ShipStatus.Idle;
+                }
             }
-            else if (atmNavigationData.ExchangeTask == ExchangeTasks.RocketUnload && capacity <= config.AtmNavigationMinLoad)
+            else if (atmNavigationData.ExchangeTask == ExchangeTasks.RocketUnload)
             {
-                status = ShipStatus.Idle;
-                atmNavigationData.CurrentState = AtmNavigationStatus.Idle;
+                WriteInfoLCDs($"Unloading to {config.AtmNavigationMinLoad:P1}");
 
-                List<string> parts = new List<string>()
+                if (capacity <= config.AtmNavigationMinLoad)
                 {
-                    $"Command=REQUEST_DOCK",
-                    $"To={config.AtmNavigationLoadBase}",
-                    $"From={shipId}",
-                    $"Task={(int)ExchangeTasks.RocketLoad}",
-                };
-                BroadcastMessage(parts);
+                    List<string> parts = new List<string>()
+                    {
+                        $"Command=REQUEST_DOCK",
+                        $"To={config.AtmNavigationLoadBase}",
+                        $"From={shipId}",
+                        $"Task={(int)ExchangeTasks.RocketLoad}",
+                    };
+                    BroadcastMessage(parts);
 
+                    atmNavigationData.Clear();
+                    status = ShipStatus.Idle;
+                }
+            }
+            else
+            {
                 atmNavigationData.Clear();
+                status = ShipStatus.Idle;
             }
         }
         #endregion
@@ -1380,6 +1383,53 @@ namespace IngameScript
             {
                 var thrustDir = t.WorldMatrix.Backward;
                 double alignment = thrustDir.Dot(force);
+
+                t.Enabled = true;
+                t.ThrustOverridePercentage = alignment > 0 ? (float)Math.Min(alignment / t.MaxEffectiveThrust, 1f) : 0f;
+            }
+        }
+        void ApplyThrust(Vector3D force, Vector3D gravity, double mass)
+        {
+            if (gravity.Length() < 0.001)
+            {
+                ApplyThrust(force);
+                return;
+            }
+
+            //Find opposing thrusters to counteract gravity, to obtain total effective thrust
+            var opposingThrusters = new List<IMyThrust>();
+            double totalEffectiveThrust = 0;
+            foreach (var t in thrusters)
+            {
+                var thrustDir = t.WorldMatrix.Backward;
+                double alignment = thrustDir.Dot(-gravity);
+
+                if (alignment >= 0.9)
+                {
+                    opposingThrusters.Add(t);
+                    totalEffectiveThrust += t.MaxEffectiveThrust;
+
+                    continue;
+                }
+
+                //Apply force to thrusters, no opposing thrusters
+                alignment = thrustDir.Dot(force);
+
+                t.Enabled = true;
+                t.ThrustOverridePercentage = alignment > 0 ? (float)Math.Min(alignment / t.MaxEffectiveThrust, 1f) : 0f;
+            }
+
+            //Apply force to opposing thrusters, distributing the gravity force over them
+            if (totalEffectiveThrust <= 0.01) return;
+            var gravForce = mass * gravity;
+
+            foreach (var t in opposingThrusters)
+            {
+                double share = t.MaxEffectiveThrust / totalEffectiveThrust;
+                var targetForce = gravForce * share;
+
+                var thrustDir = t.WorldMatrix.Backward;
+                double alignment = thrustDir.Dot(targetForce);
 
                 t.Enabled = true;
                 t.ThrustOverridePercentage = alignment > 0 ? (float)Math.Min(alignment / t.MaxEffectiveThrust, 1f) : 0f;

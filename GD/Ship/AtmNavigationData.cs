@@ -24,7 +24,7 @@ namespace IngameScript
         public string Command = null;
         public bool HasTarget = false;
         public string StateMsg;
-        public TimeSpan SeparationSecs = TimeSpan.FromSeconds(1);
+        public TimeSpan SeparationSecs = TimeSpan.FromSeconds(3);
         public DateTime SeparationTime = DateTime.MinValue;
 
         public Vector3D DirectionToTarget { get; private set; }
