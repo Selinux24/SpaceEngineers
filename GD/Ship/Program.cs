@@ -1437,7 +1437,8 @@ namespace IngameScript
 
             //Apply force to opposing thrusters, distributing the gravity force over them
             if (totalEffectiveThrust <= 0.01) return;
-            var gravForce = mass * gravity;
+
+            var gravForce = -Vector3D.Normalize(gravity) * (mass * gravity.Length());
 
             foreach (var t in opposingThrusters)
             {
