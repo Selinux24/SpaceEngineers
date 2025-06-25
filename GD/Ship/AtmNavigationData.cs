@@ -11,6 +11,7 @@ namespace IngameScript
     {
         readonly Config config;
         int tickCount = 0;
+        DateTime separationTime = DateTime.MinValue;
 
         public AtmNavigationStatus CurrentState = AtmNavigationStatus.Idle;
         public bool Landing = false;
@@ -24,7 +25,6 @@ namespace IngameScript
         public string Command = null;
         public bool HasTarget = false;
         public string StateMsg;
-        public DateTime SeparationTime = DateTime.MinValue;
 
         public Vector3D DirectionToTarget { get; private set; }
         public double DistanceToTarget { get; private set; }
@@ -94,6 +94,17 @@ namespace IngameScript
             DirectionToTarget = Vector3D.Normalize(toTarget);
             DistanceToTarget = toTarget.Length();
             Speed = speed;
+        }
+
+        public void StartSeparation()
+        {
+            separationTime = DateTime.Now;
+        }
+        public bool IsSeparationTimeReached()
+        {
+            var elapsed = DateTime.Now - separationTime;
+
+            return elapsed.TotalSeconds >= config.AtmNavigationSeparationSecs;
         }
 
         public void LoadFromStorage(string storageLine)

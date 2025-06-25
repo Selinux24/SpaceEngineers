@@ -653,12 +653,11 @@ namespace IngameScript
 
             WriteInfoLCDs("Connector unlocked. Separating.");
             atmNavigationData.CurrentState = AtmNavigationStatus.Separating;
-            atmNavigationData.SeparationTime = DateTime.Now;
+            atmNavigationData.StartSeparation();
         }
         void AtmNavigationSeparate()
         {
-            var elapsed = DateTime.Now - atmNavigationData.SeparationTime;
-            if (elapsed < atmNavigationData.SeparationSecs)
+            if (!atmNavigationData.IsSeparationTimeReached())
             {
                 var gravity = remoteAlign.GetNaturalGravity();
                 var mass = remoteAlign.CalculateShipMass().PhysicalMass;
@@ -785,6 +784,7 @@ namespace IngameScript
             else if (argument == "RESUME") Resume();
 
             else if (argument.StartsWith("REQUEST_DOCK")) RequestDock(argument);
+            else if (argument == "START_ROUTE") StartRoute();
 
             else if (argument.StartsWith("GOTO")) Goto(argument);
             else if (argument == "APPROACH_TO_PARKING") ApproachToParking();
@@ -857,6 +857,22 @@ namespace IngameScript
                 $"To={bse}",
                 $"From={shipId}",
                 $"Task={task}",
+            };
+            BroadcastMessage(parts);
+        }
+        /// <summary>
+        /// Starts a route to the configured loading base.
+        /// </summary>
+        void StartRoute()
+        {
+            status = ShipStatus.Idle;
+
+            List<string> parts = new List<string>()
+            {
+                $"Command=REQUEST_DOCK",
+                $"To={config.AtmNavigationLoadBase}",
+                $"From={shipId}",
+                $"Task={(int)ExchangeTasks.RocketLoad}",
             };
             BroadcastMessage(parts);
         }
