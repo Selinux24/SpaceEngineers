@@ -10,6 +10,8 @@ namespace IngameScript
 
         public readonly string Channel;
 
+        public bool EnableLogs = true;
+
         public readonly string WildcardShipId;
         public readonly string WildcardShipInfo;
         public readonly string WildcardLogLCDs;
@@ -70,6 +72,8 @@ namespace IngameScript
         {
             Channel = Utils.ReadConfig(customData, "Channel");
 
+            EnableLogs = ReadConfig(customData, "EnableLogs", "false") == "true";
+
             WildcardShipId = ReadConfig(customData, "WildcardShipId");
             WildcardShipInfo = ReadConfig(customData, "WildcardShipInfo");
             WildcardLogLCDs = ReadConfig(customData, "WildcardLogLCDs");
@@ -125,11 +129,16 @@ namespace IngameScript
             AtmNavigationUnloadBase = ReadConfig(customData, "AtmNavigationUnloadBase");
             AtmNavigationSeparationSecs = ReadConfigDouble(customData, "AtmNavigationSeparationSecs");
         }
-        string ReadConfig(string customData, string name)
+        string ReadConfig(string customData, string name, string defaultValue = null)
         {
             var value = ReadConfigLine(customData, name);
             if (string.IsNullOrWhiteSpace(value))
             {
+                if (defaultValue != null)
+                {
+                    return defaultValue;
+                }
+
                 errors.AppendLine($"{name} not set.");
             }
 
@@ -180,6 +189,8 @@ namespace IngameScript
         {
             return
                 "Channel=name\n" +
+                "\n" +
+                "EnableLogs=false\n" +
                 "\n" +
                 "WildcardShipId=[shipId]\n" +
                 "WildcardShipInfo=[DELIVERY_INFO]\n" +

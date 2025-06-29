@@ -58,7 +58,6 @@ namespace IngameScript
 
         ShipStatus status = ShipStatus.Idle;
         bool paused = false;
-        bool enableLogs = true;
 
         public Program()
         {
@@ -1057,7 +1056,7 @@ namespace IngameScript
         /// </summary>
         void EnableLogs()
         {
-            enableLogs = !enableLogs;
+            config.EnableLogs = !config.EnableLogs;
         }
         #endregion
 
@@ -1342,7 +1341,7 @@ namespace IngameScript
         }
         void WriteLogLCDs(string text)
         {
-            if (!enableLogs)
+            if (!config.EnableLogs)
             {
                 return;
             }
@@ -1602,7 +1601,6 @@ namespace IngameScript
             arrivalData.LoadFromStorage(Utils.ReadString(storageLines, "ArrivalData"));
             cruisingData.LoadFromStorage(Utils.ReadString(storageLines, "NavigationData"));
             atmNavigationData.LoadFromStorage(Utils.ReadString(storageLines, "AtmNavigationData"));
-            enableLogs = Utils.ReadInt(storageLines, "EnableLogs") == 1;
             paused = Utils.ReadInt(storageLines, "Paused", 0) == 1;
         }
         void SaveToStorage()
@@ -1615,7 +1613,6 @@ namespace IngameScript
                 $"ArrivalData={arrivalData.SaveToStorage()}",
                 $"NavigationData={cruisingData.SaveToStorage()}",
                 $"AtmNavigationData={atmNavigationData.SaveToStorage()}",
-                $"EnableLogs={(enableLogs ? 1 : 0)}",
                 $"Paused={(paused ? 1 : 0)}",
             };
 

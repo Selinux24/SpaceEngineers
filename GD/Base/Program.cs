@@ -32,12 +32,6 @@ namespace IngameScript
         readonly List<Ship> ships = new List<Ship>();
         readonly List<ExchangeRequest> exchangeRequests = new List<ExchangeRequest>();
 
-        bool showExchanges = true;
-        bool showShips = true;
-        bool showOrders = true;
-        bool showExchangeRequests = true;
-        bool enableLogs = false;
-
         bool requestStatus = true;
         DateTime lastRequestStatus = DateTime.MinValue;
 
@@ -118,7 +112,8 @@ namespace IngameScript
             PrintShipStatus();
             PrintOrders();
             PrintExchangeRequests();
-            WriteDataLCDs(sbData.ToString(), false);
+            WriteDataLCDs();
+            WriteLogLCDs();
         }
 
         #region STATUS
@@ -182,7 +177,7 @@ namespace IngameScript
                 DoRequestStatus();
                 return;
             }
-            WriteLogLCDs($"Deliveries: {pendantOrders.Count}; Free exchanges: {freeExchanges.Count}; Free ships: {freeShips.Count}");
+            WriteLog($"Deliveries: {pendantOrders.Count}; Free exchanges: {freeExchanges.Count}; Free ships: {freeShips.Count}");
 
             var shipExchangePair = GetNearestShipsFromExchanges(freeShips, freeExchanges).FirstOrDefault();
             if (shipExchangePair == null)
@@ -249,7 +244,7 @@ namespace IngameScript
                 DoRequestStatus();
                 return;
             }
-            WriteLogLCDs($"Exchange requests: {exRequest.Count}; Free exchanges: {freeExchanges.Count}; Free ships: {waitingShips.Count}");
+            WriteLog($"Exchange requests: {exRequest.Count}; Free exchanges: {freeExchanges.Count}; Free ships: {waitingShips.Count}");
 
             var shipExchangePairs = GetNearestShipsFromExchanges(waitingShips, freeExchanges);
             if (shipExchangePairs.Count == 0)
@@ -295,7 +290,7 @@ namespace IngameScript
         #region TERMINAL COMMANDS
         void ParseTerminalMessage(string argument)
         {
-            WriteLogLCDs($"ParseTerminalMessage: {argument}");
+            WriteLog($"ParseTerminalMessage: {argument}");
 
             if (argument == "RESET") Reset();
             else if (argument == "LIST_EXCHANGES") ListExchanges();
@@ -331,35 +326,35 @@ namespace IngameScript
         /// </summary>
         void ListExchanges()
         {
-            showExchanges = !showExchanges;
+            config.ShowExchanges = !config.ShowExchanges;
         }
         /// <summary>
         /// Changes the state of the variable that controls the display of ships
         /// </summary>
         void ListShips()
         {
-            showShips = !showShips;
+            config.ShowShips = !config.ShowShips;
         }
         /// <summary>
         /// Changes the state of the variable that controls the display of orders
         /// </summary>
         void ListOrders()
         {
-            showOrders = !showOrders;
+            config.ShowOrders = !config.ShowOrders;
         }
         /// <summary>
         /// Changes the state of the variable that controls the display of exchange requests
         /// </summary>
         void ListExchangeRequests()
         {
-            showExchangeRequests = !showExchangeRequests;
+            config.ShowExchangeRequests = !config.ShowExchangeRequests;
         }
         /// <summary>
         /// Changes the state of the variable that controls the display of logs
         /// </summary>
         void EnableLogs()
         {
-            enableLogs = !enableLogs;
+            config.EnableLogs = !config.EnableLogs;
         }
         /// <summary>
         /// Changes the state of the variable that controls the status request to the ships
@@ -431,7 +426,7 @@ namespace IngameScript
         #region IGC COMMANDS
         void ParseMessage(string signal)
         {
-            WriteLogLCDs($"ParseMessage: {signal}");
+            WriteLog($"ParseMessage: {signal}");
 
             string[] lines = signal.Split('|');
             string command = Utils.ReadArgument(lines, "Command");
@@ -582,7 +577,7 @@ namespace IngameScript
             }
 
             string moveLog = exchange.MoveCargo(order, cargos);
-            WriteLogLCDs(moveLog);
+            WriteLog(moveLog);
 
             exchange.TimerUnload?.StartCountdown();
         }
@@ -783,12 +778,12 @@ namespace IngameScript
 
                 if (exchangeGroup.IsValid())
                 {
-                    WriteLogLCDs($"ExchangeGroup {exchangeGroup.Name} initialized.");
+                    WriteLog($"ExchangeGroup {exchangeGroup.Name} initialized.");
                     exchanges.Add(exchangeGroup);
                 }
                 else
                 {
-                    WriteLogLCDs($"ExchangeGroup {exchangeGroup.Name} is invalid.");
+                    WriteLog($"ExchangeGroup {exchangeGroup.Name} is invalid.");
                 }
             }
         }
@@ -850,7 +845,7 @@ namespace IngameScript
 
         void PrintExchanges()
         {
-            if (!showExchanges) return;
+            if (!config.ShowExchanges) return;
 
             sbData.AppendLine();
             sbData.AppendLine("EXCHANGE STATUS");
@@ -871,7 +866,7 @@ namespace IngameScript
         }
         void PrintShipStatus()
         {
-            if (!showShips) return;
+            if (!config.ShowShips) return;
 
             sbData.AppendLine();
             sbData.AppendLine("SHIPS STATUS");
@@ -906,7 +901,7 @@ namespace IngameScript
         }
         void PrintOrders()
         {
-            if (!showOrders) return;
+            if (!config.ShowOrders) return;
 
             sbData.AppendLine();
             sbData.AppendLine("ORDERS STATUS");
@@ -924,7 +919,7 @@ namespace IngameScript
         }
         void PrintExchangeRequests()
         {
-            if (!showExchangeRequests) return;
+            if (!config.ShowExchangeRequests) return;
 
             sbData.AppendLine();
             sbData.AppendLine("EXCHANGE REQUESTS");
@@ -976,26 +971,20 @@ namespace IngameScript
                 lcd.WriteText(text, false);
             }
         }
-        void WriteDataLCDs(string text, bool append)
+        void WriteDataLCDs()
         {
+            string text = sbData.ToString();
             foreach (var lcd in dataLCDs)
             {
                 lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-                lcd.WriteText(text, append);
+                lcd.WriteText(text, false);
             }
         }
-        void WriteLogLCDs(string text)
+        void WriteLogLCDs()
         {
-            if (!enableLogs)
-            {
-                return;
-            }
-
-            sbLog.Insert(0, text + Environment.NewLine);
-
-            var log = sbLog.ToString();
-            string[] logLines = log.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
-
+            string text = sbLog.ToString();
+            string[] logLines = text.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+         
             foreach (var lcd in logLCDs)
             {
                 lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
@@ -1009,15 +998,24 @@ namespace IngameScript
                 }
                 else
                 {
-                    lcd.WriteText(log, false);
+                    lcd.WriteText(text, false);
                 }
             }
+        }
+        void WriteLog(string text)
+        {
+            if (!config.EnableLogs)
+            {
+                return;
+            }
+
+            sbLog.Insert(0, text + Environment.NewLine);
         }
         void BroadcastMessage(List<string> parts)
         {
             string message = string.Join("|", parts);
 
-            WriteLogLCDs($"SendIGCMessage: {message}");
+            WriteLog($"SendIGCMessage: {message}");
 
             IGC.SendBroadcastMessage(config.Channel, message);
         }
@@ -1034,11 +1032,6 @@ namespace IngameScript
             Order.LoadListFromStorage(storageLines, orders);
             ExchangeRequest.LoadListFromStorage(storageLines, exchangeRequests);
             ExchangeGroup.LoadListFromStorage(storageLines, exchanges);
-            showExchanges = Utils.ReadInt(storageLines, "ShowExchanges") == 1;
-            showShips = Utils.ReadInt(storageLines, "ShowShips") == 1;
-            showOrders = Utils.ReadInt(storageLines, "ShowOrders") == 1;
-            showExchangeRequests = Utils.ReadInt(storageLines, "ShowExchangeRequests") == 1;
-            enableLogs = Utils.ReadInt(storageLines, "EnableLogs") == 1;
             requestStatus = Utils.ReadInt(storageLines, "RequestStatus", 1) == 1;
             requestDelivery = Utils.ReadInt(storageLines, "RequestDelivery", 1) == 1;
             requestExchange = Utils.ReadInt(storageLines, "RequestReception", 1) == 1;
@@ -1049,11 +1042,6 @@ namespace IngameScript
             parts.AddRange(Order.SaveListToStorage(orders));
             parts.AddRange(ExchangeRequest.SaveListToStorage(exchangeRequests));
             parts.AddRange(ExchangeGroup.SaveListToStorage(exchanges));
-            parts.Add($"ShowExchanges={(showExchanges ? 1 : 0)}");
-            parts.Add($"ShowShips={(showShips ? 1 : 0)}");
-            parts.Add($"ShowOrders={(showOrders ? 1 : 0)}");
-            parts.Add($"ShowExchangeRequests={(showExchangeRequests ? 1 : 0)}");
-            parts.Add($"EnableLogs={(enableLogs ? 1 : 0)}");
             parts.Add($"RequestStatus={(requestStatus ? 1 : 0)}");
             parts.Add($"RequestDelivery={(requestDelivery ? 1 : 0)}");
             parts.Add($"RequestReception={(requestExchange ? 1 : 0)}");

@@ -12,6 +12,12 @@ namespace IngameScript
         public readonly string BaseParking;
         public readonly bool IsRocketBase;
 
+        public bool ShowExchanges = true;
+        public bool ShowShips = true;
+        public bool ShowOrders = true;
+        public bool ShowExchangeRequests = true;
+        public bool EnableLogs = false;
+
         public readonly string BaseCamera;
         public readonly string BaseWarehouses;
         public readonly string BaseDataLCDs;
@@ -38,6 +44,12 @@ namespace IngameScript
             BaseParking = ReadConfig(customData, "Parking");
             IsRocketBase = ReadConfig(customData, "IsRocketBase").ToLower() == "true";
 
+            ShowExchanges = ReadConfig(customData, "ShowExchanges", "true") == "true";
+            ShowShips = ReadConfig(customData, "ShowShips", "true") == "true";
+            ShowOrders = ReadConfig(customData, "ShowOrders", "true") == "true";
+            ShowExchangeRequests = ReadConfig(customData, "ShowExchangeRequests", "true") == "true";
+            EnableLogs = ReadConfig(customData, "EnableLogs", "false") == "true";
+
             BaseCamera = ReadConfig(customData, "Camera");
             BaseWarehouses = ReadConfig(customData, "Warehouses");
 
@@ -59,11 +71,16 @@ namespace IngameScript
             RequestDeliveryInterval = ReadConfigInt(customData, "RequestDeliveryInterval");
             RequestReceptionInterval = ReadConfigInt(customData, "RequestReceptionInterval");
         }
-        string ReadConfig(string customData, string name)
+        string ReadConfig(string customData, string name, string defaultValue = null)
         {
             var value = ReadConfigLine(customData, name);
             if (string.IsNullOrWhiteSpace(value))
             {
+                if (defaultValue != null)
+                {
+                    return defaultValue;
+                }
+
                 errors.AppendLine($"{name} not set.");
             }
 
@@ -116,6 +133,12 @@ namespace IngameScript
                 "Channel=name\n" +
                 "Parking=x:y:z\n" +
                 "IsRocketBase=false\n" +
+                "\n" +
+                "ShowExchanges=true\n" +
+                "ShowShips=true\n" +
+                "ShowOrders=true\n" +
+                "ShowExchangeRequests=true\n" +
+                "EnableLogs=false\n" +
                 "\n" +
                 "DataLCDs=[DELIVERY_DATA]\n" +
                 "LogLCDs=[DELIVERY_LOG]\n" +
