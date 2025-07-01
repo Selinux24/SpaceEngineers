@@ -359,14 +359,8 @@ namespace IngameScript
         {
             cruisingData.UpdatePositionAndVelocity(cameraPilot.GetPosition(), remotePilot.GetShipSpeed());
 
-            cruisingData.StateMsg = $"Cruising state {cruisingData.CurrentState}";
-
-            WriteInfoLCDs($"Trip: {Utils.DistanceToStr(cruisingData.TotalDistance)}");
-            WriteInfoLCDs($"To target: {Utils.DistanceToStr(cruisingData.DistanceToTarget)}");
-            WriteInfoLCDs($"ETC: {cruisingData.EstimatedArrival:hh\\:mm\\:ss}");
-            WriteInfoLCDs($"Speed: {cruisingData.Speed:F2}");
-            WriteInfoLCDs($"Progress {cruisingData.Progress:P1}");
-            WriteInfoLCDs(cruisingData.PrintObstacle());
+            cruisingData.StateMsg = $"{cruisingData.CurrentState}";
+            WriteInfoLCDs($"{cruisingData.CurrentState}");
 
             if (DoPause()) return;
 
@@ -403,7 +397,7 @@ namespace IngameScript
         }
         void CruisingLocate()
         {
-            if (AlignToDirection(remotePilot.WorldMatrix.Forward, cruisingData.DirectionToTarget, config.CruisingLocateAlignThr))
+            if (!AlignToDirection(remotePilot.WorldMatrix.Forward, cruisingData.DirectionToTarget, config.CruisingLocateAlignThr))
             {
                 BroadcastStatus("Destination located. Initializing acceleration.");
                 cruisingData.CurrentState = CruisingStatus.Accelerating;
@@ -440,6 +434,12 @@ namespace IngameScript
             }
 
             //Accelerate
+            WriteInfoLCDs($"Trip: {Utils.DistanceToStr(cruisingData.TotalDistance)}");
+            WriteInfoLCDs($"To target: {Utils.DistanceToStr(cruisingData.DistanceToTarget)}");
+            WriteInfoLCDs($"ETC: {cruisingData.EstimatedArrival:dd\\:hh\\:mm\\:ss}");
+            WriteInfoLCDs($"Speed: {cruisingData.Speed:F2}");
+            WriteInfoLCDs($"Progress {cruisingData.Progress:P1}");
+
             var maxSpeed = config.CruisingMaxSpeed;
             if (Vector3D.Distance(cruisingData.Origin, cameraPilot.GetPosition()) <= config.CruisingToBasesDistanceThr)
             {
@@ -466,9 +466,17 @@ namespace IngameScript
             }
 
             //Maintain speed
+            WriteInfoLCDs($"Trip: {Utils.DistanceToStr(cruisingData.TotalDistance)}");
+            WriteInfoLCDs($"To target: {Utils.DistanceToStr(cruisingData.DistanceToTarget)}");
+            WriteInfoLCDs($"ETC: {cruisingData.EstimatedArrival:dd\\:hh\\:mm\\:ss}");
+            WriteInfoLCDs($"Speed: {cruisingData.Speed:F2}");
+            WriteInfoLCDs($"Progress {cruisingData.Progress:P1}");
+
             bool inGravity = IsShipInGravity();
-            if (inGravity || !AlignToDirection(remotePilot.WorldMatrix.Forward, cruisingData.DirectionToTarget, config.CruisingCruiseAlignThr))
+            if (inGravity || AlignToDirection(remotePilot.WorldMatrix.Forward, cruisingData.DirectionToTarget, config.CruisingCruiseAlignThr))
             {
+                WriteInfoLCDs("Not aligned");
+
                 //Thrust until the velocity vector is aligned again with the vector to the target
                 ThrustToTarget(remotePilot, cruisingData.DirectionToTarget, config.CruisingMaxSpeed);
                 cruisingData.AlignThrustStart = DateTime.Now;
@@ -479,6 +487,8 @@ namespace IngameScript
 
             if (cruisingData.Thrusting)
             {
+                WriteInfoLCDs("Thrusters started to regain alignment");
+
                 //Thrusters started to regain alignment
                 if (!inGravity && (DateTime.Now - cruisingData.AlignThrustStart).TotalSeconds > config.CruisingThrustAlignSeconds)
                 {
@@ -493,6 +503,8 @@ namespace IngameScript
             var shipVelocity = remotePilot.GetShipVelocities().LinearVelocity.Length();
             if (shipVelocity > config.CruisingMaxSpeed)
             {
+                WriteInfoLCDs("Maximum speed exceeded");
+
                 //Maximum speed exceeded. Engage thrusters in neutral to brake.
                 ResetThrust();
                 ResetGyros();
@@ -502,6 +514,8 @@ namespace IngameScript
 
             if (shipVelocity < config.CruisingMaxSpeed * config.CruisingMaxSpeedThr)
             {
+                WriteInfoLCDs("Below the desired speed");
+
                 //Below the desired speed. Accelerate until reaching it.
                 ThrustToTarget(remotePilot, cruisingData.DirectionToTarget, config.CruisingMaxSpeed);
 
@@ -530,6 +544,8 @@ namespace IngameScript
         }
         void CruisingAvoid()
         {
+            WriteInfoLCDs(cruisingData.PrintObstacle());
+
             if (cruisingData.DistanceToTarget < config.CruisingToTargetDistanceThr)
             {
                 BroadcastStatus("Destination reached. Braking.");
@@ -616,7 +632,8 @@ namespace IngameScript
 
             atmNavigationData.UpdatePositionAndVelocity(remote.GetPosition(), remote.GetShipSpeed());
 
-            atmNavigationData.StateMsg = $"Navigation state {atmNavigationData.CurrentState}";
+            atmNavigationData.StateMsg = $"{atmNavigationData.CurrentState}";
+            WriteInfoLCDs($"{atmNavigationData.CurrentState}");
 
             if (DoPause()) return;
 
@@ -690,7 +707,7 @@ namespace IngameScript
             WriteInfoLCDs($"Trip: {Utils.DistanceToStr(atmNavigationData.TotalDistance)}");
             WriteInfoLCDs($"To target: {Utils.DistanceToStr(atmNavigationData.DistanceToTarget)}");
             WriteInfoLCDs($"Speed: {atmNavigationData.Speed:F2}");
-            WriteInfoLCDs($"ETC: {atmNavigationData.EstimatedArrival:hh\\:mm\\:ss}");
+            WriteInfoLCDs($"ETC: {atmNavigationData.EstimatedArrival:dd\\:hh\\:mm\\:ss}");
             WriteInfoLCDs($"Progress {atmNavigationData.Progress:P1}");
 
             ThrustToTarget(remote, atmNavigationData.DirectionToTarget, config.AtmNavigationMaxSpeed);
@@ -783,6 +800,7 @@ namespace IngameScript
             else if (argument == "RESUME") Resume();
 
             else if (argument.StartsWith("REQUEST_DOCK")) RequestDock(argument);
+            else if (argument.StartsWith("UNLOAD_TO")) UnloadTo(argument);
             else if (argument == "START_ROUTE") StartRoute();
 
             else if (argument.StartsWith("GOTO")) Goto(argument);
@@ -858,6 +876,26 @@ namespace IngameScript
                 $"Task={task}",
             };
             BroadcastMessage(parts);
+        }
+
+        void UnloadTo(string argument)
+        {
+            string[] lines = argument.Split('|');
+            var bse = Utils.ReadString(lines, "Base");
+            var bsePos = Utils.ReadVector(lines, "BaseParking");
+
+            status = ShipStatus.Idle;
+
+            List<string> parts = new List<string>()
+            {
+                $"Command=REQUEST_DOCK",
+                $"To={bse}",
+                $"From={shipId}",
+                $"Task={(int)ExchangeTasks.DeliveryUnload}",
+            };
+            string message = string.Join("|", parts);
+
+            StartCruising(bsePos, message);
         }
         /// <summary>
         /// Starts a route to the configured loading base.
