@@ -24,7 +24,6 @@ namespace IngameScript
         public ExchangeTasks ExchangeTask = ExchangeTasks.None;
         public string Command = null;
         public bool HasTarget = false;
-        public string StateMsg;
 
         public Vector3D DirectionToTarget { get; private set; }
         public double DistanceToTarget { get; private set; }
@@ -105,6 +104,16 @@ namespace IngameScript
             var elapsed = DateTime.Now - separationTime;
 
             return elapsed.TotalSeconds >= config.AtmNavigationSeparationSecs;
+        }
+
+        public string GetTripState()
+        {
+            return
+                $"Trip: {Utils.DistanceToStr(TotalDistance)}" + Environment.NewLine +
+                $"To target: {Utils.DistanceToStr(DistanceToTarget)}" + Environment.NewLine +
+                $"Speed: {Speed:F2}" + Environment.NewLine +
+                $"ETC: {EstimatedArrival:dd\\:hh\\:mm\\:ss}" + Environment.NewLine +
+                $"Progress {Progress:P1}" + Environment.NewLine;
         }
 
         public void LoadFromStorage(string storageLine)

@@ -56,7 +56,7 @@ namespace IngameScript
         readonly CruisingData cruisingData;
         readonly AtmNavigationData atmNavigationData;
 
-        ShipStatus status = ShipStatus.Idle;
+        DeliveryStatus status = DeliveryStatus.Idle;
         bool paused = false;
 
         public Program()
@@ -237,7 +237,7 @@ namespace IngameScript
                 return;
             }
 
-            if (!string.IsNullOrWhiteSpace(alignData.StateMsg)) Echo(alignData.StateMsg);
+            if (!string.IsNullOrWhiteSpace(alignData.StateMsg)) WriteInfoLCDs(alignData.StateMsg);
 
             if (!alignData.Tick())
             {
@@ -273,22 +273,18 @@ namespace IngameScript
                 return;
             }
 
-            var currentPos = connectorA.GetPosition();
+            alignData.UpdatePosition(connectorA.GetPosition());
+
             var currentVelocity = remoteAlign.GetShipVelocities().LinearVelocity;
             double mass = remoteAlign.CalculateShipMass().PhysicalMass;
 
-            NavigateWaypoints(currentPos, currentVelocity, mass);
+            NavigateWaypoints(currentVelocity, mass);
         }
-        void NavigateWaypoints(Vector3D currentPos, Vector3D currentVelocity, double mass)
+        void NavigateWaypoints(Vector3D currentVelocity, double mass)
         {
-            var targetPos = alignData.Waypoints[alignData.CurrentTarget];
-            var toTarget = targetPos - currentPos;
-            double distance = toTarget.Length();
+            WriteInfoLCDs(alignData.GetAlignState());
 
-            WriteInfoLCDs($"Distance to destination: {Utils.DistanceToStr(distance)}");
-            WriteInfoLCDs($"Progress: {alignData.CurrentTarget + 1}/{alignData.Waypoints.Count}.");
-            WriteInfoLCDs($"Has command? {!string.IsNullOrWhiteSpace(alignData.Command)}");
-
+            var distance = alignData.Distance;
             if (distance < config.AlignDistanceThrWaypoints)
             {
                 alignData.Next();
@@ -298,7 +294,7 @@ namespace IngameScript
             }
 
             double desiredSpeed = alignData.CalculateDesiredSpeed(distance);
-            var neededForce = Utils.CalculateThrustForce(toTarget, desiredSpeed, currentVelocity, mass);
+            var neededForce = Utils.CalculateThrustForce(alignData.ToTarget, desiredSpeed, currentVelocity, mass);
 
             ApplyThrust(neededForce);
         }
@@ -312,7 +308,7 @@ namespace IngameScript
                 return;
             }
 
-            if (!string.IsNullOrWhiteSpace(arrivalData.StateMsg)) Echo(arrivalData.StateMsg);
+            if (!string.IsNullOrWhiteSpace(arrivalData.StateMsg)) WriteInfoLCDs(arrivalData.StateMsg);
 
             if (!arrivalData.Tick())
             {
@@ -323,18 +319,11 @@ namespace IngameScript
         }
         void MonitorizeArrival()
         {
-            double distance;
-            if (arrivalData.Arrived(remotePilot.GetPosition(), out distance))
+            if (arrivalData.Arrived(remotePilot.GetPosition()))
             {
-                arrivalData.StateMsg = "Destination reached.";
                 ParseTerminalMessage(arrivalData.Command);
                 arrivalData.Clear();
-                ResetGyros();
-                ResetThrust();
-                return;
             }
-
-            arrivalData.StateMsg = $"Distance to destination: {Utils.DistanceToStr(distance)}";
         }
         #endregion
 
@@ -345,8 +334,6 @@ namespace IngameScript
             {
                 return;
             }
-
-            if (!string.IsNullOrWhiteSpace(cruisingData.StateMsg)) Echo(cruisingData.StateMsg);
 
             if (!cruisingData.Tick())
             {
@@ -359,7 +346,6 @@ namespace IngameScript
         {
             cruisingData.UpdatePositionAndVelocity(cameraPilot.GetPosition(), remotePilot.GetShipSpeed());
 
-            cruisingData.StateMsg = $"{cruisingData.CurrentState}";
             WriteInfoLCDs($"{cruisingData.CurrentState}");
 
             if (DoPause()) return;
@@ -434,11 +420,7 @@ namespace IngameScript
             }
 
             //Accelerate
-            WriteInfoLCDs($"Trip: {Utils.DistanceToStr(cruisingData.TotalDistance)}");
-            WriteInfoLCDs($"To target: {Utils.DistanceToStr(cruisingData.DistanceToTarget)}");
-            WriteInfoLCDs($"ETC: {cruisingData.EstimatedArrival:dd\\:hh\\:mm\\:ss}");
-            WriteInfoLCDs($"Speed: {cruisingData.Speed:F2}");
-            WriteInfoLCDs($"Progress {cruisingData.Progress:P1}");
+            WriteInfoLCDs(cruisingData.GetTripState());
 
             var maxSpeed = config.CruisingMaxSpeed;
             if (Vector3D.Distance(cruisingData.Origin, cameraPilot.GetPosition()) <= config.CruisingToBasesDistanceThr)
@@ -466,11 +448,7 @@ namespace IngameScript
             }
 
             //Maintain speed
-            WriteInfoLCDs($"Trip: {Utils.DistanceToStr(cruisingData.TotalDistance)}");
-            WriteInfoLCDs($"To target: {Utils.DistanceToStr(cruisingData.DistanceToTarget)}");
-            WriteInfoLCDs($"ETC: {cruisingData.EstimatedArrival:dd\\:hh\\:mm\\:ss}");
-            WriteInfoLCDs($"Speed: {cruisingData.Speed:F2}");
-            WriteInfoLCDs($"Progress {cruisingData.Progress:P1}");
+            WriteInfoLCDs(cruisingData.GetTripState());
 
             bool inGravity = IsShipInGravity();
             if (inGravity || AlignToDirection(remotePilot.WorldMatrix.Forward, cruisingData.DirectionToTarget, config.CruisingCruiseAlignThr))
@@ -617,8 +595,6 @@ namespace IngameScript
                 return;
             }
 
-            if (!string.IsNullOrWhiteSpace(atmNavigationData.StateMsg)) Echo(atmNavigationData.StateMsg);
-
             if (!atmNavigationData.Tick())
             {
                 return;
@@ -632,7 +608,6 @@ namespace IngameScript
 
             atmNavigationData.UpdatePositionAndVelocity(remote.GetPosition(), remote.GetShipSpeed());
 
-            atmNavigationData.StateMsg = $"{atmNavigationData.CurrentState}";
             WriteInfoLCDs($"{atmNavigationData.CurrentState}");
 
             if (DoPause()) return;
@@ -704,11 +679,7 @@ namespace IngameScript
             }
 
             //Accelerate
-            WriteInfoLCDs($"Trip: {Utils.DistanceToStr(atmNavigationData.TotalDistance)}");
-            WriteInfoLCDs($"To target: {Utils.DistanceToStr(atmNavigationData.DistanceToTarget)}");
-            WriteInfoLCDs($"Speed: {atmNavigationData.Speed:F2}");
-            WriteInfoLCDs($"ETC: {atmNavigationData.EstimatedArrival:dd\\:hh\\:mm\\:ss}");
-            WriteInfoLCDs($"Progress {atmNavigationData.Progress:P1}");
+            WriteInfoLCDs(atmNavigationData.GetTripState());
 
             ThrustToTarget(remote, atmNavigationData.DirectionToTarget, config.AtmNavigationMaxSpeed);
         }
@@ -760,7 +731,7 @@ namespace IngameScript
                     BroadcastMessage(parts);
 
                     atmNavigationData.Clear();
-                    status = ShipStatus.Idle;
+                    status = DeliveryStatus.Idle;
                 }
             }
             else if (atmNavigationData.ExchangeTask == ExchangeTasks.RocketUnload)
@@ -779,13 +750,13 @@ namespace IngameScript
                     BroadcastMessage(parts);
 
                     atmNavigationData.Clear();
-                    status = ShipStatus.Idle;
+                    status = DeliveryStatus.Idle;
                 }
             }
             else
             {
                 atmNavigationData.Clear();
-                status = ShipStatus.Idle;
+                status = DeliveryStatus.Idle;
             }
         }
         #endregion
@@ -825,7 +796,7 @@ namespace IngameScript
         {
             Storage = "";
 
-            status = ShipStatus.Idle;
+            status = DeliveryStatus.Idle;
 
             deliveryData.Clear();
             alignData.Clear();
@@ -866,7 +837,7 @@ namespace IngameScript
             var bse = Utils.ReadString(lines, "Base");
             var task = Utils.ReadInt(lines, "Task");
 
-            status = ShipStatus.Idle;
+            status = DeliveryStatus.Idle;
 
             List<string> parts = new List<string>()
             {
@@ -884,7 +855,7 @@ namespace IngameScript
             var bse = Utils.ReadString(lines, "Base");
             var bsePos = Utils.ReadVector(lines, "BaseParking");
 
-            status = ShipStatus.Idle;
+            status = DeliveryStatus.Idle;
 
             List<string> parts = new List<string>()
             {
@@ -902,7 +873,7 @@ namespace IngameScript
         /// </summary>
         void StartRoute()
         {
-            status = ShipStatus.Idle;
+            status = DeliveryStatus.Idle;
 
             List<string> parts = new List<string>()
             {
@@ -965,7 +936,7 @@ namespace IngameScript
 
             timerWaiting.StartCountdown();
 
-            status = ShipStatus.WaitingForLoad;
+            status = DeliveryStatus.WaitingForLoad;
         }
         /// <summary>
         /// Seq_C_2b - When the ship reaches the connector, it informs the base to begin loading.
@@ -990,7 +961,7 @@ namespace IngameScript
             //Load mode
             timerLoad.StartCountdown();
 
-            status = ShipStatus.Loading;
+            status = DeliveryStatus.Loading;
         }
 
         /// <summary>
@@ -1011,7 +982,7 @@ namespace IngameScript
 
             timerWaiting.StartCountdown();
 
-            status = ShipStatus.WaitingForUnload;
+            status = DeliveryStatus.WaitingForUnload;
         }
         /// <summary>
         /// Seq_D_2b - SHIPX notifies BASEX that it has arrived to unload the ORDER_ID to the connector. It launches [UNLOADING] to BASEX.
@@ -1037,7 +1008,7 @@ namespace IngameScript
             //Unload mode
             timerUnload.StartCountdown();
 
-            status = ShipStatus.Unloading;
+            status = DeliveryStatus.Unloading;
         }
         /// <summary>
         /// Seq_D_2d - SHIPX informs BASEX of the end of the unload, and begins the return journey to Parking_WH.
@@ -1073,7 +1044,7 @@ namespace IngameScript
 
             Depart();
 
-            status = ShipStatus.RouteToLoad;
+            status = DeliveryStatus.RouteToLoad;
         }
 
         /// <summary>
@@ -1087,7 +1058,7 @@ namespace IngameScript
             //It occurs when the ship reaches the last waypoint of the delivery route
             deliveryData.Clear();
 
-            status = ShipStatus.Idle;
+            status = DeliveryStatus.Idle;
         }
         /// <summary>
         /// Changes the state of the variable that controls the display of logs
@@ -1151,7 +1122,7 @@ namespace IngameScript
                 return;
             }
 
-            status = ShipStatus.RouteToLoad;
+            status = DeliveryStatus.RouteToLoad;
 
             deliveryData.SetOrder(
                 Utils.ReadInt(lines, "Order"),
@@ -1181,7 +1152,7 @@ namespace IngameScript
 
             if (task == ExchangeTasks.DeliveryLoad)
             {
-                status = ShipStatus.ApproachingLoad;
+                status = DeliveryStatus.ApproachingLoad;
 
                 deliveryData.SetExchange(
                     Utils.ReadString(lines, "Exchange"),
@@ -1195,7 +1166,7 @@ namespace IngameScript
             }
             else if (task == ExchangeTasks.DeliveryUnload)
             {
-                status = ShipStatus.ApproachingUnload;
+                status = DeliveryStatus.ApproachingUnload;
 
                 deliveryData.SetExchange(
                     Utils.ReadString(lines, "Exchange"),
@@ -1209,7 +1180,7 @@ namespace IngameScript
             }
             else if (task == ExchangeTasks.RocketLoad)
             {
-                status = ShipStatus.ApproachingLoad;
+                status = DeliveryStatus.ApproachingLoad;
 
                 atmNavigationData.Initialize(
                     Utils.ReadInt(lines, "Landing") == 1,
@@ -1228,7 +1199,7 @@ namespace IngameScript
             }
             else if (task == ExchangeTasks.RocketUnload)
             {
-                status = ShipStatus.ApproachingUnload;
+                status = DeliveryStatus.ApproachingUnload;
 
                 atmNavigationData.Initialize(
                     Utils.ReadInt(lines, "Landing") == 1,
@@ -1261,7 +1232,7 @@ namespace IngameScript
                 return;
             }
 
-            status = ShipStatus.RouteToUnload;
+            status = DeliveryStatus.RouteToUnload;
 
             //Load the exit route and upon reaching the last waypoint of the connector, it will execute APPROACH_TO_PARKING, which will activate navigation to the Customer
             deliveryData.PrepareNavigationFromExchange("APPROACH_TO_PARKING");
@@ -1633,7 +1604,7 @@ namespace IngameScript
                 return;
             }
 
-            status = (ShipStatus)Utils.ReadInt(storageLines, "Status");
+            status = (DeliveryStatus)Utils.ReadInt(storageLines, "Status");
             deliveryData.LoadFromStorage(Utils.ReadString(storageLines, "DeliveryData"));
             alignData.LoadFromStorage(Utils.ReadString(storageLines, "AlignData"));
             arrivalData.LoadFromStorage(Utils.ReadString(storageLines, "ArrivalData"));

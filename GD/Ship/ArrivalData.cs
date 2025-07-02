@@ -44,10 +44,17 @@ namespace IngameScript
             HasPosition = false;
         }
 
-        public bool Arrived(Vector3D position, out double distance)
+        public bool Arrived(Vector3D position)
         {
-            distance = Vector3D.Distance(position, Destination);
-            return distance <= Distance;
+            double distance = Vector3D.Distance(position, Destination);
+            if (distance <= Distance)
+            {
+                StateMsg = "Destination reached.";
+                return true;
+            }
+
+            StateMsg = $"Distance to destination: {Utils.DistanceToStr(distance)}";
+            return false;
         }
 
         public void LoadFromStorage(string storageLine)

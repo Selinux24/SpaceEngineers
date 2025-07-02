@@ -11,12 +11,16 @@ namespace IngameScript
 
         public readonly List<Vector3D> Waypoints = new List<Vector3D>();
         public int CurrentTarget = 0;
+        public Vector3D CurrentPos = Vector3D.Zero;
         public Vector3D TargetForward = new Vector3D(1, 0, 0);
         public Vector3D TargetUp = new Vector3D(0, 1, 0);
         public bool HasTarget = false;
         public string Command = null;
         public string StateMsg;
 
+        public Vector3D TargetPos => Waypoints[CurrentTarget];
+        public Vector3D ToTarget => TargetPos - CurrentPos;
+        public double Distance => ToTarget.Length();
         public bool Done => HasTarget && CurrentTarget >= Waypoints.Count;
 
         public AlignData(Config config)
@@ -51,6 +55,11 @@ namespace IngameScript
             Command = null;
         }
 
+        public void UpdatePosition(Vector3D position)
+        {
+            CurrentPos = position;
+        }
+
         public void Next()
         {
             CurrentTarget++;
@@ -70,6 +79,14 @@ namespace IngameScript
             }
 
             return desiredSpeed;
+        }
+
+        public string GetAlignState()
+        {
+            return
+                $"Distance to destination: {Utils.DistanceToStr(Distance)}" + Environment.NewLine +
+                $"Progress: {CurrentTarget + 1}/{Waypoints.Count}." + Environment.NewLine +
+                $"Has command? {!string.IsNullOrWhiteSpace(Command)}" + Environment.NewLine;
         }
 
         public void LoadFromStorage(string storageLine)

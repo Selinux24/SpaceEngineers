@@ -1,7 +1,7 @@
 ﻿
 namespace IngameScript
 {
-    enum ShipStatus
+    enum DeliveryStatus
     {
         Unknown,
         Idle,

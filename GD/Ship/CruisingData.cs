@@ -18,7 +18,6 @@ namespace IngameScript
         public bool Thrusting = false;
         public readonly List<Vector3D> EvadingPoints = new List<Vector3D>();
         public DateTime AlignThrustStart = DateTime.Now;
-        public string StateMsg;
 
         public Vector3D DirectionToTarget { get; private set; }
         public double DistanceToTarget { get; private set; }
@@ -133,6 +132,16 @@ namespace IngameScript
         public void ClearObstacle()
         {
             lastHit = new MyDetectedEntityInfo();
+        }
+
+        public string GetTripState()
+        {
+            return
+                $"Trip: {Utils.DistanceToStr(TotalDistance)}" + Environment.NewLine +
+                $"To target: {Utils.DistanceToStr(DistanceToTarget)}" + Environment.NewLine +
+                $"Speed: {Speed:F2}" + Environment.NewLine +
+                $"ETC: {EstimatedArrival:dd\\:hh\\:mm\\:ss}" + Environment.NewLine +
+                $"Progress {Progress:P1}" + Environment.NewLine;
         }
 
         public void LoadFromStorage(string storageLine)
