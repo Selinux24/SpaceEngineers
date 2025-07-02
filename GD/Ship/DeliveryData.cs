@@ -5,6 +5,8 @@ namespace IngameScript
 {
     class DeliveryData
     {
+        public DeliveryStatus Status = DeliveryStatus.Idle;
+
         public int OrderId;
         public string OrderWarehouse;
         public Vector3D OrderWarehouseParking;
@@ -39,6 +41,8 @@ namespace IngameScript
             string[] lines = data.Split('¬');
             if (lines.Length == 0) return;
 
+            Status = (DeliveryStatus)Utils.ReadInt(lines, "Status");
+
             OrderId = Utils.ReadInt(lines, "OrderId", -1);
             OrderWarehouse = Utils.ReadString(lines, "OrderWarehouse");
             OrderWarehouseParking = Utils.ReadVector(lines, "OrderWarehouseParking");
@@ -67,6 +71,8 @@ namespace IngameScript
         {
             List<string> parts = new List<string>()
             {
+                $"Status={(int)Status}",
+
                 $"OrderId={OrderId}",
                 $"OrderWarehouse={OrderWarehouse}",
                 $"OrderWarehouseParking={Utils.VectorToStr(OrderWarehouseParking)}",

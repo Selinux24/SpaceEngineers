@@ -56,7 +56,6 @@ namespace IngameScript
         readonly CruisingData cruisingData;
         readonly AtmNavigationData atmNavigationData;
 
-        DeliveryStatus status = DeliveryStatus.Idle;
         bool paused = false;
 
         public Program()
@@ -203,6 +202,7 @@ namespace IngameScript
         {
             WriteInfoLCDs($"{shipId} in channel {config.Channel}", false);
             WriteInfoLCDs($"{CalculateCargoPercentage():P1} cargo.");
+
             if (!string.IsNullOrEmpty(argument))
             {
                 ParseTerminalMessage(argument);
@@ -215,19 +215,25 @@ namespace IngameScript
                 ParseMessage(message.Data.ToString());
             }
 
-            WriteInfoLCDs($"Status: {status}");
-            if (deliveryData.OrderId > 0)
-            {
-                WriteInfoLCDs($"Order: {deliveryData.OrderId}");
-                WriteInfoLCDs($"Load: {deliveryData.OrderWarehouse}");
-                WriteInfoLCDs($"Unload: {deliveryData.OrderCustomer}");
-            }
-
+            DoDelivery();
             DoArrival();
             DoAlign();
             DoCruising();
             DoAtmNavigation();
         }
+
+        #region DELIVERY
+        void DoDelivery()
+        {
+            if (!deliveryData.Active)
+            {
+                return;
+            }
+
+            WriteInfoLCDs($"Order {deliveryData.OrderId} from {deliveryData.OrderWarehouse} to {deliveryData.OrderCustomer}");
+            WriteInfoLCDs($"Status: {deliveryData.Status}");
+        }
+        #endregion
 
         #region ALIGN
         void DoAlign()
@@ -731,7 +737,7 @@ namespace IngameScript
                     BroadcastMessage(parts);
 
                     atmNavigationData.Clear();
-                    status = DeliveryStatus.Idle;
+                    deliveryData.Status = DeliveryStatus.Idle;
                 }
             }
             else if (atmNavigationData.ExchangeTask == ExchangeTasks.RocketUnload)
@@ -750,13 +756,13 @@ namespace IngameScript
                     BroadcastMessage(parts);
 
                     atmNavigationData.Clear();
-                    status = DeliveryStatus.Idle;
+                    deliveryData.Status = DeliveryStatus.Idle;
                 }
             }
             else
             {
                 atmNavigationData.Clear();
-                status = DeliveryStatus.Idle;
+                deliveryData.Status = DeliveryStatus.Idle;
             }
         }
         #endregion
@@ -796,7 +802,7 @@ namespace IngameScript
         {
             Storage = "";
 
-            status = DeliveryStatus.Idle;
+            deliveryData.Status = DeliveryStatus.Idle;
 
             deliveryData.Clear();
             alignData.Clear();
@@ -837,7 +843,7 @@ namespace IngameScript
             var bse = Utils.ReadString(lines, "Base");
             var task = Utils.ReadInt(lines, "Task");
 
-            status = DeliveryStatus.Idle;
+            deliveryData.Status = DeliveryStatus.Idle;
 
             List<string> parts = new List<string>()
             {
@@ -855,7 +861,7 @@ namespace IngameScript
             var bse = Utils.ReadString(lines, "Base");
             var bsePos = Utils.ReadVector(lines, "BaseParking");
 
-            status = DeliveryStatus.Idle;
+            deliveryData.Status = DeliveryStatus.Idle;
 
             List<string> parts = new List<string>()
             {
@@ -873,7 +879,7 @@ namespace IngameScript
         /// </summary>
         void StartRoute()
         {
-            status = DeliveryStatus.Idle;
+            deliveryData.Status = DeliveryStatus.Idle;
 
             List<string> parts = new List<string>()
             {
@@ -936,7 +942,7 @@ namespace IngameScript
 
             timerWaiting.StartCountdown();
 
-            status = DeliveryStatus.WaitingForLoad;
+            deliveryData.Status = DeliveryStatus.WaitingForLoad;
         }
         /// <summary>
         /// Seq_C_2b - When the ship reaches the connector, it informs the base to begin loading.
@@ -961,7 +967,7 @@ namespace IngameScript
             //Load mode
             timerLoad.StartCountdown();
 
-            status = DeliveryStatus.Loading;
+            deliveryData.Status = DeliveryStatus.Loading;
         }
 
         /// <summary>
@@ -982,7 +988,7 @@ namespace IngameScript
 
             timerWaiting.StartCountdown();
 
-            status = DeliveryStatus.WaitingForUnload;
+            deliveryData.Status = DeliveryStatus.WaitingForUnload;
         }
         /// <summary>
         /// Seq_D_2b - SHIPX notifies BASEX that it has arrived to unload the ORDER_ID to the connector. It launches [UNLOADING] to BASEX.
@@ -1008,7 +1014,7 @@ namespace IngameScript
             //Unload mode
             timerUnload.StartCountdown();
 
-            status = DeliveryStatus.Unloading;
+            deliveryData.Status = DeliveryStatus.Unloading;
         }
         /// <summary>
         /// Seq_D_2d - SHIPX informs BASEX of the end of the unload, and begins the return journey to Parking_WH.
@@ -1044,7 +1050,7 @@ namespace IngameScript
 
             Depart();
 
-            status = DeliveryStatus.RouteToLoad;
+            deliveryData.Status = DeliveryStatus.RouteToLoad;
         }
 
         /// <summary>
@@ -1058,7 +1064,7 @@ namespace IngameScript
             //It occurs when the ship reaches the last waypoint of the delivery route
             deliveryData.Clear();
 
-            status = DeliveryStatus.Idle;
+            deliveryData.Status = DeliveryStatus.Idle;
         }
         /// <summary>
         /// Changes the state of the variable that controls the display of logs
@@ -1098,7 +1104,7 @@ namespace IngameScript
                 $"Command=RESPONSE_STATUS",
                 $"To={from}",
                 $"From={shipId}",
-                $"Status={(int)status}",
+                $"Status={(int)deliveryData.Status}",
                 $"Warehouse={deliveryData.OrderWarehouse}",
                 $"WarehousePosition={Utils.VectorToStr(deliveryData.OrderWarehouseParking)}",
                 $"Customer={deliveryData.OrderCustomer}",
@@ -1122,7 +1128,7 @@ namespace IngameScript
                 return;
             }
 
-            status = DeliveryStatus.RouteToLoad;
+            deliveryData.Status = DeliveryStatus.RouteToLoad;
 
             deliveryData.SetOrder(
                 Utils.ReadInt(lines, "Order"),
@@ -1152,7 +1158,7 @@ namespace IngameScript
 
             if (task == ExchangeTasks.DeliveryLoad)
             {
-                status = DeliveryStatus.ApproachingLoad;
+                deliveryData.Status = DeliveryStatus.ApproachingLoad;
 
                 deliveryData.SetExchange(
                     Utils.ReadString(lines, "Exchange"),
@@ -1166,7 +1172,7 @@ namespace IngameScript
             }
             else if (task == ExchangeTasks.DeliveryUnload)
             {
-                status = DeliveryStatus.ApproachingUnload;
+                deliveryData.Status = DeliveryStatus.ApproachingUnload;
 
                 deliveryData.SetExchange(
                     Utils.ReadString(lines, "Exchange"),
@@ -1180,8 +1186,6 @@ namespace IngameScript
             }
             else if (task == ExchangeTasks.RocketLoad)
             {
-                status = DeliveryStatus.ApproachingLoad;
-
                 atmNavigationData.Initialize(
                     Utils.ReadInt(lines, "Landing") == 1,
                     remotePilot.GetPosition(),
@@ -1199,8 +1203,6 @@ namespace IngameScript
             }
             else if (task == ExchangeTasks.RocketUnload)
             {
-                status = DeliveryStatus.ApproachingUnload;
-
                 atmNavigationData.Initialize(
                     Utils.ReadInt(lines, "Landing") == 1,
                     remotePilot.GetPosition(),
@@ -1232,7 +1234,7 @@ namespace IngameScript
                 return;
             }
 
-            status = DeliveryStatus.RouteToUnload;
+            deliveryData.Status = DeliveryStatus.RouteToUnload;
 
             //Load the exit route and upon reaching the last waypoint of the connector, it will execute APPROACH_TO_PARKING, which will activate navigation to the Customer
             deliveryData.PrepareNavigationFromExchange("APPROACH_TO_PARKING");
@@ -1604,7 +1606,6 @@ namespace IngameScript
                 return;
             }
 
-            status = (DeliveryStatus)Utils.ReadInt(storageLines, "Status");
             deliveryData.LoadFromStorage(Utils.ReadString(storageLines, "DeliveryData"));
             alignData.LoadFromStorage(Utils.ReadString(storageLines, "AlignData"));
             arrivalData.LoadFromStorage(Utils.ReadString(storageLines, "ArrivalData"));
@@ -1616,7 +1617,6 @@ namespace IngameScript
         {
             List<string> parts = new List<string>
             {
-                $"Status={(int)status}{Environment.NewLine}",
                 $"DeliveryData={deliveryData.SaveToStorage()}",
                 $"AlignData={alignData.SaveToStorage()}",
                 $"ArrivalData={arrivalData.SaveToStorage()}",
