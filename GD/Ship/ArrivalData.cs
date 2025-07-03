@@ -7,6 +7,7 @@ namespace IngameScript
     {
         readonly Config config;
         int tickCount = 0;
+        Vector3D position;
 
         public Vector3D Destination = Vector3D.Zero;
         public double Distance = 0;
@@ -46,6 +47,8 @@ namespace IngameScript
 
         public bool Arrived(Vector3D position)
         {
+            this.position = position;
+
             double distance = Vector3D.Distance(position, Destination);
             if (distance <= Distance)
             {
@@ -55,6 +58,11 @@ namespace IngameScript
 
             StateMsg = $"Distance to destination: {Utils.DistanceToStr(distance)}";
             return false;
+        }
+
+        public string GetArrivalState()
+        {
+            return $"Distance to position: {Utils.DistanceToStr(Vector3D.Distance(position, Destination))}";
         }
 
         public void LoadFromStorage(string storageLine)

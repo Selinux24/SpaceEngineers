@@ -7,13 +7,13 @@ namespace IngameScript
         Idle,
 
         RouteToLoad,
-        ApproachingLoad,
         WaitingForLoad,
+        ApproachingLoad,
         Loading,
 
         RouteToUnload,
-        ApproachingUnload,
         WaitingForUnload,
+        ApproachingUnload,
         Unloading,
     }
 }

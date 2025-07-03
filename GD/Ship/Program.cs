@@ -56,6 +56,7 @@ namespace IngameScript
         readonly CruisingData cruisingData;
         readonly AtmNavigationData atmNavigationData;
 
+        ShipStatus shipStatus = ShipStatus.Idle;
         bool paused = false;
 
         public Program()
@@ -220,6 +221,8 @@ namespace IngameScript
             DoAlign();
             DoCruising();
             DoAtmNavigation();
+
+            UpdateShipStatus();
         }
 
         #region DELIVERY
@@ -229,6 +232,10 @@ namespace IngameScript
             {
                 return;
             }
+
+            var speed = remotePilot.GetShipVelocities().LinearVelocity.Length();
+            var position = remotePilot.GetPosition();
+            deliveryData.UpdateSpeedAndPosition(speed, position);
 
             WriteInfoLCDs($"Order {deliveryData.OrderId} from {deliveryData.OrderWarehouse} to {deliveryData.OrderCustomer}");
             WriteInfoLCDs($"Status: {deliveryData.Status}");
@@ -1096,22 +1103,16 @@ namespace IngameScript
         void CmdRequestStatus(string[] lines)
         {
             string from = Utils.ReadString(lines, "From");
-            Vector3D position = remotePilot.GetPosition();
-            double speed = remotePilot.GetShipVelocities().LinearVelocity.Length();
 
             List<string> parts = new List<string>()
             {
                 $"Command=RESPONSE_STATUS",
                 $"To={from}",
                 $"From={shipId}",
-                $"Status={(int)deliveryData.Status}",
-                $"Warehouse={deliveryData.OrderWarehouse}",
-                $"WarehousePosition={Utils.VectorToStr(deliveryData.OrderWarehouseParking)}",
-                $"Customer={deliveryData.OrderCustomer}",
-                $"CustomerPosition={Utils.VectorToStr(deliveryData.OrderCustomerParking)}",
-                $"Position={Utils.VectorToStr(position)}",
-                $"Capacity={CalculateCargoPercentage():F2}",
-                $"Speed={speed:F2}",
+                $"Status={(int)shipStatus}",
+                $"Cargo={CalculateCargoPercentage()}",
+                $"Position={Utils.VectorToStr(remotePilot.GetPosition())}",
+                $"StatusMessage={PrintShipStatus()}"
             };
             BroadcastMessage(parts);
         }
@@ -1328,6 +1329,130 @@ namespace IngameScript
             var blocks = new List<T>();
             GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && b.CustomName.Contains(name));
             return blocks;
+        }
+
+        void UpdateShipStatus()
+        {
+            shipStatus = ShipStatus.Idle;
+
+            if (deliveryData.Active)
+            {
+                if (deliveryData.Status == DeliveryStatus.RouteToLoad ||
+                    deliveryData.Status == DeliveryStatus.RouteToUnload)
+                {
+                    shipStatus = ShipStatus.OnRoute;
+                    return;
+                }
+                if (deliveryData.Status == DeliveryStatus.WaitingForLoad ||
+                    deliveryData.Status == DeliveryStatus.WaitingForUnload)
+                {
+                    shipStatus = ShipStatus.WaitingDock;
+                    return;
+                }
+                if (deliveryData.Status == DeliveryStatus.ApproachingLoad ||
+                    deliveryData.Status == DeliveryStatus.ApproachingUnload)
+                {
+                    shipStatus = ShipStatus.Docking;
+                    return;
+                }
+                if (deliveryData.Status == DeliveryStatus.Loading ||
+                    deliveryData.Status == DeliveryStatus.Unloading)
+                {
+                    shipStatus = ShipStatus.Docking;
+                    return;
+                }
+
+                return;
+            }
+
+            if (alignData.HasTarget)
+            {
+                shipStatus = ShipStatus.Docking;
+                return;
+            }
+
+            if (cruisingData.HasTarget)
+            {
+                if (cruisingData.CurrentState == CruisingStatus.Distress)
+                {
+                    shipStatus = ShipStatus.Distress;
+                }
+
+                shipStatus = ShipStatus.OnRoute;
+                return;
+            }
+
+            if (atmNavigationData.HasTarget)
+            {
+                if (atmNavigationData.CurrentState == AtmNavigationStatus.Accelerating ||
+                    atmNavigationData.CurrentState == AtmNavigationStatus.Decelerating)
+                {
+                    shipStatus = ShipStatus.OnRoute;
+                }
+                else
+                {
+                    shipStatus = ShipStatus.Docking;
+                }
+
+                return;
+            }
+        }
+        string PrintShipStatus()
+        {
+            var sb = new StringBuilder();
+
+            PrintDeliveryStatus(sb);
+            PrintAlignStatus(sb);
+            PrintArrivalStatus(sb);
+            PrintCruiseStatus(sb);
+            PrintAtmNavigationStatus(sb);
+
+            return sb.ToString();
+        }
+        void PrintDeliveryStatus(StringBuilder sb)
+        {
+            if (!deliveryData.Active)
+            {
+                return;
+            }
+
+            sb.AppendLine(deliveryData.GetDeliveryState());
+        }
+        void PrintAlignStatus(StringBuilder sb)
+        {
+            if (!alignData.HasTarget)
+            {
+                return;
+            }
+
+            sb.AppendLine(alignData.GetAlignState());
+        }
+        void PrintArrivalStatus(StringBuilder sb)
+        {
+            if (!arrivalData.HasPosition)
+            {
+                return;
+            }
+
+            sb.AppendLine(arrivalData.GetArrivalState());
+        }
+        void PrintCruiseStatus(StringBuilder sb)
+        {
+            if (!cruisingData.HasTarget)
+            {
+                return;
+            }
+
+            sb.AppendLine(cruisingData.GetTripState());
+        }
+        void PrintAtmNavigationStatus(StringBuilder sb)
+        {
+            if (!atmNavigationData.HasTarget)
+            {
+                return;
+            }
+
+            sb.AppendLine(atmNavigationData.GetTripState());
         }
 
         void WriteLCDs(string wildcard, string text)

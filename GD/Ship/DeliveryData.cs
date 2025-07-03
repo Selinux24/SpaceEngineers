@@ -1,10 +1,15 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Text;
 using VRageMath;
 
 namespace IngameScript
 {
     class DeliveryData
     {
+        double speed;
+        Vector3D position;
+
         public DeliveryStatus Status = DeliveryStatus.Idle;
 
         public int OrderId;
@@ -168,6 +173,35 @@ namespace IngameScript
             DestinationName = OrderCustomer;
             DestinationPosition = OrderCustomerParking;
             OnDestinationArrival = onDestinationArrival;
+        }
+
+        public void UpdateSpeedAndPosition(double speed, Vector3D position)
+        {
+            this.speed = speed;
+            this.position = position;
+        }
+        public string GetDeliveryState()
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine($"{Status}");
+
+            if (Status == DeliveryStatus.RouteToUnload || Status == DeliveryStatus.RouteToLoad)
+            {
+                string origin = Status == DeliveryStatus.RouteToUnload ? OrderWarehouse : OrderCustomer;
+                string destination = Status == DeliveryStatus.RouteToUnload ? OrderCustomer : OrderWarehouse;
+                Vector3D originPosition = Status == DeliveryStatus.RouteToUnload ? OrderWarehouseParking : OrderCustomerParking;
+                Vector3D destinationPosition = Status == DeliveryStatus.RouteToUnload ? OrderCustomerParking : OrderWarehouseParking;
+                double distanceToOrigin = Vector3D.Distance(position, originPosition);
+                double distanceToDestination = Vector3D.Distance(position, destinationPosition);
+                TimeSpan time = speed > 0.01 ? TimeSpan.FromSeconds(distanceToDestination / speed) : TimeSpan.Zero;
+
+                sb.AppendLine($"On route from [{origin}] to [{destination}]");
+                sb.AppendLine($"Distance from origin: {Utils.DistanceToStr(distanceToOrigin)}.");
+                sb.AppendLine($"Distance to destination: {Utils.DistanceToStr(distanceToDestination)}.");
+                sb.AppendLine($"Estimated arrival: {time}.");
+            }
+
+            return sb.ToString();
         }
     }
 }

@@ -108,12 +108,30 @@ namespace IngameScript
 
         public string GetTripState()
         {
-            return
-                $"Trip: {Utils.DistanceToStr(TotalDistance)}" + Environment.NewLine +
-                $"To target: {Utils.DistanceToStr(DistanceToTarget)}" + Environment.NewLine +
-                $"Speed: {Speed:F2}" + Environment.NewLine +
-                $"ETC: {EstimatedArrival:dd\\:hh\\:mm\\:ss}" + Environment.NewLine +
-                $"Progress {Progress:P1}" + Environment.NewLine;
+            if (CurrentState == AtmNavigationStatus.Accelerating ||
+                CurrentState == AtmNavigationStatus.Decelerating)
+            {
+                return
+                    $"Trip: {Utils.DistanceToStr(TotalDistance)}" + Environment.NewLine +
+                    $"To target: {Utils.DistanceToStr(DistanceToTarget)}" + Environment.NewLine +
+                    $"Speed: {Speed:F2}" + Environment.NewLine +
+                    $"ETC: {EstimatedArrival:dd\\:hh\\:mm\\:ss}" + Environment.NewLine +
+                    $"Progress {Progress:P1}" + Environment.NewLine;
+            }
+
+            if (CurrentState == AtmNavigationStatus.Docking ||
+                CurrentState == AtmNavigationStatus.Undocking ||
+                CurrentState == AtmNavigationStatus.Separating)
+            {
+                return "Docking";
+            }
+
+            if (CurrentState == AtmNavigationStatus.Exchanging)
+            {
+                return "Exchanging";
+            }
+
+            return "No trip in progress.";
         }
 
         public void LoadFromStorage(string storageLine)

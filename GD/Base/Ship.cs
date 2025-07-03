@@ -6,14 +6,10 @@ namespace IngameScript
     class Ship
     {
         public string Name;
-        public ShipStatus ShipStatus;
+        public ShipStatus Status;
+        public double Cargo;
         public Vector3D Position;
-        public string Warehouse;
-        public Vector3D WarehousePosition;
-        public string Customer;
-        public Vector3D CustomerPosition;
-        public double Speed;
-        public double Capacity;
+        public string StatusMessage;
         public DateTime UpdateTime;
     }
 }

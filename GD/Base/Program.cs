@@ -13,6 +13,8 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
+        const string Separate = "-";
+
         #region Blocks
         readonly IMyCameraBlock camera;
         readonly List<IMyCargoContainer> cargos = new List<IMyCargoContainer>();
@@ -190,7 +192,7 @@ namespace IngameScript
             var exchange = shipExchangePair.Exchange;
 
             order.AssignedShip = ship.Name;
-            ship.ShipStatus = ShipStatus.ApproachingLoad;
+            ship.Status = ShipStatus.Docking;
             exchange.DockRequest(ship.Name);
 
             List<string> parts = new List<string>()
@@ -264,7 +266,7 @@ namespace IngameScript
                 var exchange = pair.Exchange;
 
                 request.Idle = false;
-                ship.ShipStatus = ShipStatus.ApproachingUnload;
+                ship.Status = ShipStatus.Docking;
                 exchange.DockRequest(ship.Name);
 
                 List<string> parts = new List<string>()
@@ -455,13 +457,9 @@ namespace IngameScript
 
             string from = Utils.ReadString(lines, "From");
             ShipStatus status = (ShipStatus)Utils.ReadInt(lines, "Status");
-            string wh = Utils.ReadString(lines, "Warehouse");
-            Vector3D whPosition = Utils.ReadVector(lines, "WarehousePosition");
-            string customer = Utils.ReadString(lines, "Customer");
-            Vector3D customerPosition = Utils.ReadVector(lines, "CustomerPosition");
-            Vector3D position = Utils.ReadVector(lines, "Position");
-            double speed = Utils.ReadDouble(lines, "Speed");
-            double capacity = Utils.ReadDouble(lines, "Capacity", 0);
+            var cargo = Utils.ReadDouble(lines, "Cargo");
+            var position = Utils.ReadVector(lines, "Position");
+            string statusMessage = Utils.ReadString(lines, "StatusMessage");
 
             var ship = ships.Find(s => s.Name == from);
             if (ship == null)
@@ -470,14 +468,10 @@ namespace IngameScript
                 ships.Add(ship);
             }
 
-            ship.ShipStatus = status;
-            ship.Warehouse = wh;
-            ship.WarehousePosition = whPosition;
-            ship.Customer = customer;
-            ship.CustomerPosition = customerPosition;
+            ship.Status = status;
+            ship.Cargo = cargo;
             ship.Position = position;
-            ship.Speed = speed;
-            ship.Capacity = capacity;
+            ship.StatusMessage = statusMessage;
             ship.UpdateTime = DateTime.Now;
         }
         /// <summary>
@@ -798,14 +792,13 @@ namespace IngameScript
         }
         List<Ship> GetFreeShips()
         {
-            return ships.Where(s => s.ShipStatus == ShipStatus.Idle).ToList();
+            return ships.Where(s => s.Status == ShipStatus.Idle).ToList();
         }
         List<Ship> GetWaitingShips()
         {
             return ships.Where(s =>
-                s.ShipStatus == ShipStatus.WaitingForLoad ||
-                s.ShipStatus == ShipStatus.WaitingForUnload ||
-                s.ShipStatus == ShipStatus.Idle).ToList();
+                s.Status == ShipStatus.WaitingDock ||
+                s.Status == ShipStatus.Idle).ToList();
         }
         List<ExchangeGroup> GetFreeExchanges()
         {
@@ -879,21 +872,9 @@ namespace IngameScript
 
             foreach (var ship in ships)
             {
-                sbData.AppendLine($"+ {ship.Name} {ship.ShipStatus}. Capacity {ship.Capacity:P1}. Last update: {(DateTime.Now - ship.UpdateTime).TotalSeconds:F0}secs");
-                if (ship.ShipStatus != ShipStatus.RouteToUnload && ship.ShipStatus != ShipStatus.RouteToLoad) continue;
-
-                string origin = ship.ShipStatus == ShipStatus.RouteToUnload ? ship.Warehouse : ship.Customer;
-                string destination = ship.ShipStatus == ShipStatus.RouteToUnload ? ship.Customer : ship.Warehouse;
-                sbData.AppendLine($"  - On route from [{origin}] to [{destination}]");
-
-                Vector3D originPosition = ship.ShipStatus == ShipStatus.RouteToUnload ? ship.WarehousePosition : ship.CustomerPosition;
-                Vector3D destinationPosition = ship.ShipStatus == ShipStatus.RouteToUnload ? ship.CustomerPosition : ship.WarehousePosition;
-                double distanceToOrigin = Vector3D.Distance(ship.Position, originPosition);
-                double distanceToDestination = Vector3D.Distance(ship.Position, destinationPosition);
-                TimeSpan time = TimeSpan.FromSeconds(distanceToDestination / ship.Speed);
-                sbData.AppendLine($"  - Distance from origin: {Utils.DistanceToStr(distanceToOrigin)}.");
-                sbData.AppendLine($"  - Distance to destination: {Utils.DistanceToStr(distanceToDestination)}.");
-                sbData.AppendLine($"  - Estimated arrival: {time}.");
+                sbData.AppendLine($"+{ship.Name} - {ship.Status}. Cargo at {ship.Cargo:P1}. Last update: {(DateTime.Now - ship.UpdateTime).TotalSeconds:F0}secs");
+                sbData.AppendLine(ship.StatusMessage);
+                sbData.AppendLine(Separate);
             }
 
             //Remove ships that have not been updated in a while
