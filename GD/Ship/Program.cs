@@ -784,6 +784,7 @@ namespace IngameScript
             else if (argument == "RESUME") Resume();
 
             else if (argument.StartsWith("REQUEST_DOCK")) RequestDock(argument);
+            else if (argument.StartsWith("LOAD_TO")) LoadTo(argument);
             else if (argument.StartsWith("UNLOAD_TO")) UnloadTo(argument);
             else if (argument == "START_ROUTE") StartRoute();
 
@@ -861,24 +862,27 @@ namespace IngameScript
             };
             BroadcastMessage(parts);
         }
+        /// <summary>
+        /// Goes to a base defined in the argument to load cargo.
+        /// </summary>
+        void LoadTo(string argument)
+        {
+            string[] lines = argument.Split('|');
+            var bse = Utils.ReadString(lines, "Base");
+            var bsePos = Utils.ReadVector(lines, "BaseParking");
 
+            StartDock(bse, bsePos, ExchangeTasks.DeliveryLoad);
+        }
+        /// <summary>
+        /// Goes to a base defined in the argument to unload cargo.
+        /// </summary>
         void UnloadTo(string argument)
         {
             string[] lines = argument.Split('|');
             var bse = Utils.ReadString(lines, "Base");
             var bsePos = Utils.ReadVector(lines, "BaseParking");
 
-            deliveryData.Status = DeliveryStatus.Idle;
-
-            List<string> parts = new List<string>()
-            {
-                $"REQUEST_DOCK",
-                $"Base={bse}",
-                $"Task={(int)ExchangeTasks.DeliveryUnload}",
-            };
-            string message = string.Join("|", parts);
-
-            StartCruising(bsePos, message);
+            StartDock(bse, bsePos, ExchangeTasks.DeliveryUnload);
         }
         /// <summary>
         /// Starts a route to the configured loading base.
@@ -1719,6 +1723,19 @@ namespace IngameScript
             ResetThrust();
             ResetGyros();
             return true;
+        }
+
+        void StartDock(string baseName, Vector3D baseParking, ExchangeTasks task)
+        {
+            List<string> parts = new List<string>()
+            {
+                $"REQUEST_DOCK",
+                $"Base={baseName}",
+                $"Task={(int)task}",
+            };
+            string message = string.Join("|", parts);
+
+            StartCruising(baseParking, message);
         }
         #endregion
 
