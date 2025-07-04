@@ -803,6 +803,7 @@ namespace IngameScript
             else if (argument == "START_APPROACH") StartApproach();
             else if (argument == "ENABLE_LOGS") EnableLogs();
         }
+
         /// <summary>
         /// Ship reset
         /// </summary>
@@ -1100,6 +1101,7 @@ namespace IngameScript
             else if (command == "DOCK") CmdDock(lines);
             else if (command == "LOADED") CmdLoaded(lines);
         }
+
         /// <summary>
         /// Seq_A_2 - The ship responds with its status
         /// Request:  REQUEST_STATUS
@@ -1122,6 +1124,9 @@ namespace IngameScript
             BroadcastMessage(parts);
         }
 
+        /// <summary>
+        /// A base calls the ship to load cargo.
+        /// </summary>
         void CmdRequestLoad(string[] lines)
         {
             string to = Utils.ReadString(lines, "To");
@@ -1135,6 +1140,9 @@ namespace IngameScript
 
             StartDock(from, parking, ExchangeTasks.DeliveryLoad);
         }
+        /// <summary>
+        /// A base calls the ship to unload cargo.
+        /// </summary>
         void CmdRequestUnload(string[] lines)
         {
             string to = Utils.ReadString(lines, "To");

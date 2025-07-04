@@ -425,7 +425,9 @@ namespace IngameScript
 
             orders.Add(order);
         }
-        
+        /// <summary>
+        /// The base calls a ship to load cargo.
+        /// </summary>
         void RequestLoad(string argument)
         {
             string[] lines = argument.Split('|');
@@ -440,7 +442,10 @@ namespace IngameScript
             };
             BroadcastMessage(parts);
         }
-
+        /// <summary>
+        /// The base calls a ship to unload cargo.
+        /// </summary>
+        /// <param name="argument"></param>
         void RequestUnload(string argument)
         {
             string[] lines = argument.Split('|');
@@ -997,7 +1002,7 @@ namespace IngameScript
         {
             string text = sbLog.ToString();
             string[] logLines = text.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
-         
+
             foreach (var lcd in logLCDs)
             {
                 lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
