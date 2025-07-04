@@ -529,7 +529,7 @@ namespace IngameScript
             if (shipVelocity <= 0.1)
             {
                 BroadcastStatus("Destination reached.");
-                ParseTerminalMessage(cruisingData.Command);
+                ParseTerminalMessage(cruisingData.TerminalMessage);
                 cruisingData.Clear();
             }
         }
@@ -872,9 +872,8 @@ namespace IngameScript
 
             List<string> parts = new List<string>()
             {
-                $"Command=REQUEST_DOCK",
-                $"To={bse}",
-                $"From={shipId}",
+                $"REQUEST_DOCK",
+                $"Base={bse}",
                 $"Task={(int)ExchangeTasks.DeliveryUnload}",
             };
             string message = string.Join("|", parts);
@@ -1305,9 +1304,9 @@ namespace IngameScript
         /// <summary>
         /// Set up the long trip
         /// </summary>
-        void StartCruising(Vector3D destination, string onArrival)
+        void StartCruising(Vector3D destination, string onArrivalMessage)
         {
-            cruisingData.Initialize(cameraPilot.GetPosition(), destination, onArrival);
+            cruisingData.Initialize(cameraPilot.GetPosition(), destination, onArrivalMessage);
         }
         #endregion
 

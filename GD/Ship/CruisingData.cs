@@ -13,7 +13,7 @@ namespace IngameScript
         public CruisingStatus CurrentState = CruisingStatus.Idle;
         public Vector3D Origin;
         public Vector3D Destination;
-        public string Command = null;
+        public string TerminalMessage = null;
         public bool HasTarget = false;
         public bool Thrusting = false;
         public readonly List<Vector3D> EvadingPoints = new List<Vector3D>();
@@ -43,11 +43,11 @@ namespace IngameScript
             return true;
         }
 
-        public void Initialize(Vector3D origin, Vector3D destination, string commad)
+        public void Initialize(Vector3D origin, Vector3D destination, string terminalMessage)
         {
             Origin = origin;
             Destination = destination;
-            Command = commad;
+            TerminalMessage = terminalMessage;
             HasTarget = true;
             EvadingPoints.Clear();
             CurrentState = CruisingStatus.Locating;
@@ -60,7 +60,7 @@ namespace IngameScript
         {
             Origin = Vector3D.Zero;
             Destination = Vector3D.Zero;
-            Command = null;
+            TerminalMessage = null;
             HasTarget = false;
             EvadingPoints.Clear();
             CurrentState = CruisingStatus.Idle;
@@ -151,7 +151,7 @@ namespace IngameScript
             CurrentState = (CruisingStatus)Utils.ReadInt(parts, "CurrentState");
             Origin = Utils.ReadVector(parts, "Origin");
             Destination = Utils.ReadVector(parts, "Destination");
-            Command = Utils.ReadString(parts, "Command");
+            TerminalMessage = Utils.ReadString(parts, "TerminalMessage");
             HasTarget = Utils.ReadInt(parts, "HasTarget") == 1;
             Thrusting = Utils.ReadInt(parts, "Thrusting") == 1;
             EvadingPoints.Clear();
@@ -164,7 +164,7 @@ namespace IngameScript
                 $"CurrentState={(int)CurrentState}",
                 $"Origin={Utils.VectorToStr(Origin)}",
                 $"Destination={Utils.VectorToStr(Destination)}",
-                $"Command={Command}",
+                $"TerminalMessage={TerminalMessage}",
                 $"HasTarget={(HasTarget?1:0)}",
                 $"Thrusting={(Thrusting?1:0)}",
                 $"EvadingPoints={Utils.VectorListToStr(EvadingPoints)}",
