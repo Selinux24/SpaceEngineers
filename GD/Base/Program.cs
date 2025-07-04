@@ -305,6 +305,8 @@ namespace IngameScript
             else if (argument == "ENABLE_EXCHANGE_REQUEST") EnableExchangeRequest();
             else if (argument.StartsWith("SHIP_LOADED")) ShipLoaded(argument);
             else if (argument.StartsWith("SET_ORDER")) SetOrder(argument);
+            else if (argument.StartsWith("REQUEST_LOAD")) RequestLoad(argument);
+            else if (argument.StartsWith("REQUEST_UNLOAD")) RequestUnload(argument);
         }
         /// <summary>
         /// Resets the state
@@ -422,6 +424,36 @@ namespace IngameScript
             };
 
             orders.Add(order);
+        }
+        
+        void RequestLoad(string argument)
+        {
+            string[] lines = argument.Split('|');
+            string ship = Utils.ReadString(lines, "Ship");
+
+            List<string> parts = new List<string>()
+            {
+                $"Command=REQUEST_LOAD",
+                $"From={baseId}",
+                $"To={ship}",
+                $"Parking={config.BaseParking}",
+            };
+            BroadcastMessage(parts);
+        }
+
+        void RequestUnload(string argument)
+        {
+            string[] lines = argument.Split('|');
+            string ship = Utils.ReadString(lines, "Ship");
+
+            List<string> parts = new List<string>()
+            {
+                $"Command=REQUEST_UNLOAD",
+                $"From={baseId}",
+                $"To={ship}",
+                $"Parking={config.BaseParking}",
+            };
+            BroadcastMessage(parts);
         }
         #endregion
 

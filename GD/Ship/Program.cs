@@ -1094,6 +1094,8 @@ namespace IngameScript
 
             string command = Utils.ReadArgument(lines, "Command");
             if (command == "REQUEST_STATUS") CmdRequestStatus(lines);
+            if (command == "REQUEST_LOAD") CmdRequestLoad(lines);
+            if (command == "REQUEST_UNLOAD") CmdRequestUnload(lines);
             else if (command == "START_DELIVERY") CmdStartDelivery(lines);
             else if (command == "DOCK") CmdDock(lines);
             else if (command == "LOADED") CmdLoaded(lines);
@@ -1119,6 +1121,34 @@ namespace IngameScript
             };
             BroadcastMessage(parts);
         }
+
+        void CmdRequestLoad(string[] lines)
+        {
+            string to = Utils.ReadString(lines, "To");
+            if (to != shipId)
+            {
+                return;
+            }
+
+            string from = Utils.ReadString(lines, "From");
+            Vector3D parking = Utils.ReadVector(lines, "Parking");
+
+            StartDock(from, parking, ExchangeTasks.DeliveryLoad);
+        }
+        void CmdRequestUnload(string[] lines)
+        {
+            string to = Utils.ReadString(lines, "To");
+            if (to != shipId)
+            {
+                return;
+            }
+
+            string from = Utils.ReadString(lines, "From");
+            Vector3D parking = Utils.ReadVector(lines, "Parking");
+
+            StartDock(from, parking, ExchangeTasks.DeliveryUnload);
+        }
+
         /// <summary>
         /// Seq_C_2a - SHIPX registers the request, begins navigation to the specified parking position, and requests an exchange to dock.
         /// Request:  START_DELIVERY
