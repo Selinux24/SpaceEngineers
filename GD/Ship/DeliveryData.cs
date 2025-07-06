@@ -18,11 +18,7 @@ namespace IngameScript
         public string OrderCustomer;
         public Vector3D OrderCustomerParking;
 
-        public string ExchangeName;
-        public Vector3D ExchangeForward;
-        public Vector3D ExchangeUp;
-        public readonly List<Vector3D> ExchangeApproachingWaypoints = new List<Vector3D>();
-        public readonly List<Vector3D> ExchangeDepartingWaypoints = new List<Vector3D>();
+        public ExchangeInfo Exchange;
 
         public Vector3D AlignFwd;
         public Vector3D AlignUp;
@@ -54,13 +50,11 @@ namespace IngameScript
             OrderCustomer = Utils.ReadString(lines, "OrderCustomer");
             OrderCustomerParking = Utils.ReadVector(lines, "OrderCustomerParking");
 
-            ExchangeName = Utils.ReadString(lines, "ExchangeName");
-            ExchangeForward = Utils.ReadVector(lines, "ExchangeForward");
-            ExchangeUp = Utils.ReadVector(lines, "ExchangeUp");
-            ExchangeApproachingWaypoints.Clear();
-            ExchangeApproachingWaypoints.AddRange(Utils.ReadVectorList(lines, "ExchangeApproachingWaypoints"));
-            ExchangeDepartingWaypoints.Clear();
-            ExchangeDepartingWaypoints.AddRange(Utils.ReadVectorList(lines, "ExchangeDepartingWaypoints"));
+            Exchange = new ExchangeInfo(
+                Utils.ReadString(lines, "ExchangeName"),
+                Utils.ReadVector(lines, "ExchangeForward"),
+                Utils.ReadVector(lines, "ExchangeUp"),
+                Utils.ReadVectorList(lines, "ExchangeApproachingWaypoints"));
 
             AlignFwd = Utils.ReadVector(lines, "AlignFwd");
             AlignUp = Utils.ReadVector(lines, "AlignUp");
@@ -84,11 +78,11 @@ namespace IngameScript
                 $"OrderCustomer={OrderCustomer}",
                 $"OrderCustomerParking={Utils.VectorToStr(OrderCustomerParking)}",
 
-                $"ExchangeName={ExchangeName}",
-                $"ExchangeForward={Utils.VectorToStr(ExchangeForward)}",
-                $"ExchangeUp={Utils.VectorToStr(ExchangeUp)}",
-                $"ExchangeApproachingWaypoints={Utils.VectorListToStr(ExchangeApproachingWaypoints)}",
-                $"ExchangeDepartingWaypoints={Utils.VectorListToStr(ExchangeDepartingWaypoints)}",
+                $"ExchangeName={Exchange.Exchange}",
+                $"ExchangeForward={Utils.VectorToStr(Exchange.Forward)}",
+                $"ExchangeUp={Utils.VectorToStr(Exchange.Up)}",
+                $"ExchangeApproachingWaypoints={Utils.VectorListToStr(Exchange.ApproachingWaypoints)}",
+                $"ExchangeDepartingWaypoints={Utils.VectorListToStr(Exchange.DepartingWaypoints)}",
 
                 $"AlignFwd={Utils.VectorToStr(AlignFwd)}",
                 $"AlignUp={Utils.VectorToStr(AlignUp)}",
@@ -125,40 +119,29 @@ namespace IngameScript
             OrderCustomerParking = new Vector3D();
         }
 
-        public void SetExchange(string name, Vector3D forward, Vector3D up, List<Vector3D> waypoints)
+        public void SetExchange(ExchangeInfo info)
         {
-            ExchangeName = name;
-            ExchangeForward = forward;
-            ExchangeUp = up;
-            ExchangeApproachingWaypoints.Clear();
-            ExchangeApproachingWaypoints.AddRange(waypoints);
-            ExchangeDepartingWaypoints.Clear();
-            ExchangeDepartingWaypoints.AddRange(waypoints);
-            ExchangeDepartingWaypoints.Reverse();
+            Exchange = info;
         }
         public void ClearExchange()
         {
-            ExchangeName = null;
-            ExchangeForward = Vector3D.Zero;
-            ExchangeUp = Vector3D.Zero;
-            ExchangeApproachingWaypoints.Clear();
-            ExchangeDepartingWaypoints.Clear();
+            Exchange = null;
         }
 
         public void PrepareNavigationFromExchange(string onLastWaypoint)
         {
-            AlignFwd = ExchangeForward;
-            AlignUp = ExchangeUp;
+            AlignFwd = Exchange.Forward;
+            AlignUp = Exchange.Up;
             Waypoints.Clear();
-            Waypoints.AddRange(ExchangeDepartingWaypoints);
+            Waypoints.AddRange(Exchange.DepartingWaypoints);
             OnLastWaypoint = onLastWaypoint;
         }
         public void PrepareNavigationToExchange(string onLastWaypoint)
         {
-            AlignFwd = ExchangeForward;
-            AlignUp = ExchangeUp;
+            AlignFwd = Exchange.Forward;
+            AlignUp = Exchange.Up;
             Waypoints.Clear();
-            Waypoints.AddRange(ExchangeApproachingWaypoints);
+            Waypoints.AddRange(Exchange.ApproachingWaypoints);
             OnLastWaypoint = onLastWaypoint;
         }
 

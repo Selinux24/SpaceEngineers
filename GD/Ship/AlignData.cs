@@ -38,12 +38,12 @@ namespace IngameScript
             return true;
         }
 
-        public void Initialize(Vector3D forward, Vector3D up, List<Vector3D> wayPoints, string command)
+        public void Initialize(ExchangeInfo info, string command)
         {
-            TargetForward = -Vector3D.Normalize(forward);
-            TargetUp = Vector3D.Normalize(up);
+            TargetForward = -Vector3D.Normalize(info.Forward);
+            TargetUp = Vector3D.Normalize(info.Up);
             Waypoints.Clear();
-            Waypoints.AddRange(wayPoints);
+            Waypoints.AddRange(info.ApproachingWaypoints);
             Command = command;
             HasTarget = true;
         }

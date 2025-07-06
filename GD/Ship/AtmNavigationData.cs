@@ -17,10 +17,7 @@ namespace IngameScript
         public bool Landing = false;
         public Vector3D Origin;
         public Vector3D Destination;
-        public string ExchangeName;
-        public Vector3D ExchangeForward;
-        public Vector3D ExchangeUp;
-        public readonly List<Vector3D> ExchangeApproachingWaypoints = new List<Vector3D>();
+        public ExchangeInfo Exchange;
         public ExchangeTasks ExchangeTask = ExchangeTasks.None;
         public string Command = null;
         public bool HasTarget = false;
@@ -69,21 +66,14 @@ namespace IngameScript
             ClearExchange();
         }
 
-        public void SetExchange(string name, Vector3D forward, Vector3D up, List<Vector3D> waypoints, ExchangeTasks task)
+        public void SetExchange(ExchangeInfo info, ExchangeTasks task)
         {
-            ExchangeName = name;
-            ExchangeForward = forward;
-            ExchangeUp = up;
-            ExchangeApproachingWaypoints.Clear();
-            ExchangeApproachingWaypoints.AddRange(waypoints);
+            Exchange= info;
             ExchangeTask = task;
         }
         public void ClearExchange()
         {
-            ExchangeName = null;
-            ExchangeForward = Vector3D.Zero;
-            ExchangeUp = Vector3D.Zero;
-            ExchangeApproachingWaypoints.Clear();
+            Exchange = null;
             ExchangeTask = ExchangeTasks.None;
         }
 
@@ -145,11 +135,12 @@ namespace IngameScript
             Command = Utils.ReadString(parts, "Command");
             HasTarget = Utils.ReadInt(parts, "HasTarget") == 1;
 
-            ExchangeName = Utils.ReadString(parts, "ExchangeName");
-            ExchangeForward = Utils.ReadVector(parts, "ExchangeForward");
-            ExchangeUp = Utils.ReadVector(parts, "ExchangeUp");
-            ExchangeApproachingWaypoints.Clear();
-            ExchangeApproachingWaypoints.AddRange(Utils.ReadVectorList(parts, "ExchangeApproachingWaypoints"));
+            Exchange = new ExchangeInfo(
+                Utils.ReadString(parts, "ExchangeName"),
+                Utils.ReadVector(parts, "ExchangeForward"),
+                Utils.ReadVector(parts, "ExchangeUp"),
+                Utils.ReadVectorList(parts, "ExchangeApproachingWaypoints"));
+
             ExchangeTask = (ExchangeTasks)Utils.ReadInt(parts, "ExchangeTask");
         }
         public string SaveToStorage()
@@ -163,10 +154,10 @@ namespace IngameScript
                 $"Command={Command}",
                 $"HasTarget={(HasTarget?1:0)}",
 
-                $"ExchangeName={ExchangeName}",
-                $"ExchangeForward={Utils.VectorToStr(ExchangeForward)}",
-                $"ExchangeUp={Utils.VectorToStr(ExchangeUp)}",
-                $"ExchangeApproachingWaypoints={Utils.VectorListToStr(ExchangeApproachingWaypoints)}",
+                $"ExchangeName={Exchange.Exchange}",
+                $"ExchangeForward={Utils.VectorToStr(Exchange.Forward)}",
+                $"ExchangeUp={Utils.VectorToStr(Exchange.Up)}",
+                $"ExchangeApproachingWaypoints={Utils.VectorListToStr(Exchange.ApproachingWaypoints)}",
                 $"ExchangeTask={(int)ExchangeTask}"
             };
 

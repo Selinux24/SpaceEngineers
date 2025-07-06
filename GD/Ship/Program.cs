@@ -199,7 +199,7 @@ namespace IngameScript
             SaveToStorage();
         }
 
-        public void Main(string argument, UpdateType updateSource)
+        public void Main(string argument)
         {
             WriteInfoLCDs($"{shipId} in channel {config.Channel}", false);
             WriteInfoLCDs($"{CalculateCargoPercentage():P1} cargo.");
@@ -239,6 +239,283 @@ namespace IngameScript
 
             WriteInfoLCDs($"Order {deliveryData.OrderId} from {deliveryData.OrderWarehouse} to {deliveryData.OrderCustomer}");
             WriteInfoLCDs($"Status: {deliveryData.Status}");
+        }
+        /// <summary>
+        /// Seq_C_2a - SHIPX registers the request, begins navigation to the specified parking position, and requests an exchange to dock.
+        /// Request:  START_DELIVERY
+        /// Execute:  REQUEST_LOAD_TO_WAREHOUSE when the ship reaches the WH parking lot
+        /// </summary>
+        void DeliveryTriggerStart(int order, string warehouse, Vector3D warehouseParking, string customer, Vector3D customerParking)
+        {
+            deliveryData.Status = DeliveryStatus.RouteToLoad;
+
+            deliveryData.SetOrder(
+                order,
+                warehouse,
+                warehouseParking,
+                customer,
+                customerParking);
+
+            deliveryData.PrepareNavigationToWarehouse("REQUEST_LOAD_TO_WAREHOUSE");
+
+            DeliveryApproachToParking();
+        }
+        /// <summary>
+        /// Seq_xxxx / Seq_D_2a - SHIPX begins navigation to the specified connector and docks in LOADING or UNLOADING MODE.
+        /// </summary>
+        void DeliveryTriggerLoad(ExchangeInfo info)
+        {
+            deliveryData.Status = DeliveryStatus.ApproachingLoad;
+
+            deliveryData.SetExchange(info);
+
+            deliveryData.PrepareNavigationToExchange("START_LOADING");
+
+            DeliveryApproachToExchange();
+        }
+        /// <summary>
+        /// Seq_xxxx / Seq_D_2a - SHIPX begins navigation to the specified connector and docks in LOADING or UNLOADING MODE.
+        /// </summary>
+        void DeliveryTriggerUnload(ExchangeInfo info)
+        {
+            deliveryData.Status = DeliveryStatus.ApproachingUnload;
+
+            deliveryData.SetExchange(info);
+
+            deliveryData.PrepareNavigationToExchange("START_UNLOADING");
+
+            DeliveryApproachToExchange();
+        }
+
+        /// <summary>
+        /// Goes to a base defined in the argument to load cargo.
+        /// </summary>
+        void DeliveryTriggerLoadTo(string argument)
+        {
+            string[] lines = argument.Split('|');
+            var bse = Utils.ReadString(lines, "Base");
+            var bsePos = Utils.ReadVector(lines, "BaseParking");
+
+            StartTrip(bse, bsePos, ExchangeTasks.DeliveryLoad);
+        }
+        /// <summary>
+        /// Goes to a base defined in the argument to unload cargo.
+        /// </summary>
+        void DeliveryTriggerUnloadTo(string argument)
+        {
+            string[] lines = argument.Split('|');
+            var bse = Utils.ReadString(lines, "Base");
+            var bsePos = Utils.ReadVector(lines, "BaseParking");
+
+            StartTrip(bse, bsePos, ExchangeTasks.DeliveryUnload);
+        }
+
+        /// <summary>
+        /// Seq_xxx - SHIPX arrives at Parking_WH and requests permission to load
+        /// Request:  REQUEST_LOAD_TO_WAREHOUSE
+        /// Execute:  REQUEST_LOAD
+        /// </summary>
+        void DeliveryRequestLoad()
+        {
+            List<string> parts = new List<string>()
+            {
+                $"Command=REQUEST_LOAD",
+                $"To={deliveryData.OrderWarehouse}",
+                $"From={shipId}",
+                $"Order={deliveryData.OrderId}"
+            };
+            BroadcastMessage(parts);
+
+            timerWaiting.StartCountdown();
+
+            deliveryData.Status = DeliveryStatus.WaitingForLoad;
+        }
+        /// <summary>
+        /// Seq_C_2b - When the ship reaches the connector, it informs the base to begin loading.
+        /// Request  : START_LOADING
+        /// Execute  : LOADING
+        /// </summary>
+        void DeliveryStartLoading()
+        {
+            List<string> parts = new List<string>()
+            {
+                $"Command=LOADING",
+                $"To={deliveryData.OrderWarehouse}",
+                $"From={shipId}",
+                $"Order={deliveryData.OrderId}",
+                $"Exchange={deliveryData.Exchange?.Exchange}"
+            };
+            BroadcastMessage(parts);
+
+            //Dock
+            timerLock.StartCountdown();
+
+            //Load mode
+            timerLoad.StartCountdown();
+
+            deliveryData.Status = DeliveryStatus.Loading;
+        }
+        /// <summary>
+        /// Seq_C_4a - SHIPX loads the route to Parking_BASEX and begins the exit maneuver from the WH connector
+        /// Request:  LOADED
+        /// Execute:  APPROACH_TO_PARKING when SHIPX reaches the last waypoint of the connector's exit route
+        /// Execute:  REQUEST_UNLOAD_TO_CUSTOMER when SHIPX arrives at Parking_BASEX
+        /// </summary>
+        void DeliveryLoaded()
+        {
+            deliveryData.Status = DeliveryStatus.RouteToUnload;
+
+            //Load the exit route and upon reaching the last waypoint of the connector, it will execute APPROACH_TO_PARKING, which will activate navigation to the Customer
+            deliveryData.PrepareNavigationFromExchange("APPROACH_TO_PARKING");
+
+            //It will monitor the trip to the Customer's waiting position, execute REQUEST_UNLOAD_TO_CUSTOMER, and wait for instructions from the base.
+            deliveryData.PrepareNavigationToCustomer("REQUEST_UNLOAD_TO_CUSTOMER");
+
+            DeliveryDepartFromExchange();
+        }
+        /// <summary>
+        /// Seq_C_4c - SHIPX arrives at Parking_BASEX and requests permission to unload
+        /// Request:  REQUEST_UNLOAD_TO_CUSTOMER
+        /// Execute:  REQUEST_UNLOAD
+        /// </summary>
+        void DeliveryRequestUnload()
+        {
+            List<string> parts = new List<string>()
+            {
+                $"Command=REQUEST_UNLOAD",
+                $"To={deliveryData.OrderCustomer}",
+                $"From={shipId}",
+                $"Order={deliveryData.OrderId}"
+            };
+            BroadcastMessage(parts);
+
+            timerWaiting.StartCountdown();
+
+            deliveryData.Status = DeliveryStatus.WaitingForUnload;
+        }
+        /// <summary>
+        /// Seq_D_2b - SHIPX notifies BASEX that it has arrived to unload the ORDER_ID to the connector. It launches [UNLOADING] to BASEX.
+        /// Request:  START_UNLOADING
+        /// Execute:  UNLOADING
+        /// </summary>
+        void DeliveryStartUnloading()
+        {
+            List<string> parts = new List<string>()
+            {
+                $"Command=UNLOADING",
+                $"To={deliveryData.OrderCustomer}",
+                $"From={shipId}",
+                $"Order={deliveryData.OrderId}",
+                $"Exchange={deliveryData.Exchange?.Exchange}"
+            };
+            BroadcastMessage(parts);
+
+            //Dock
+            timerLock.StartCountdown();
+
+            //Unload mode
+            timerUnload.StartCountdown();
+
+            deliveryData.Status = DeliveryStatus.Unloading;
+        }
+        /// <summary>
+        /// Seq_D_2d - SHIPX informs BASEX of the end of the unload, and begins the return journey to Parking_WH.
+        /// Execute:  UNLOADED - to BASEX
+        /// Execute:  APPROACH_TO_PARKING - When the route of the exit waypoints ends, the trip to Parking_WH begins
+        /// Execute:  WAITING - When it arrives at Parking_WH, it is put on hold.
+        /// </summary>
+        void DeliveryUnloadFinished()
+        {
+            if (!deliveryData.Active)
+            {
+                return;
+            }
+
+            //Notice of download completed to base
+            List<string> parts = new List<string>()
+            {
+                $"Command=UNLOADED",
+                $"To={deliveryData.OrderCustomer}",
+                $"From={shipId}",
+                $"Order={deliveryData.OrderId}",
+                $"Warehouse={deliveryData.OrderWarehouse}"
+            };
+            BroadcastMessage(parts);
+
+            //Load the return trip to the Warehouse
+            //It will monitor the journey to the Warehouse standby position, execute WAITING, and wait for instructions from the base.
+            deliveryData.PrepareNavigationToWarehouse("WAITING");
+
+            //Load the exit route and when you reach the last waypoint of the connector
+            //It will execute APPROACH_TO_PARKING, which will activate navigation to the previously loaded destination
+            deliveryData.PrepareNavigationFromExchange("APPROACH_TO_PARKING");
+
+            DeliveryDepartFromExchange();
+
+            deliveryData.Status = DeliveryStatus.RouteToLoad;
+        }
+        /// <summary>
+        /// Make the approach to the destination parking position
+        /// </summary>
+        void DeliveryApproachToParking()
+        {
+            var dst = deliveryData.DestinationPosition;
+            var dstName = deliveryData.DestinationName;
+            var onArrival = deliveryData.OnDestinationArrival;
+
+            var pos = remotePilot.GetPosition();
+            var distance = Vector3D.Distance(pos, dst);
+            if (Vector3D.Distance(pos, dst) >= 5000)
+            {
+                //Start cruise mode
+                StartCruising(pos, dst, onArrival);
+            }
+            else
+            {
+                //Start autopilot
+                StartAutoPilot(remoteAlign, dst, dstName, config.AlignExchangeApproachingSpeed, onArrival);
+            }
+        }
+        /// <summary>
+        /// Perform the approach maneuver from any position
+        /// </summary>
+        void DeliveryApproachToExchange()
+        {
+            var pos = remoteAlign.GetPosition();
+            var wp = deliveryData.Waypoints[0];
+            if (Vector3D.Distance(pos, wp) >= 500)
+            {
+                //Load the autopilot to the position of the first waypoint
+                StartAutoPilot(remoteAlign, wp, "Path to Connector", config.AlignExchangeApproachingSpeed, "START_APPROACH");
+            }
+            else
+            {
+                StartApproach(remotePilot, deliveryData.Exchange, deliveryData.OnLastWaypoint);
+            }
+        }
+        /// <summary>
+        /// Perform the uncoupling maneuver and travel to the destination
+        /// </summary>
+        void DeliveryDepartFromExchange()
+        {
+            timerUnlock?.StartCountdown();
+
+            //The exit maneuver begins
+            alignData.Initialize(deliveryData.Exchange, deliveryData.OnLastWaypoint);
+        }
+
+        /// <summary>
+        /// Seq_D_2f - SHIPX is on hold
+        /// </summary>
+        void DeliveryWaiting()
+        {
+            //Puts the ship on hold
+            timerWaiting.StartCountdown();
+
+            //It occurs when the ship reaches the last waypoint of the delivery route
+            deliveryData.Clear();
+
+            deliveryData.Status = DeliveryStatus.Idle;
         }
         #endregion
 
@@ -484,7 +761,7 @@ namespace IngameScript
                 if (!inGravity && (DateTime.Now - cruisingData.AlignThrustStart).TotalSeconds > config.CruisingThrustAlignSeconds)
                 {
                     //Out of gravity and alignment time consumed. Deactivate thrusters.
-                    EnterCruising();
+                    CruisingEnterCruise();
                     cruisingData.Thrusting = false;
                 }
 
@@ -513,7 +790,7 @@ namespace IngameScript
                 return;
             }
 
-            EnterCruising();
+            CruisingEnterCruise();
         }
         void CruisingBrake()
         {
@@ -557,7 +834,7 @@ namespace IngameScript
             //Navigate between evading points
             if (cruisingData.EvadingPoints.Count > 0)
             {
-                EvadingTo(cruisingData.EvadingPoints[0], config.CruisingEvadingMaxSpeed);
+                CruisingEvadingTo(cruisingData.EvadingPoints[0], config.CruisingEvadingMaxSpeed);
 
                 if (cruisingData.EvadingPoints.Count == 0)
                 {
@@ -573,7 +850,7 @@ namespace IngameScript
                 return;
             }
         }
-        void EvadingTo(Vector3D wayPoint, double maxSpeed)
+        void CruisingEvadingTo(Vector3D wayPoint, double maxSpeed)
         {
             var toTarget = wayPoint - cameraPilot.GetPosition();
             var d = toTarget.Length();
@@ -590,7 +867,7 @@ namespace IngameScript
 
             ThrustToTarget(remotePilot, Vector3D.Normalize(toTarget), maxSpeed);
         }
-        void EnterCruising()
+        void CruisingEnterCruise()
         {
             antenna.Enabled = false;
 
@@ -601,6 +878,20 @@ namespace IngameScript
         #endregion
 
         #region ATMOSPHERIC NAVIGATION
+        /// <summary>
+        /// Starts a route to the configured loading base.
+        /// </summary>
+        void AtmNavigationStartRoute()
+        {
+            List<string> parts = new List<string>()
+            {
+                $"Command=REQUEST_DOCK",
+                $"To={config.AtmNavigationLoadBase}",
+                $"From={shipId}",
+                $"Task={(int)ExchangeTasks.RocketLoad}",
+            };
+            BroadcastMessage(parts);
+        }
         void DoAtmNavigation()
         {
             if (!atmNavigationData.HasTarget)
@@ -706,11 +997,7 @@ namespace IngameScript
                 WriteInfoLCDs("Parking reached. Aproaching to dock...");
                 atmNavigationData.CurrentState = AtmNavigationStatus.Docking;
 
-                alignData.Initialize(
-                    atmNavigationData.ExchangeForward,
-                    atmNavigationData.ExchangeUp,
-                    atmNavigationData.ExchangeApproachingWaypoints,
-                    atmNavigationData.Command);
+                alignData.Initialize(atmNavigationData.Exchange, atmNavigationData.Command);
             }
         }
         void AtmNavigationDock()
@@ -772,6 +1059,30 @@ namespace IngameScript
                 deliveryData.Status = DeliveryStatus.Idle;
             }
         }
+        void AtmNavigationTriggerLoad(bool landing, Vector3D parking, ExchangeInfo info, ExchangeTasks task)
+        {
+            atmNavigationData.Initialize(
+                landing,
+                remotePilot.GetPosition(),
+                parking,
+                "START_LOADING");
+
+            atmNavigationData.SetExchange(info, task);
+
+            timerUnlock?.StartCountdown();
+        }
+        void AtmNavigationTriggerUnload(bool landing, Vector3D parking, ExchangeInfo info, ExchangeTasks task)
+        {
+            atmNavigationData.Initialize(
+                landing,
+                remotePilot.GetPosition(),
+                parking,
+                "START_UNLOADING");
+
+            atmNavigationData.SetExchange(info, task);
+
+            timerUnlock?.StartCountdown();
+        }
         #endregion
 
         #region TERMINAL COMMANDS
@@ -782,26 +1093,24 @@ namespace IngameScript
             if (argument == "RESET") Reset();
             else if (argument == "PAUSE") Pause();
             else if (argument == "RESUME") Resume();
+            else if (argument == "ENABLE_LOGS") EnableLogs();
 
             else if (argument.StartsWith("REQUEST_DOCK")) RequestDock(argument);
-            else if (argument.StartsWith("LOAD_TO")) LoadTo(argument);
-            else if (argument.StartsWith("UNLOAD_TO")) UnloadTo(argument);
-            else if (argument == "START_ROUTE") StartRoute();
 
-            else if (argument.StartsWith("GOTO")) Goto(argument);
-            else if (argument == "APPROACH_TO_PARKING") ApproachToParking();
+            else if (argument == "START_ROUTE") AtmNavigationStartRoute();
 
-            else if (argument == "REQUEST_LOAD_TO_WAREHOUSE") RequestLoadToWarehouse();
-            else if (argument == "START_LOADING") StartLoading();
+            else if (argument == "START_LOADING") DeliveryStartLoading();
+            else if (argument == "START_UNLOADING") DeliveryStartUnloading();
+            else if (argument == "UNLOAD_FINISHED") DeliveryUnloadFinished();
 
-            else if (argument == "REQUEST_UNLOAD_TO_CUSTOMER") RequestUnloadToCustomer();
-            else if (argument == "START_UNLOADING") StartUnloading();
-            else if (argument == "UNLOAD_FINISHED") UnloadFinished();
-
-            else if (argument == "WAITING") Waiting();
-
-            else if (argument == "START_APPROACH") StartApproach();
-            else if (argument == "ENABLE_LOGS") EnableLogs();
+            //Triggers
+            else if (argument.StartsWith("LOAD_TO")) DeliveryTriggerLoadTo(argument);
+            else if (argument.StartsWith("UNLOAD_TO")) DeliveryTriggerUnloadTo(argument);
+            else if (argument == "APPROACH_TO_PARKING") DeliveryApproachToParking();
+            else if (argument == "START_APPROACH") StartApproach(remotePilot, deliveryData.Exchange, deliveryData.OnLastWaypoint);
+            else if (argument == "REQUEST_LOAD_TO_WAREHOUSE") DeliveryRequestLoad();
+            else if (argument == "REQUEST_UNLOAD_TO_CUSTOMER") DeliveryRequestUnload();
+            else if (argument == "WAITING") DeliveryWaiting();
         }
 
         /// <summary>
@@ -842,6 +1151,13 @@ namespace IngameScript
         {
             paused = false;
         }
+        /// <summary>
+        /// Changes the state of the variable that controls the display of logs
+        /// </summary>
+        void EnableLogs()
+        {
+            config.EnableLogs = !config.EnableLogs;
+        }
 
         /// <summary>
         /// Requests docking at a base defined in the argument.
@@ -852,8 +1168,6 @@ namespace IngameScript
             var bse = Utils.ReadString(lines, "Base");
             var task = Utils.ReadInt(lines, "Task");
 
-            deliveryData.Status = DeliveryStatus.Idle;
-
             List<string> parts = new List<string>()
             {
                 $"Command=REQUEST_DOCK",
@@ -863,227 +1177,6 @@ namespace IngameScript
             };
             BroadcastMessage(parts);
         }
-        /// <summary>
-        /// Goes to a base defined in the argument to load cargo.
-        /// </summary>
-        void LoadTo(string argument)
-        {
-            string[] lines = argument.Split('|');
-            var bse = Utils.ReadString(lines, "Base");
-            var bsePos = Utils.ReadVector(lines, "BaseParking");
-
-            StartDock(bse, bsePos, ExchangeTasks.DeliveryLoad);
-        }
-        /// <summary>
-        /// Goes to a base defined in the argument to unload cargo.
-        /// </summary>
-        void UnloadTo(string argument)
-        {
-            string[] lines = argument.Split('|');
-            var bse = Utils.ReadString(lines, "Base");
-            var bsePos = Utils.ReadVector(lines, "BaseParking");
-
-            StartDock(bse, bsePos, ExchangeTasks.DeliveryUnload);
-        }
-        /// <summary>
-        /// Starts a route to the configured loading base.
-        /// </summary>
-        void StartRoute()
-        {
-            deliveryData.Status = DeliveryStatus.Idle;
-
-            List<string> parts = new List<string>()
-            {
-                $"Command=REQUEST_DOCK",
-                $"To={config.AtmNavigationLoadBase}",
-                $"From={shipId}",
-                $"Task={(int)ExchangeTasks.RocketLoad}",
-            };
-            BroadcastMessage(parts);
-        }
-
-        /// <summary>
-        /// Goes to a position defined in the argument.
-        /// </summary>
-        void Goto(string argument)
-        {
-            string[] lines = argument.Split('|');
-            var position = Utils.ReadVector(lines, "Position");
-
-            StartCruising(position, "WAITING");
-        }
-        /// <summary>
-        /// Make the approach to the destination parking position
-        /// </summary>
-        void ApproachToParking()
-        {
-            var destination = deliveryData.DestinationPosition;
-            var destinationName = deliveryData.DestinationName;
-            var onArrival = deliveryData.OnDestinationArrival;
-
-            var shipPosition = remotePilot.GetPosition();
-            var distance = Vector3D.Distance(shipPosition, destination);
-            if (distance < 5000)
-            {
-                //Load on autopilot
-                StartAutoPilot(destination, destinationName, config.AlignExchangeApproachingSpeed, onArrival);
-            }
-            else
-            {
-                //Load on cruise mode
-                StartCruising(destination, onArrival);
-            }
-        }
-
-        /// <summary>
-        /// Seq_xxx - SHIPX arrives at Parking_WH and requests permission to load
-        /// Request:  REQUEST_LOAD_TO_WAREHOUSE
-        /// Execute:  REQUEST_LOAD
-        /// </summary>
-        void RequestLoadToWarehouse()
-        {
-            List<string> parts = new List<string>()
-            {
-                $"Command=REQUEST_LOAD",
-                $"To={deliveryData.OrderWarehouse}",
-                $"From={shipId}",
-                $"Order={deliveryData.OrderId}"
-            };
-            BroadcastMessage(parts);
-
-            timerWaiting.StartCountdown();
-
-            deliveryData.Status = DeliveryStatus.WaitingForLoad;
-        }
-        /// <summary>
-        /// Seq_C_2b - When the ship reaches the connector, it informs the base to begin loading.
-        /// Request  : START_LOADING
-        /// Execute  : LOADING
-        /// </summary>
-        void StartLoading()
-        {
-            List<string> parts = new List<string>()
-            {
-                $"Command=LOADING",
-                $"To={deliveryData.OrderWarehouse}",
-                $"From={shipId}",
-                $"Order={deliveryData.OrderId}",
-                $"Exchange={deliveryData.ExchangeName}"
-            };
-            BroadcastMessage(parts);
-
-            //Dock
-            timerLock.StartCountdown();
-
-            //Load mode
-            timerLoad.StartCountdown();
-
-            deliveryData.Status = DeliveryStatus.Loading;
-        }
-
-        /// <summary>
-        /// Seq_C_4c - SHIPX arrives at Parking_BASEX and requests permission to unload
-        /// Request:  REQUEST_UNLOAD_TO_CUSTOMER
-        /// Execute:  REQUEST_UNLOAD
-        /// </summary>
-        void RequestUnloadToCustomer()
-        {
-            List<string> parts = new List<string>()
-            {
-                $"Command=REQUEST_UNLOAD",
-                $"To={deliveryData.OrderCustomer}",
-                $"From={shipId}",
-                $"Order={deliveryData.OrderId}"
-            };
-            BroadcastMessage(parts);
-
-            timerWaiting.StartCountdown();
-
-            deliveryData.Status = DeliveryStatus.WaitingForUnload;
-        }
-        /// <summary>
-        /// Seq_D_2b - SHIPX notifies BASEX that it has arrived to unload the ORDER_ID to the connector. It launches [UNLOADING] to BASEX.
-        /// Request:  START_UNLOADING
-        /// Execute:  UNLOADING
-        /// </summary>
-        void StartUnloading()
-        {
-
-            List<string> parts = new List<string>()
-            {
-                $"Command=UNLOADING",
-                $"To={deliveryData.OrderCustomer}",
-                $"From={shipId}",
-                $"Order={deliveryData.OrderId}",
-                $"Exchange={deliveryData.ExchangeName}"
-            };
-            BroadcastMessage(parts);
-
-            //Dock
-            timerLock.StartCountdown();
-
-            //Unload mode
-            timerUnload.StartCountdown();
-
-            deliveryData.Status = DeliveryStatus.Unloading;
-        }
-        /// <summary>
-        /// Seq_D_2d - SHIPX informs BASEX of the end of the unload, and begins the return journey to Parking_WH.
-        /// Execute:  UNLOADED - to BASEX
-        /// Execute:  APPROACH_TO_PARKING - When the route of the exit waypoints ends, the trip to Parking_WH begins
-        /// Execute:  WAITING - When it arrives at Parking_WH, it is put on hold.
-        /// </summary>
-        void UnloadFinished()
-        {
-            if (!deliveryData.Active)
-            {
-                return;
-            }
-
-            //Notice of download completed to base
-            List<string> parts = new List<string>()
-            {
-                $"Command=UNLOADED",
-                $"To={deliveryData.OrderCustomer}",
-                $"From={shipId}",
-                $"Order={deliveryData.OrderId}",
-                $"Warehouse={deliveryData.OrderWarehouse}"
-            };
-            BroadcastMessage(parts);
-
-            //Load the return trip to the Warehouse
-            //It will monitor the journey to the Warehouse standby position, execute WAITING, and wait for instructions from the base.
-            deliveryData.PrepareNavigationToWarehouse("WAITING");
-
-            //Load the exit route and when you reach the last waypoint of the connector
-            //It will execute APPROACH_TO_PARKING, which will activate navigation to the previously loaded destination
-            deliveryData.PrepareNavigationFromExchange("APPROACH_TO_PARKING");
-
-            Depart();
-
-            deliveryData.Status = DeliveryStatus.RouteToLoad;
-        }
-
-        /// <summary>
-        /// Seq_D_2f - SHIPX is on hold
-        /// </summary>
-        void Waiting()
-        {
-            //Puts the ship on hold
-            timerWaiting.StartCountdown();
-
-            //It occurs when the ship reaches the last waypoint of the delivery route
-            deliveryData.Clear();
-
-            deliveryData.Status = DeliveryStatus.Idle;
-        }
-        /// <summary>
-        /// Changes the state of the variable that controls the display of logs
-        /// </summary>
-        void EnableLogs()
-        {
-            config.EnableLogs = !config.EnableLogs;
-        }
         #endregion
 
         #region IGC COMMANDS
@@ -1092,14 +1185,17 @@ namespace IngameScript
             WriteLogLCDs($"ParseMessage: {signal}");
 
             string[] lines = signal.Split('|');
-
             string command = Utils.ReadArgument(lines, "Command");
+
             if (command == "REQUEST_STATUS") CmdRequestStatus(lines);
-            if (command == "REQUEST_LOAD") CmdRequestLoad(lines);
-            if (command == "REQUEST_UNLOAD") CmdRequestUnload(lines);
-            else if (command == "START_DELIVERY") CmdStartDelivery(lines);
+
+            if (!IsForMe(lines)) return;
+
+            if (command == "START_DELIVERY") CmdStartDelivery(lines);
             else if (command == "DOCK") CmdDock(lines);
-            else if (command == "LOADED") CmdLoaded(lines);
+            else if (command == "REQUEST_LOAD") CmdRequestLoad(lines);
+            else if (command == "REQUEST_UNLOAD") CmdRequestUnload(lines);
+            else if (command == "LOADED") DeliveryLoaded();
         }
 
         /// <summary>
@@ -1125,63 +1221,18 @@ namespace IngameScript
         }
 
         /// <summary>
-        /// A base calls the ship to load cargo.
-        /// </summary>
-        void CmdRequestLoad(string[] lines)
-        {
-            string to = Utils.ReadString(lines, "To");
-            if (to != shipId)
-            {
-                return;
-            }
-
-            string from = Utils.ReadString(lines, "From");
-            Vector3D parking = Utils.ReadVector(lines, "Parking");
-
-            StartDock(from, parking, ExchangeTasks.DeliveryLoad);
-        }
-        /// <summary>
-        /// A base calls the ship to unload cargo.
-        /// </summary>
-        void CmdRequestUnload(string[] lines)
-        {
-            string to = Utils.ReadString(lines, "To");
-            if (to != shipId)
-            {
-                return;
-            }
-
-            string from = Utils.ReadString(lines, "From");
-            Vector3D parking = Utils.ReadVector(lines, "Parking");
-
-            StartDock(from, parking, ExchangeTasks.DeliveryUnload);
-        }
-
-        /// <summary>
         /// Seq_C_2a - SHIPX registers the request, begins navigation to the specified parking position, and requests an exchange to dock.
         /// Request:  START_DELIVERY
         /// Execute:  REQUEST_LOAD_TO_WAREHOUSE when the ship reaches the WH parking lot
         /// </summary>
         void CmdStartDelivery(string[] lines)
         {
-            string to = Utils.ReadString(lines, "To");
-            if (to != shipId)
-            {
-                return;
-            }
-
-            deliveryData.Status = DeliveryStatus.RouteToLoad;
-
-            deliveryData.SetOrder(
+            DeliveryTriggerStart(
                 Utils.ReadInt(lines, "Order"),
                 Utils.ReadString(lines, "Warehouse"),
                 Utils.ReadVector(lines, "WarehouseParking"),
                 Utils.ReadString(lines, "Customer"),
                 Utils.ReadVector(lines, "CustomerParking"));
-
-            deliveryData.PrepareNavigationToWarehouse("REQUEST_LOAD_TO_WAREHOUSE");
-
-            ApproachToParking();
         }
 
         /// <summary>
@@ -1190,165 +1241,53 @@ namespace IngameScript
         /// </summary>
         void CmdDock(string[] lines)
         {
-            string to = Utils.ReadString(lines, "To");
-            if (to != shipId)
-            {
-                return;
-            }
-
-            ExchangeTasks task = (ExchangeTasks)Utils.ReadInt(lines, "Task");
+            var task = (ExchangeTasks)Utils.ReadInt(lines, "Task");
 
             if (task == ExchangeTasks.DeliveryLoad)
             {
-                deliveryData.Status = DeliveryStatus.ApproachingLoad;
-
-                deliveryData.SetExchange(
-                    Utils.ReadString(lines, "Exchange"),
-                    Utils.ReadVector(lines, "Forward"),
-                    Utils.ReadVector(lines, "Up"),
-                    Utils.ReadVectorList(lines, "WayPoints"));
-
-                deliveryData.PrepareNavigationToExchange("START_LOADING");
-
-                ApproachToExchange();
+                DeliveryTriggerLoad(new ExchangeInfo(lines));
             }
             else if (task == ExchangeTasks.DeliveryUnload)
             {
-                deliveryData.Status = DeliveryStatus.ApproachingUnload;
-
-                deliveryData.SetExchange(
-                    Utils.ReadString(lines, "Exchange"),
-                    Utils.ReadVector(lines, "Forward"),
-                    Utils.ReadVector(lines, "Up"),
-                    Utils.ReadVectorList(lines, "WayPoints"));
-
-                deliveryData.PrepareNavigationToExchange("START_UNLOADING");
-
-                ApproachToExchange();
+                DeliveryTriggerUnload(new ExchangeInfo(lines));
             }
             else if (task == ExchangeTasks.RocketLoad)
             {
-                atmNavigationData.Initialize(
+                AtmNavigationTriggerLoad(
                     Utils.ReadInt(lines, "Landing") == 1,
-                    remotePilot.GetPosition(),
                     Utils.ReadVector(lines, "Parking"),
-                    "START_LOADING");
-
-                atmNavigationData.SetExchange(
-                    Utils.ReadString(lines, "Exchange"),
-                    Utils.ReadVector(lines, "Forward"),
-                    Utils.ReadVector(lines, "Up"),
-                    Utils.ReadVectorList(lines, "WayPoints"),
+                    new ExchangeInfo(lines),
                     task);
-
-                timerUnlock?.StartCountdown();
             }
             else if (task == ExchangeTasks.RocketUnload)
             {
-                atmNavigationData.Initialize(
+                AtmNavigationTriggerUnload(
                     Utils.ReadInt(lines, "Landing") == 1,
-                    remotePilot.GetPosition(),
                     Utils.ReadVector(lines, "Parking"),
-                    "START_UNLOADING");
-
-                atmNavigationData.SetExchange(
-                    Utils.ReadString(lines, "Exchange"),
-                    Utils.ReadVector(lines, "Forward"),
-                    Utils.ReadVector(lines, "Up"),
-                    Utils.ReadVectorList(lines, "WayPoints"),
+                    new ExchangeInfo(lines),
                     task);
-
-                timerUnlock?.StartCountdown();
             }
         }
 
         /// <summary>
-        /// Seq_C_4a - SHIPX loads the route to Parking_BASEX and begins the exit maneuver from the WH connector
-        /// Request:  LOADED
-        /// Execute:  APPROACH_TO_PARKING when SHIPX reaches the last waypoint of the connector's exit route
-        /// Execute:  REQUEST_UNLOAD_TO_CUSTOMER when SHIPX arrives at Parking_BASEX
+        /// A base calls the ship to load cargo.
         /// </summary>
-        void CmdLoaded(string[] lines)
+        void CmdRequestLoad(string[] lines)
         {
-            string to = Utils.ReadString(lines, "To");
-            if (to != shipId)
-            {
-                return;
-            }
+            var bse = Utils.ReadString(lines, "From");
+            var bsePos = Utils.ReadVector(lines, "Parking");
 
-            deliveryData.Status = DeliveryStatus.RouteToUnload;
-
-            //Load the exit route and upon reaching the last waypoint of the connector, it will execute APPROACH_TO_PARKING, which will activate navigation to the Customer
-            deliveryData.PrepareNavigationFromExchange("APPROACH_TO_PARKING");
-
-            //It will monitor the trip to the Customer's waiting position, execute REQUEST_UNLOAD_TO_CUSTOMER, and wait for instructions from the base.
-            deliveryData.PrepareNavigationToCustomer("REQUEST_UNLOAD_TO_CUSTOMER");
-
-            Depart();
-        }
-
-        /// <summary>
-        /// Perform the approach maneuver from any position
-        /// </summary>
-        void ApproachToExchange()
-        {
-            //Get the distance to the first approach point
-            var shipPosition = remoteAlign.GetPosition();
-            var wp = deliveryData.Waypoints[0];
-            double distance = Vector3D.Distance(shipPosition, wp);
-            if (distance > 500)
-            {
-                //Load the autopilot to the position of the first waypoint
-                StartAutoPilot(wp, "Path to Connector", config.AlignExchangeApproachingSpeed, "START_APPROACH");
-            }
-            else
-            {
-                StartApproach();
-            }
+            StartTrip(bse, bsePos, ExchangeTasks.DeliveryLoad);
         }
         /// <summary>
-        /// Perform the uncoupling maneuver and travel to the destination
+        /// A base calls the ship to unload cargo.
         /// </summary>
-        void Depart()
+        void CmdRequestUnload(string[] lines)
         {
-            timerUnlock?.StartCountdown();
+            var bse = Utils.ReadString(lines, "From");
+            var bsePos = Utils.ReadVector(lines, "Parking");
 
-            //The exit maneuver begins
-            alignData.Initialize(deliveryData.AlignFwd, deliveryData.AlignUp, deliveryData.Waypoints, deliveryData.OnLastWaypoint);
-        }
-        /// <summary>
-        /// Navigate the waypoints
-        /// </summary>
-        void StartApproach()
-        {
-            remotePilot.SetAutoPilotEnabled(false);
-            remotePilot.ClearWaypoints();
-
-            alignData.Initialize(deliveryData.AlignFwd, deliveryData.AlignUp, deliveryData.Waypoints, deliveryData.OnLastWaypoint);
-        }
-        /// <summary>
-        /// Set the autopilot
-        /// </summary>
-        void StartAutoPilot(Vector3D destination, string destinationName, double velocity, string onArrival)
-        {
-            arrivalData.Initialize(destination, config.AlignExchangeDistanceThr, onArrival);
-
-            timerPilot.Trigger();
-
-            remoteAlign.ClearWaypoints();
-            remoteAlign.AddWaypoint(destination, destinationName);
-            remoteAlign.SetCollisionAvoidance(true);
-            remoteAlign.WaitForFreeWay = false;
-            remoteAlign.FlightMode = FlightMode.OneWay;
-            remoteAlign.SpeedLimit = (float)velocity;
-            remoteAlign.SetAutoPilotEnabled(true);
-        }
-        /// <summary>
-        /// Set up the long trip
-        /// </summary>
-        void StartCruising(Vector3D destination, string onArrivalMessage)
-        {
-            cruisingData.Initialize(cameraPilot.GetPosition(), destination, onArrivalMessage);
+            StartTrip(bse, bsePos, ExchangeTasks.DeliveryUnload);
         }
         #endregion
 
@@ -1370,6 +1309,11 @@ namespace IngameScript
             var blocks = new List<T>();
             GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && b.CustomName.Contains(name));
             return blocks;
+        }
+
+        bool IsForMe(string[] lines)
+        {
+            return Utils.ReadString(lines, "To") == shipId;
         }
 
         void UpdateShipStatus()
@@ -1763,8 +1707,53 @@ namespace IngameScript
             return true;
         }
 
-        void StartDock(string baseName, Vector3D baseParking, ExchangeTasks task)
+        /// <summary>
+        /// Set the autopilot
+        /// </summary>
+        void StartAutoPilot(IMyRemoteControl remote, Vector3D destination, string destinationName, double velocity, string onArrival)
         {
+            arrivalData.Initialize(destination, config.AlignExchangeDistanceThr, onArrival);
+
+            timerPilot.Trigger();
+
+            remote.ClearWaypoints();
+            remote.AddWaypoint(destination, destinationName);
+            remote.SetCollisionAvoidance(true);
+            remote.WaitForFreeWay = false;
+            remote.FlightMode = FlightMode.OneWay;
+            remote.SpeedLimit = (float)velocity;
+            remote.SetAutoPilotEnabled(true);
+        }
+        /// <summary>
+        /// Navigate the waypoints
+        /// </summary>
+        void StartApproach(IMyRemoteControl remote, ExchangeInfo info, string onLastWaypoint)
+        {
+            remote.SetAutoPilotEnabled(false);
+            remote.ClearWaypoints();
+
+            alignData.Initialize(info, onLastWaypoint);
+        }
+        /// <summary>
+        /// Set up the long trip
+        /// </summary>
+        void StartCruising(Vector3D origin, Vector3D destination, string onArrivalMessage)
+        {
+            cruisingData.Initialize(origin, destination, onArrivalMessage);
+        }
+
+        void StartTrip(string baseName, Vector3D baseParking, ExchangeTasks task)
+        {
+            //If the ship is docked, start departure from dock, and then start the cruise
+
+            List<string> parts2 = new List<string>()
+            {
+                $"REQUEST_DEPARTURE",
+                $"Ship={shipId}",
+            };
+            BroadcastMessage(parts2);
+
+
             List<string> parts = new List<string>()
             {
                 $"REQUEST_DOCK",
@@ -1773,7 +1762,7 @@ namespace IngameScript
             };
             string message = string.Join("|", parts);
 
-            StartCruising(baseParking, message);
+            StartCruising(remotePilot.GetPosition(), baseParking, message);
         }
         #endregion
 
