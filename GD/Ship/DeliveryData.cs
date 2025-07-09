@@ -18,7 +18,7 @@ namespace IngameScript
         public string OrderCustomer;
         public Vector3D OrderCustomerParking;
 
-        public ExchangeInfo Exchange;
+        public ExchangeInfo Exchange = new ExchangeInfo();
 
         public Vector3D AlignFwd;
         public Vector3D AlignUp;
@@ -125,7 +125,7 @@ namespace IngameScript
         }
         public void ClearExchange()
         {
-            Exchange = null;
+            Exchange = new ExchangeInfo();
         }
 
         public void PrepareNavigationFromExchange(string onLastWaypoint)

@@ -201,7 +201,7 @@ namespace IngameScript
 
         public void Main(string argument)
         {
-            WriteInfoLCDs($"{shipId} in channel {config.Channel}", false);
+            WriteInfoLCDs($"{shipId} in channel {config.Channel}");
             WriteInfoLCDs($"{CalculateCargoPercentage():P1} cargo.");
 
             if (!string.IsNullOrEmpty(argument))
@@ -326,7 +326,7 @@ namespace IngameScript
             };
             BroadcastMessage(parts);
 
-            timerWaiting.StartCountdown();
+            timerWaiting?.StartCountdown();
 
             deliveryData.Status = DeliveryStatus.WaitingForLoad;
         }
@@ -348,10 +348,10 @@ namespace IngameScript
             BroadcastMessage(parts);
 
             //Dock
-            timerLock.StartCountdown();
+            timerLock?.StartCountdown();
 
             //Load mode
-            timerLoad.StartCountdown();
+            timerLoad?.StartCountdown();
 
             deliveryData.Status = DeliveryStatus.Loading;
         }
@@ -389,7 +389,7 @@ namespace IngameScript
             };
             BroadcastMessage(parts);
 
-            timerWaiting.StartCountdown();
+            timerWaiting?.StartCountdown();
 
             deliveryData.Status = DeliveryStatus.WaitingForUnload;
         }
@@ -411,10 +411,10 @@ namespace IngameScript
             BroadcastMessage(parts);
 
             //Dock
-            timerLock.StartCountdown();
+            timerLock?.StartCountdown();
 
             //Unload mode
-            timerUnload.StartCountdown();
+            timerUnload?.StartCountdown();
 
             deliveryData.Status = DeliveryStatus.Unloading;
         }
@@ -510,7 +510,7 @@ namespace IngameScript
         void DeliveryWaiting()
         {
             //Puts the ship on hold
-            timerWaiting.StartCountdown();
+            timerWaiting?.StartCountdown();
 
             //It occurs when the ship reaches the last waypoint of the delivery route
             deliveryData.Clear();
@@ -1714,7 +1714,7 @@ namespace IngameScript
         {
             arrivalData.Initialize(destination, config.AlignExchangeDistanceThr, onArrival);
 
-            timerPilot.Trigger();
+            timerPilot?.Trigger();
 
             remote.ClearWaypoints();
             remote.AddWaypoint(destination, destinationName);

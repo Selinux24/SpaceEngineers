@@ -78,11 +78,11 @@ namespace IngameScript
             WildcardShipInfo = ReadConfig(customData, "WildcardShipInfo");
             WildcardLogLCDs = ReadConfig(customData, "WildcardLogLCDs");
 
-            ShipTimerPilot = ReadConfig(customData, "ShipTimerPilot");
+            ShipTimerPilot = ReadConfig(customData, "ShipTimerPilot", "");
             ShipTimerLock = ReadConfig(customData, "ShipTimerLock");
             ShipTimerUnlock = ReadConfig(customData, "ShipTimerUnlock");
-            ShipTimerLoad = ReadConfig(customData, "ShipTimerLoad");
-            ShipTimerUnload = ReadConfig(customData, "ShipTimerUnload");
+            ShipTimerLoad = ReadConfig(customData, "ShipTimerLoad", "");
+            ShipTimerUnload = ReadConfig(customData, "ShipTimerUnload", "");
             ShipTimerWaiting = ReadConfig(customData, "ShipTimerWaiting");
             ShipRemoteControlPilot = ReadConfig(customData, "ShipRemoteControlPilot");
             ShipCameraPilot = ReadConfig(customData, "ShipCameraPilot");

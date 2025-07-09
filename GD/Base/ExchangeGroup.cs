@@ -36,10 +36,7 @@ namespace IngameScript
 
         public bool IsValid()
         {
-            return
-                UpperConnector != null &&
-                SorterInput != null &&
-                SorterOutput != null;
+            return UpperConnector != null;
         }
         public bool IsFree()
         {

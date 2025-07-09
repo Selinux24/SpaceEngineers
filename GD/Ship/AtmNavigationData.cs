@@ -15,9 +15,9 @@ namespace IngameScript
 
         public AtmNavigationStatus CurrentState = AtmNavigationStatus.Idle;
         public bool Landing = false;
-        public Vector3D Origin;
-        public Vector3D Destination;
-        public ExchangeInfo Exchange;
+        public List<Vector3D> Waypoints = new List<Vector3D>();
+        public int CurrentWaypointIndex = 0;
+        public ExchangeInfo Exchange = new ExchangeInfo();
         public ExchangeTasks ExchangeTask = ExchangeTasks.None;
         public string Command = null;
         public bool HasTarget = false;
@@ -26,7 +26,7 @@ namespace IngameScript
         public double DistanceToTarget { get; private set; }
         public double Speed { get; private set; } = 0;
         public TimeSpan EstimatedArrival => Speed > 0.01 ? TimeSpan.FromSeconds(DistanceToTarget / Speed) : TimeSpan.Zero;
-        public double TotalDistance => Vector3D.Distance(Origin, Destination);
+        public double TotalDistance => GetTotalDistance();
         public double Progress => DistanceToTarget > 0 ? 1 - (DistanceToTarget / TotalDistance) : 1;
         public TimeSpan SeparationSecs => TimeSpan.FromSeconds(config.AtmNavigationSeparationSecs);
 
@@ -49,8 +49,9 @@ namespace IngameScript
         {
             CurrentState = AtmNavigationStatus.Undocking;
             Landing = landing;
-            Origin = origin;
-            Destination = destination;
+            Waypoints.Clear();
+            Waypoints.Add(origin);
+            Waypoints.Add(destination);
             Command = commad;
             HasTarget = true;
         }
@@ -58,8 +59,7 @@ namespace IngameScript
         {
             CurrentState = AtmNavigationStatus.Idle;
             Landing = false;
-            Origin = Vector3D.Zero;
-            Destination = Vector3D.Zero;
+            Waypoints.Clear();
             Command = null;
             HasTarget = false;
 
@@ -68,20 +68,50 @@ namespace IngameScript
 
         public void SetExchange(ExchangeInfo info, ExchangeTasks task)
         {
-            Exchange= info;
+            Exchange = info;
             ExchangeTask = task;
         }
         public void ClearExchange()
         {
-            Exchange = null;
+            Exchange = new ExchangeInfo();
             ExchangeTask = ExchangeTasks.None;
+        }
+
+        public double GetTotalDistance()
+        {
+            if (Waypoints.Count < 2)
+            {
+                return 0;
+            }
+
+            double d = 0;
+            for (int i = 1; i < Waypoints.Count; i++)
+            {
+                d += Vector3D.Distance(Waypoints[i - 1], Waypoints[i]);
+            }
+            return d;
+        }
+        public double GetRemainingDistance(Vector3D position)
+        {
+            if (Waypoints.Count < 2)
+            {
+                return 0;
+            }
+
+            double d = 0;
+            for (int i = CurrentWaypointIndex; i < Waypoints.Count; i++)
+            {
+                var p = i == CurrentWaypointIndex ? position : Waypoints[i - 1];
+                d += Vector3D.Distance(p, Waypoints[i]);
+            }
+            return d;
         }
 
         public void UpdatePositionAndVelocity(Vector3D position, double speed)
         {
-            var toTarget = Destination - position;
+            var toTarget = Waypoints[CurrentWaypointIndex] - position;
             DirectionToTarget = Vector3D.Normalize(toTarget);
-            DistanceToTarget = toTarget.Length();
+            DistanceToTarget = GetRemainingDistance(position);
             Speed = speed;
         }
 
@@ -130,8 +160,8 @@ namespace IngameScript
 
             CurrentState = (AtmNavigationStatus)Utils.ReadInt(parts, "CurrentState");
             Landing = Utils.ReadInt(parts, "Landing") == 1;
-            Origin = Utils.ReadVector(parts, "Origin");
-            Destination = Utils.ReadVector(parts, "Destination");
+            Waypoints.Clear();
+            Waypoints.AddRange(Utils.ReadVectorList(parts, "Waypoints"));
             Command = Utils.ReadString(parts, "Command");
             HasTarget = Utils.ReadInt(parts, "HasTarget") == 1;
 
@@ -149,8 +179,7 @@ namespace IngameScript
             {
                 $"CurrentState={(int)CurrentState}",
                 $"Landing={(Landing?1:0)}",
-                $"Origin={Utils.VectorToStr(Origin)}",
-                $"Destination={Utils.VectorToStr(Destination)}",
+                $"Waypoints={Utils.VectorListToStr(Waypoints)}",
                 $"Command={Command}",
                 $"HasTarget={(HasTarget?1:0)}",
 

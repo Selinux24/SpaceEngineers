@@ -11,6 +11,15 @@ namespace IngameScript
         public readonly List<Vector3D> ApproachingWaypoints;
         public readonly List<Vector3D> DepartingWaypoints;
 
+        public ExchangeInfo()
+        {
+            Exchange = null;
+            Forward = Vector3D.Zero;
+            Up = Vector3D.Zero;
+            ApproachingWaypoints = new List<Vector3D>();
+            DepartingWaypoints = new List<Vector3D>();
+        }
+
         public ExchangeInfo(string exchange, Vector3D forward, Vector3D up, List<Vector3D> waypoints)
         {
             Exchange = exchange;
