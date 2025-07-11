@@ -5,29 +5,15 @@ namespace IngameScript
 {
     class ExchangeInfo
     {
-        public readonly string Exchange;
-        public readonly Vector3D Forward;
-        public readonly Vector3D Up;
-        public readonly List<Vector3D> ApproachingWaypoints;
-        public readonly List<Vector3D> DepartingWaypoints;
+        public string Exchange = null;
+        public Vector3D Forward = Vector3D.Zero;
+        public Vector3D Up = Vector3D.Zero;
+        public readonly List<Vector3D> ApproachingWaypoints = new List<Vector3D>();
+        public readonly List<Vector3D> DepartingWaypoints = new List<Vector3D>();
 
         public ExchangeInfo()
         {
-            Exchange = null;
-            Forward = Vector3D.Zero;
-            Up = Vector3D.Zero;
-            ApproachingWaypoints = new List<Vector3D>();
-            DepartingWaypoints = new List<Vector3D>();
-        }
 
-        public ExchangeInfo(string exchange, Vector3D forward, Vector3D up, List<Vector3D> waypoints)
-        {
-            Exchange = exchange;
-            Forward = forward;
-            Up = up;
-            ApproachingWaypoints = new List<Vector3D>(waypoints);
-            DepartingWaypoints = new List<Vector3D>(waypoints);
-            DepartingWaypoints.Reverse();
         }
         public ExchangeInfo(string[] lines)
         {
@@ -37,6 +23,36 @@ namespace IngameScript
             ApproachingWaypoints = Utils.ReadVectorList(lines, "WayPoints");
             DepartingWaypoints = new List<Vector3D>(ApproachingWaypoints);
             DepartingWaypoints.Reverse();
+        }
+
+        public void Initialize(ExchangeInfo info)
+        {
+            Exchange = info.Exchange;
+            Forward = info.Forward;
+            Up = info.Up;
+            ApproachingWaypoints.Clear();
+            ApproachingWaypoints.AddRange(info.ApproachingWaypoints);
+            DepartingWaypoints.Clear();
+            DepartingWaypoints.AddRange(info.DepartingWaypoints);
+        }
+        public void Initialize(string exchange, Vector3D forward, Vector3D up, List<Vector3D> waypoints)
+        {
+            Exchange = exchange;
+            Forward = forward;
+            Up = up;
+            ApproachingWaypoints.Clear();
+            ApproachingWaypoints.AddRange(waypoints);
+            DepartingWaypoints.Clear();
+            DepartingWaypoints.AddRange(waypoints);
+            DepartingWaypoints.Reverse();
+        }
+        public void Clear()
+        {
+            Exchange = null;
+            Forward = Vector3D.Zero;
+            Up = Vector3D.Zero;
+            ApproachingWaypoints.Clear();
+            DepartingWaypoints.Clear();
         }
     }
 }

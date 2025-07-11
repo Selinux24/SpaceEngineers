@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using VRageMath;
 
 namespace IngameScript
 {
@@ -64,8 +66,7 @@ namespace IngameScript
         public readonly double AtmNavigationAlignThr; //Alignment accuracy
         public readonly double AtmNavigationMinLoad;
         public readonly double AtmNavigationMaxLoad;
-        public readonly string AtmNavigationLoadBase;
-        public readonly string AtmNavigationUnloadBase;
+        public readonly Route AtmNavigationRoute;
         public readonly double AtmNavigationSeparationSecs; //Separation thrust time before acceleration
 
         public Config(string customData)
@@ -125,8 +126,11 @@ namespace IngameScript
             AtmNavigationAlignThr = ReadConfigDouble(customData, "AtmNavigationAlignThr");
             AtmNavigationMinLoad = ReadConfigDouble(customData, "AtmNavigationMinLoad", 0.1);
             AtmNavigationMaxLoad = ReadConfigDouble(customData, "AtmNavigationMaxLoad", 0.9);
-            AtmNavigationLoadBase = ReadConfig(customData, "AtmNavigationLoadBase");
-            AtmNavigationUnloadBase = ReadConfig(customData, "AtmNavigationUnloadBase");
+            AtmNavigationRoute = new Route(
+                ReadConfig(customData, "AtmNavigationLoadBase"),
+                ReadConfig(customData, "AtmNavigationUnloadBase"),
+                ReadConfigVectorList(customData, "AtmNavigationToLoadBaseWaypoints", new List<Vector3D>()),
+                ReadConfigVectorList(customData, "AtmNavigationToUnloadBaseWaypoints", new List<Vector3D>()));
             AtmNavigationSeparationSecs = ReadConfigDouble(customData, "AtmNavigationSeparationSecs");
         }
         string ReadConfig(string customData, string name, string defaultValue = null)
@@ -134,39 +138,60 @@ namespace IngameScript
             var value = ReadConfigLine(customData, name);
             if (string.IsNullOrWhiteSpace(value))
             {
-                if (defaultValue != null)
+                if (defaultValue == null)
                 {
-                    return defaultValue;
+                    errors.AppendLine($"{name} not set.");
                 }
 
-                errors.AppendLine($"{name} not set.");
+                return defaultValue;
             }
 
             return value;
         }
-        int ReadConfigInt(string customData, string name, int defaultValue = 0)
+        int ReadConfigInt(string customData, string name, int? defaultValue = null)
         {
             var value = ReadConfigLine(customData, name);
             if (string.IsNullOrWhiteSpace(value))
             {
-                errors.AppendLine($"{name} not set.");
+                if (!defaultValue.HasValue)
+                {
+                    errors.AppendLine($"{name} not set.");
+                }
 
-                return defaultValue;
+                return 0;
             }
 
             return int.Parse(value.Trim());
         }
-        double ReadConfigDouble(string customData, string name, double defaultValue = 0)
+        double ReadConfigDouble(string customData, string name, double? defaultValue = null)
         {
             var value = ReadConfigLine(customData, name);
             if (string.IsNullOrWhiteSpace(value))
             {
-                errors.AppendLine($"{name} not set.");
+                if (!defaultValue.HasValue)
+                {
+                    errors.AppendLine($"{name} not set.");
+                }
 
-                return defaultValue;
+                return 0;
             }
 
             return double.Parse(value.Trim());
+        }
+        List<Vector3D> ReadConfigVectorList(string customData, string name, List<Vector3D> defaultValue = null)
+        {
+            var value = ReadConfigLine(customData, name);
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                if (defaultValue == null)
+                {
+                    errors.AppendLine($"{name} not set.");
+                }
+
+                return new List<Vector3D>();
+            }
+
+            return Utils.StrToVectorList(value.Trim());
         }
         static string ReadConfigLine(string customData, string name)
         {

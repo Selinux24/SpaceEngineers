@@ -17,7 +17,7 @@ namespace IngameScript
         public bool Landing = false;
         public List<Vector3D> Waypoints = new List<Vector3D>();
         public int CurrentWaypointIndex = 0;
-        public ExchangeInfo Exchange = new ExchangeInfo();
+        public readonly ExchangeInfo Exchange = new ExchangeInfo();
         public ExchangeTasks ExchangeTask = ExchangeTasks.None;
         public string Command = null;
         public bool HasTarget = false;
@@ -45,13 +45,12 @@ namespace IngameScript
             return true;
         }
 
-        public void Initialize(bool landing, Vector3D origin, Vector3D destination, string commad)
+        public void Initialize(bool landing, List<Vector3D> waypoints, string commad)
         {
             CurrentState = AtmNavigationStatus.Undocking;
             Landing = landing;
             Waypoints.Clear();
-            Waypoints.Add(origin);
-            Waypoints.Add(destination);
+            Waypoints.AddRange(waypoints);
             Command = commad;
             HasTarget = true;
         }
@@ -68,12 +67,12 @@ namespace IngameScript
 
         public void SetExchange(ExchangeInfo info, ExchangeTasks task)
         {
-            Exchange = info;
+            Exchange.Initialize(info);
             ExchangeTask = task;
         }
         public void ClearExchange()
         {
-            Exchange = new ExchangeInfo();
+            Exchange.Clear();
             ExchangeTask = ExchangeTasks.None;
         }
 
@@ -109,10 +108,21 @@ namespace IngameScript
 
         public void UpdatePositionAndVelocity(Vector3D position, double speed)
         {
-            var toTarget = Waypoints[CurrentWaypointIndex] - position;
+            if (Waypoints.Count == 0 || CurrentWaypointIndex >= Waypoints.Count)
+            {
+                return;
+            }
+
+            var target = Waypoints[CurrentWaypointIndex];
+            var toTarget = target - position;
             DirectionToTarget = Vector3D.Normalize(toTarget);
             DistanceToTarget = GetRemainingDistance(position);
             Speed = speed;
+
+            if (toTarget.Length() <= 1000)
+            {
+                CurrentWaypointIndex++;
+            }
         }
 
         public void StartSeparation()
@@ -165,7 +175,7 @@ namespace IngameScript
             Command = Utils.ReadString(parts, "Command");
             HasTarget = Utils.ReadInt(parts, "HasTarget") == 1;
 
-            Exchange = new ExchangeInfo(
+            Exchange.Initialize(
                 Utils.ReadString(parts, "ExchangeName"),
                 Utils.ReadVector(parts, "ExchangeForward"),
                 Utils.ReadVector(parts, "ExchangeUp"),

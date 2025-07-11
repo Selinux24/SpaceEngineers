@@ -89,7 +89,7 @@ namespace IngameScript
             SaveToStorage();
         }
 
-        public void Main(string argument, UpdateType updateSource)
+        public void Main(string argument)
         {
             DoRequestStatus();
             DoRequestDelivery();
@@ -200,9 +200,9 @@ namespace IngameScript
                 $"Command=START_DELIVERY",
                 $"To={ship.Name}",
                 $"Warehouse={order.Warehouse}",
-                $"WarehouseParking={Utils.VectorToStr(order.WarehouseParking)}",
+                $"ToWarehouse={Utils.VectorListToStr(order.ToWarehouse)}",
                 $"Customer={order.Customer}",
-                $"CustomerParking={Utils.VectorToStr(order.CustomerParking)}",
+                $"ToCustomer={Utils.VectorListToStr(order.ToCustomer)}",
                 $"Order={order.Id}",
             };
             BroadcastMessage(parts);
@@ -305,8 +305,8 @@ namespace IngameScript
             else if (argument == "ENABLE_EXCHANGE_REQUEST") EnableExchangeRequest();
             else if (argument.StartsWith("SHIP_LOADED")) ShipLoaded(argument);
             else if (argument.StartsWith("SET_ORDER")) SetOrder(argument);
-            else if (argument.StartsWith("REQUEST_LOAD")) RequestLoad(argument);
-            else if (argument.StartsWith("REQUEST_UNLOAD")) RequestUnload(argument);
+            else if (argument.StartsWith("START_LOAD_ROUTE")) StartLoadRoute(argument);
+            else if (argument.StartsWith("START_UNLOAD_ROUTE")) StartUnloadRoute(argument);
         }
         /// <summary>
         /// Resets the state
@@ -413,22 +413,15 @@ namespace IngameScript
             string[] lines = argument.Split('|');
 
             string warehouse = Utils.ReadString(lines, "Warehouse");
-            string warehouseParking = Utils.ReadString(lines, "WarehouseParking");
+            var toWarehouse = Utils.ReadVectorList(lines, "ToWarehouse");
+            var toCustomer = Utils.ReadVectorList(lines, "ToCustomer");
 
-            Order order = new Order
-            {
-                Warehouse = warehouse,
-                WarehouseParking = Utils.StrToVector(warehouseParking),
-                Customer = baseId,
-                CustomerParking = Utils.StrToVector(config.BaseParking),
-            };
-
-            orders.Add(order);
+            orders.Add(new Order(warehouse, toWarehouse, baseId, toCustomer));
         }
         /// <summary>
         /// The base calls a ship to load cargo.
         /// </summary>
-        void RequestLoad(string argument)
+        void StartLoadRoute(string argument)
         {
             string[] lines = argument.Split('|');
             string ship = Utils.ReadString(lines, "Ship");
@@ -438,7 +431,7 @@ namespace IngameScript
                 $"Command=REQUEST_LOAD",
                 $"From={baseId}",
                 $"To={ship}",
-                $"Parking={config.BaseParking}",
+                $"Route={config.BaseParking}",
             };
             BroadcastMessage(parts);
         }
@@ -446,7 +439,7 @@ namespace IngameScript
         /// The base calls a ship to unload cargo.
         /// </summary>
         /// <param name="argument"></param>
-        void RequestUnload(string argument)
+        void StartUnloadRoute(string argument)
         {
             string[] lines = argument.Split('|');
             string ship = Utils.ReadString(lines, "Ship");
@@ -456,7 +449,7 @@ namespace IngameScript
                 $"Command=REQUEST_UNLOAD",
                 $"From={baseId}",
                 $"To={ship}",
-                $"Parking={config.BaseParking}",
+                $"Route={config.BaseParking}",
             };
             BroadcastMessage(parts);
         }
@@ -470,14 +463,18 @@ namespace IngameScript
             string[] lines = signal.Split('|');
             string command = Utils.ReadArgument(lines, "Command");
 
+            if (!IsForMe(lines)) return;
+
             if (command == "RESPONSE_STATUS") CmdResponseStatus(lines);
+
             else if (command == "REQUEST_ORDER") CmdRequestOrder(lines);
-            else if (command == "REQUEST_LOAD") CmdRequestLoad(lines);
+            else if (command == "REQUEST_DELIVERY_LOAD") CmdRequestExchange(lines, ExchangeTasks.DeliveryLoad);
             else if (command == "LOADING") CmdLoading(lines);
-            else if (command == "REQUEST_UNLOAD") CmdRequestUnload(lines);
+            else if (command == "REQUEST_DELIVERY_UNLOAD") CmdRequestExchange(lines, ExchangeTasks.DeliveryUnload);
             else if (command == "UNLOADING") CmdUnloading(lines);
             else if (command == "UNLOADED") CmdUnloaded(lines);
             else if (command == "ORDER_RECEIVED") CmdOrderReceived(lines);
+
             else if (command == "REQUEST_DOCK") CmdRequestDock(lines);
         }
         /// <summary>
@@ -486,12 +483,6 @@ namespace IngameScript
         /// </summary>
         void CmdResponseStatus(string[] lines)
         {
-            string to = Utils.ReadString(lines, "To");
-            if (to != baseId)
-            {
-                return;
-            }
-
             string from = Utils.ReadString(lines, "From");
             ShipStatus status = (ShipStatus)Utils.ReadInt(lines, "Status");
             var cargo = Utils.ReadDouble(lines, "Cargo");
@@ -511,29 +502,19 @@ namespace IngameScript
             ship.StatusMessage = statusMessage;
             ship.UpdateTime = DateTime.Now;
         }
+
         /// <summary>
         /// Seq_B_2 - WH records the order (order list)
         /// Request:  REQUEST_ORDER
         /// </summary>
         void CmdRequestOrder(string[] lines)
         {
-            string to = Utils.ReadString(lines, "To");
-            if (to != baseId)
-            {
-                return;
-            }
-
+            var toWarehouse = Utils.ReadVectorList(lines, "ToWarehouse");
             string customer = Utils.ReadString(lines, "Customer");
-            Vector3D customerParking = Utils.ReadVector(lines, "CustomerParking");
+            var toCustomer = Utils.ReadVectorList(lines, "ToCustomer");
             string items = Utils.ReadString(lines, "Items");
 
-            Order order = new Order
-            {
-                Warehouse = baseId,
-                WarehouseParking = Utils.StrToVector(config.BaseParking),
-                Customer = customer,
-                CustomerParking = customerParking,
-            };
+            Order order = new Order(baseId, toWarehouse, customer, toCustomer);
 
             foreach (var item in items.Split(';'))
             {
@@ -556,17 +537,11 @@ namespace IngameScript
             orders.Add(order);
         }
         /// <summary>
-        /// Seq_XXX - BASEX registers exchange request (exchange request list)
-        /// Request:  REQUEST_LOAD
+        /// Seq_XXX/Seq_C_5 - BASEX registers exchange request (exchange request list)
+        /// Request:  REQUEST_DELIVERY_LOAD/REQUEST_DELIVERY_UNLOAD
         /// </summary>
-        void CmdRequestLoad(string[] lines)
+        void CmdRequestExchange(string[] lines, ExchangeTasks task)
         {
-            string to = Utils.ReadString(lines, "To");
-            if (to != baseId)
-            {
-                return;
-            }
-
             string from = Utils.ReadString(lines, "From");
             int orderId = Utils.ReadInt(lines, "Order");
 
@@ -577,7 +552,7 @@ namespace IngameScript
                 Ship = from,
                 OrderId = orderId,
                 Idle = true,
-                Task = ExchangeTasks.DeliveryLoad,
+                Task = task,
             });
         }
         /// <summary>
@@ -586,12 +561,6 @@ namespace IngameScript
         /// </summary>
         void CmdLoading(string[] lines)
         {
-            string to = Utils.ReadString(lines, "To");
-            if (to != baseId)
-            {
-                return;
-            }
-
             string from = Utils.ReadString(lines, "From");
             int orderId = Utils.ReadInt(lines, "Order");
             string exchangeName = Utils.ReadString(lines, "Exchange");
@@ -613,41 +582,10 @@ namespace IngameScript
             exchange.TimerUnload?.StartCountdown();
         }
         /// <summary>
-        /// Seq_C_5 - BASEX registers exchange request (exchange request list)
-        /// Request:  REQUEST_UNLOAD
-        /// </summary>
-        void CmdRequestUnload(string[] lines)
-        {
-            string to = Utils.ReadString(lines, "To");
-            if (to != baseId)
-            {
-                return;
-            }
-
-            string from = Utils.ReadString(lines, "From");
-            int orderId = Utils.ReadInt(lines, "Order");
-
-            exchangeRequests.RemoveAll(r => r.Ship == from);
-
-            exchangeRequests.Add(new ExchangeRequest
-            {
-                Ship = from,
-                OrderId = orderId,
-                Idle = true,
-                Task = ExchangeTasks.DeliveryUnload,
-            });
-        }
-        /// <summary>
         /// Seq_D_2c - BASEX puts the exchange in unload mode
         /// </summary>
         void CmdUnloading(string[] lines)
         {
-            string to = Utils.ReadString(lines, "To");
-            if (to != baseId)
-            {
-                return;
-            }
-
             string exchangeName = Utils.ReadString(lines, "Exchange");
             var exchange = exchanges.Find(e => e.Name == exchangeName);
             if (exchange == null)
@@ -664,12 +602,6 @@ namespace IngameScript
         /// </summary>
         void CmdUnloaded(string[] lines)
         {
-            string to = Utils.ReadString(lines, "To");
-            if (to != baseId)
-            {
-                return;
-            }
-
             string warehouse = Utils.ReadString(lines, "Warehouse");
 
             //Eliminar la orden de descarga del pedido
@@ -695,12 +627,6 @@ namespace IngameScript
         /// </summary>
         void CmdOrderReceived(string[] lines)
         {
-            string to = Utils.ReadString(lines, "To");
-            if (to != baseId)
-            {
-                return;
-            }
-
             //Eliminar el pedido de la lista
             int orderId = Utils.ReadInt(lines, "Order");
             var order = orders.FirstOrDefault(o => o.Id == orderId);
@@ -709,19 +635,16 @@ namespace IngameScript
                 orders.Remove(order);
             }
         }
+
         /// <summary>
         /// 
         /// </summary>
         void CmdRequestDock(string[] lines)
         {
-            string to = Utils.ReadString(lines, "To");
-            if (to != baseId)
-            {
-                return;
-            }
-
             string from = Utils.ReadString(lines, "From");
             ExchangeTasks task = (ExchangeTasks)Utils.ReadInt(lines, "Task");
+
+            exchangeRequests.RemoveAll(r => r.Ship == from);
 
             exchangeRequests.Add(new ExchangeRequest
             {
@@ -817,6 +740,11 @@ namespace IngameScript
                     WriteLog($"ExchangeGroup {exchangeGroup.Name} is invalid.");
                 }
             }
+        }
+
+        bool IsForMe(string[] lines)
+        {
+            return Utils.ReadString(lines, "To") == baseId;
         }
 
         List<ExchangeRequest> GetPendingExchangeRequests()

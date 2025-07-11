@@ -50,6 +50,23 @@ namespace IngameScript
                 double.Parse(trimmed[2])
             );
         }
+        public static List<Vector3D> StrToVectorList(string data)
+        {
+            List<Vector3D> res = new List<Vector3D>();
+
+            if (string.IsNullOrEmpty(data))
+            {
+                return res;
+            }
+
+            string[] points = data.Split(VariableSep);
+            for (int i = 0; i < points.Length; i++)
+            {
+                res.Add(StrToVector(points[i]));
+            }
+
+            return res;
+        }
 
         public static string ReadString(string[] lines, string name, string defaultValue = "")
         {
@@ -91,6 +108,16 @@ namespace IngameScript
             }
 
             return StrToVector(value);
+        }
+        public static List<Vector3D> ReadVectorList(string[] lines, string name)
+        {
+            string value = ReadString(lines, name);
+            if (string.IsNullOrEmpty(value))
+            {
+                return new List<Vector3D>();
+            }
+
+            return StrToVectorList(value);
         }
     }
 }

@@ -245,16 +245,16 @@ namespace IngameScript
         /// Request:  START_DELIVERY
         /// Execute:  REQUEST_LOAD_TO_WAREHOUSE when the ship reaches the WH parking lot
         /// </summary>
-        void DeliveryTriggerStart(int order, string warehouse, Vector3D warehouseParking, string customer, Vector3D customerParking)
+        void DeliveryTriggerStart(int order, string warehouse, List<Vector3D> toWarehouse, string customer, List<Vector3D> toCustomer)
         {
             deliveryData.Status = DeliveryStatus.RouteToLoad;
 
             deliveryData.SetOrder(
                 order,
                 warehouse,
-                warehouseParking,
+                toWarehouse,
                 customer,
-                customerParking);
+                toCustomer);
 
             deliveryData.PrepareNavigationToWarehouse("REQUEST_LOAD_TO_WAREHOUSE");
 
@@ -294,9 +294,9 @@ namespace IngameScript
         {
             string[] lines = argument.Split('|');
             var bse = Utils.ReadString(lines, "Base");
-            var bsePos = Utils.ReadVector(lines, "BaseParking");
+            var route = Utils.ReadVectorList(lines, "Route");
 
-            StartTrip(bse, bsePos, ExchangeTasks.DeliveryLoad);
+            StartTrip(bse, route, ExchangeTasks.DeliveryLoad);
         }
         /// <summary>
         /// Goes to a base defined in the argument to unload cargo.
@@ -305,21 +305,21 @@ namespace IngameScript
         {
             string[] lines = argument.Split('|');
             var bse = Utils.ReadString(lines, "Base");
-            var bsePos = Utils.ReadVector(lines, "BaseParking");
+            var route = Utils.ReadVectorList(lines, "Route");
 
-            StartTrip(bse, bsePos, ExchangeTasks.DeliveryUnload);
+            StartTrip(bse, route, ExchangeTasks.DeliveryUnload);
         }
 
         /// <summary>
         /// Seq_xxx - SHIPX arrives at Parking_WH and requests permission to load
         /// Request:  REQUEST_LOAD_TO_WAREHOUSE
-        /// Execute:  REQUEST_LOAD
+        /// Execute:  REQUEST_DELIVERY_LOAD
         /// </summary>
         void DeliveryRequestLoad()
         {
             List<string> parts = new List<string>()
             {
-                $"Command=REQUEST_LOAD",
+                $"Command=REQUEST_DELIVERY_LOAD",
                 $"To={deliveryData.OrderWarehouse}",
                 $"From={shipId}",
                 $"Order={deliveryData.OrderId}"
@@ -376,13 +376,13 @@ namespace IngameScript
         /// <summary>
         /// Seq_C_4c - SHIPX arrives at Parking_BASEX and requests permission to unload
         /// Request:  REQUEST_UNLOAD_TO_CUSTOMER
-        /// Execute:  REQUEST_UNLOAD
+        /// Execute:  REQUEST_DELIVERY_UNLOAD
         /// </summary>
         void DeliveryRequestUnload()
         {
             List<string> parts = new List<string>()
             {
-                $"Command=REQUEST_UNLOAD",
+                $"Command=REQUEST_DELIVERY_UNLOAD",
                 $"To={deliveryData.OrderCustomer}",
                 $"From={shipId}",
                 $"Order={deliveryData.OrderId}"
@@ -459,7 +459,8 @@ namespace IngameScript
         /// </summary>
         void DeliveryApproachToParking()
         {
-            var dst = deliveryData.DestinationPosition;
+            var dstWp = deliveryData.DestinationWaypoints;
+            var dst = deliveryData.DestinationWaypoints[deliveryData.DestinationWaypoints.Count - 1];
             var dstName = deliveryData.DestinationName;
             var onArrival = deliveryData.OnDestinationArrival;
 
@@ -468,7 +469,7 @@ namespace IngameScript
             if (Vector3D.Distance(pos, dst) >= 5000)
             {
                 //Start cruise mode
-                StartCruising(pos, dst, onArrival);
+                StartCruising(pos, dstWp, onArrival);
             }
             else
             {
@@ -713,7 +714,7 @@ namespace IngameScript
             WriteInfoLCDs(cruisingData.GetTripState());
 
             var maxSpeed = config.CruisingMaxSpeed;
-            if (Vector3D.Distance(cruisingData.Origin, cameraPilot.GetPosition()) <= config.CruisingToBasesDistanceThr)
+            if (Vector3D.Distance(cruisingData.NextWaypoint, cameraPilot.GetPosition()) <= config.CruisingToBasesDistanceThr)
             {
                 maxSpeed = config.CruisingMaxAccelerationSpeed;
             }
@@ -886,7 +887,7 @@ namespace IngameScript
             List<string> parts = new List<string>()
             {
                 $"Command=REQUEST_DOCK",
-                $"To={config.AtmNavigationLoadBase}",
+                $"To={config.AtmNavigationRoute.LoadBase}",
                 $"From={shipId}",
                 $"Task={(int)ExchangeTasks.RocketLoad}",
             };
@@ -1024,7 +1025,7 @@ namespace IngameScript
                     List<string> parts = new List<string>()
                     {
                         $"Command=REQUEST_DOCK",
-                        $"To={config.AtmNavigationUnloadBase}",
+                        $"To={config.AtmNavigationRoute.UnloadBase}",
                         $"From={shipId}",
                         $"Task={(int)ExchangeTasks.RocketUnload}",
                     };
@@ -1043,7 +1044,7 @@ namespace IngameScript
                     List<string> parts = new List<string>()
                     {
                         $"Command=REQUEST_DOCK",
-                        $"To={config.AtmNavigationLoadBase}",
+                        $"To={config.AtmNavigationRoute.LoadBase}",
                         $"From={shipId}",
                         $"Task={(int)ExchangeTasks.RocketLoad}",
                     };
@@ -1059,25 +1060,9 @@ namespace IngameScript
                 deliveryData.Status = DeliveryStatus.Idle;
             }
         }
-        void AtmNavigationTriggerLoad(bool landing, Vector3D parking, ExchangeInfo info, ExchangeTasks task)
+        void AtmNavigationTriggerInit(bool landing, List<Vector3D> waypoints, ExchangeInfo info, ExchangeTasks task, string command)
         {
-            atmNavigationData.Initialize(
-                landing,
-                remotePilot.GetPosition(),
-                parking,
-                "START_LOADING");
-
-            atmNavigationData.SetExchange(info, task);
-
-            timerUnlock?.StartCountdown();
-        }
-        void AtmNavigationTriggerUnload(bool landing, Vector3D parking, ExchangeInfo info, ExchangeTasks task)
-        {
-            atmNavigationData.Initialize(
-                landing,
-                remotePilot.GetPosition(),
-                parking,
-                "START_UNLOADING");
+            atmNavigationData.Initialize(landing, waypoints, command);
 
             atmNavigationData.SetExchange(info, task);
 
@@ -1230,9 +1215,9 @@ namespace IngameScript
             DeliveryTriggerStart(
                 Utils.ReadInt(lines, "Order"),
                 Utils.ReadString(lines, "Warehouse"),
-                Utils.ReadVector(lines, "WarehouseParking"),
+                Utils.ReadVectorList(lines, "ToWarehouse"),
                 Utils.ReadString(lines, "Customer"),
-                Utils.ReadVector(lines, "CustomerParking"));
+                Utils.ReadVectorList(lines, "ToCustomer"));
         }
 
         /// <summary>
@@ -1253,19 +1238,21 @@ namespace IngameScript
             }
             else if (task == ExchangeTasks.RocketLoad)
             {
-                AtmNavigationTriggerLoad(
+                AtmNavigationTriggerInit(
                     Utils.ReadInt(lines, "Landing") == 1,
-                    Utils.ReadVector(lines, "Parking"),
+                    config.AtmNavigationRoute.GetLoadWaypoints(remotePilot.GetPosition()),
                     new ExchangeInfo(lines),
-                    task);
+                    task,
+                    "START_LOADING");
             }
             else if (task == ExchangeTasks.RocketUnload)
             {
-                AtmNavigationTriggerUnload(
+                AtmNavigationTriggerInit(
                     Utils.ReadInt(lines, "Landing") == 1,
-                    Utils.ReadVector(lines, "Parking"),
+                    config.AtmNavigationRoute.GetUnLoadWaypoints(remotePilot.GetPosition()),
                     new ExchangeInfo(lines),
-                    task);
+                    task,
+                    "START_UNLOADING");
             }
         }
 
@@ -1275,9 +1262,9 @@ namespace IngameScript
         void CmdRequestLoad(string[] lines)
         {
             var bse = Utils.ReadString(lines, "From");
-            var bsePos = Utils.ReadVector(lines, "Parking");
+            var route = Utils.ReadVectorList(lines, "Route");
 
-            StartTrip(bse, bsePos, ExchangeTasks.DeliveryLoad);
+            StartTrip(bse, route, ExchangeTasks.DeliveryLoad);
         }
         /// <summary>
         /// A base calls the ship to unload cargo.
@@ -1285,9 +1272,9 @@ namespace IngameScript
         void CmdRequestUnload(string[] lines)
         {
             var bse = Utils.ReadString(lines, "From");
-            var bsePos = Utils.ReadVector(lines, "Parking");
+            var route = Utils.ReadVectorList(lines, "Route");
 
-            StartTrip(bse, bsePos, ExchangeTasks.DeliveryUnload);
+            StartTrip(bse, route, ExchangeTasks.DeliveryUnload);
         }
         #endregion
 
@@ -1737,12 +1724,12 @@ namespace IngameScript
         /// <summary>
         /// Set up the long trip
         /// </summary>
-        void StartCruising(Vector3D origin, Vector3D destination, string onArrivalMessage)
+        void StartCruising(Vector3D position, List<Vector3D> waypoints, string onArrivalMessage)
         {
-            cruisingData.Initialize(origin, destination, onArrivalMessage);
+            cruisingData.Initialize(position, waypoints, onArrivalMessage);
         }
 
-        void StartTrip(string baseName, Vector3D baseParking, ExchangeTasks task)
+        void StartTrip(string baseName, List<Vector3D> waypoints, ExchangeTasks task)
         {
             //If the ship is docked, start departure from dock, and then start the cruise
 
@@ -1753,7 +1740,6 @@ namespace IngameScript
             };
             BroadcastMessage(parts2);
 
-
             List<string> parts = new List<string>()
             {
                 $"REQUEST_DOCK",
@@ -1762,7 +1748,7 @@ namespace IngameScript
             };
             string message = string.Join("|", parts);
 
-            StartCruising(remotePilot.GetPosition(), baseParking, message);
+            StartCruising(remotePilot.GetPosition(), waypoints, message);
         }
         #endregion
 

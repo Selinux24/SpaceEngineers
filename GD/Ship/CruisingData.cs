@@ -11,8 +11,8 @@ namespace IngameScript
         int tickCount = 0;
 
         public CruisingStatus CurrentState = CruisingStatus.Idle;
-        public Vector3D Origin;
-        public Vector3D Destination;
+        public readonly List<Vector3D> Waypoints = new List<Vector3D>();
+        public int CurrentWaypointIndex = 0;
         public string TerminalMessage = null;
         public bool HasTarget = false;
         public bool Thrusting = false;
@@ -23,8 +23,9 @@ namespace IngameScript
         public double DistanceToTarget { get; private set; }
         public double Speed { get; private set; } = 0;
         public TimeSpan EstimatedArrival => Speed > 0.01 ? TimeSpan.FromSeconds(DistanceToTarget / Speed) : TimeSpan.Zero;
-        public double TotalDistance => Vector3D.Distance(Origin, Destination);
+        public double TotalDistance => GetTotalDistance();
         public double Progress => DistanceToTarget > 0 ? 1 - (DistanceToTarget / TotalDistance) : 1;
+        public Vector3D NextWaypoint => CurrentWaypointIndex < Waypoints.Count ? Waypoints[CurrentWaypointIndex] : Vector3D.Zero;
 
         private MyDetectedEntityInfo lastHit;
 
@@ -43,10 +44,12 @@ namespace IngameScript
             return true;
         }
 
-        public void Initialize(Vector3D origin, Vector3D destination, string terminalMessage)
+        public void Initialize(Vector3D position, List<Vector3D> waypoints, string terminalMessage)
         {
-            Origin = origin;
-            Destination = destination;
+            Waypoints.Clear();
+            Waypoints.Add(position);
+            Waypoints.AddRange(waypoints);
+            CurrentWaypointIndex = 1;
             TerminalMessage = terminalMessage;
             HasTarget = true;
             EvadingPoints.Clear();
@@ -58,8 +61,8 @@ namespace IngameScript
         }
         public void Clear()
         {
-            Origin = Vector3D.Zero;
-            Destination = Vector3D.Zero;
+            Waypoints.Clear();
+            CurrentWaypointIndex = 0;
             TerminalMessage = null;
             HasTarget = false;
             EvadingPoints.Clear();
@@ -69,12 +72,53 @@ namespace IngameScript
             lastHit = new MyDetectedEntityInfo();
         }
 
+        public double GetTotalDistance()
+        {
+            if (Waypoints.Count < 2)
+            {
+                return 0;
+            }
+
+            double d = 0;
+            for (int i = 1; i < Waypoints.Count; i++)
+            {
+                d += Vector3D.Distance(Waypoints[i - 1], Waypoints[i]);
+            }
+            return d;
+        }
+        public double GetRemainingDistance(Vector3D position)
+        {
+            if (Waypoints.Count < 2)
+            {
+                return 0;
+            }
+
+            double d = 0;
+            for (int i = CurrentWaypointIndex; i < Waypoints.Count; i++)
+            {
+                var p = i == CurrentWaypointIndex ? position : Waypoints[i - 1];
+                d += Vector3D.Distance(p, Waypoints[i]);
+            }
+            return d;
+        }
+
         public void UpdatePositionAndVelocity(Vector3D position, double speed)
         {
-            var toTarget = Destination - position;
+            if (Waypoints.Count == 0 || CurrentWaypointIndex >= Waypoints.Count)
+            {
+                return;
+            }
+
+            var target = Waypoints[CurrentWaypointIndex];
+            var toTarget = target - position;
             DirectionToTarget = Vector3D.Normalize(toTarget);
-            DistanceToTarget = toTarget.Length();
+            DistanceToTarget = GetRemainingDistance(position);
             Speed = speed;
+
+            if (toTarget.Length() <= 1000)
+            {
+                CurrentWaypointIndex++;
+            }
         }
 
         public bool IsObstacleAhead(IMyCameraBlock camera, double collisionDetectRange, Vector3D velocity)
@@ -149,8 +193,8 @@ namespace IngameScript
             var parts = storageLine.Split('¬');
 
             CurrentState = (CruisingStatus)Utils.ReadInt(parts, "CurrentState");
-            Origin = Utils.ReadVector(parts, "Origin");
-            Destination = Utils.ReadVector(parts, "Destination");
+            Waypoints.Clear();
+            Waypoints.AddRange(Utils.ReadVectorList(parts, "Waypoints"));
             TerminalMessage = Utils.ReadString(parts, "TerminalMessage");
             HasTarget = Utils.ReadInt(parts, "HasTarget") == 1;
             Thrusting = Utils.ReadInt(parts, "Thrusting") == 1;
@@ -162,8 +206,7 @@ namespace IngameScript
             List<string> parts = new List<string>()
             {
                 $"CurrentState={(int)CurrentState}",
-                $"Origin={Utils.VectorToStr(Origin)}",
-                $"Destination={Utils.VectorToStr(Destination)}",
+                $"Waypoints={Utils.VectorListToStr(Waypoints)}",
                 $"TerminalMessage={TerminalMessage}",
                 $"HasTarget={(HasTarget?1:0)}",
                 $"Thrusting={(Thrusting?1:0)}",

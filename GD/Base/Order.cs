@@ -10,9 +10,9 @@ namespace IngameScript
 
         public int Id;
         public string Customer;
-        public Vector3D CustomerParking;
+        public readonly List<Vector3D> ToCustomer = new List<Vector3D>();
         public string Warehouse;
-        public Vector3D WarehouseParking;
+        public readonly List<Vector3D> ToWarehouse = new List<Vector3D>();
         public Dictionary<string, int> Items = new Dictionary<string, int>();
         public string AssignedShip;
 
@@ -24,6 +24,14 @@ namespace IngameScript
         {
             LoadFromStorage(line);
         }
+        public Order(string warehouse, List<Vector3D> toWarehouse, string customer, List<Vector3D> toCustomer)
+        {
+            Id = ++lastId;
+            Warehouse = warehouse;
+            ToWarehouse.AddRange(toWarehouse);
+            Customer = customer;
+            ToCustomer.AddRange(toCustomer);
+        }
 
         public string SaveToStorage()
         {
@@ -31,9 +39,9 @@ namespace IngameScript
             {
                 $"Id={Id}",
                 $"Customer={Customer}",
-                $"CustomerParking={Utils.VectorToStr(CustomerParking)}",
+                $"ToCustomer={Utils.VectorListToStr(ToCustomer)}",
                 $"Warehouse={Warehouse}",
-                $"WarehouseParking={Utils.VectorToStr(WarehouseParking)}",
+                $"ToWarehouse={Utils.VectorListToStr(ToWarehouse)}",
                 $"AssignedShip={AssignedShip}",
                 $"Items={string.Join(";", Items.Select(i => $"{i.Key}:{i.Value}"))}",
             };
@@ -45,9 +53,11 @@ namespace IngameScript
 
             Id = Utils.ReadInt(parts, "Id");
             Customer = Utils.ReadString(parts, "Customer");
-            CustomerParking = Utils.ReadVector(parts, "CustomerParking");
+            ToCustomer.Clear();
+            ToCustomer.AddRange(Utils.ReadVectorList(parts, "ToCustomer"));
             Warehouse = Utils.ReadString(parts, "Warehouse");
-            WarehouseParking = Utils.ReadVector(parts, "WarehouseParking");
+            ToWarehouse.Clear();
+            ToWarehouse.AddRange(Utils.ReadVectorList(parts, "ToWarehouse"));
             AssignedShip = Utils.ReadString(parts, "AssignedShip");
 
             Items.Clear();
