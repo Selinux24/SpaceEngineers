@@ -8,10 +8,6 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Base", "GD\Base\Base.csproj", "{B5C46564-3070-4098-0269-8AC15AEB3719}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Docs", "Docs", "{2508BBB3-CC0E-4906-8E3F-083573FD0988}"
-	ProjectSection(SolutionItems) = preProject
-		GD\Doc_Eventos.txt = GD\Doc_Eventos.txt
-		GD\Doc_Secuencia.txt = GD\Doc_Secuencia.txt
-	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SEMocks", "SEMocks\SEMocks.csproj", "{ABDAB762-7D8C-13B6-C25B-8DA568F445C3}"
 EndProject
@@ -26,6 +22,12 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InventoryListener", "Inventory\InventoryListener\InventoryListener.csproj", "{35D20B69-88AC-879D-B6BE-36C38947F557}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InventoryMonitor", "Inventory\InventoryMonitor\InventoryMonitor.csproj", "{796CB677-EC26-A3AB-E8DD-724579C6C84E}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "RogueTrader", "RogueTrader", "{FF5422DF-34A5-4C82-8312-AC3BCC41202F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RogueBase", "RogueTrader\RogueBase\RogueBase.csproj", "{E9557D28-76EE-564F-BEC7-28C4262620D3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RogueShip", "RogueTrader\RogueShip\RogueShip.csproj", "{6D642FE8-A025-0FEB-315B-454477CFD4ED}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -61,6 +63,14 @@ Global
 		{796CB677-EC26-A3AB-E8DD-724579C6C84E}.Debug|x64.Build.0 = Debug|x64
 		{796CB677-EC26-A3AB-E8DD-724579C6C84E}.Release|x64.ActiveCfg = Release|x64
 		{796CB677-EC26-A3AB-E8DD-724579C6C84E}.Release|x64.Build.0 = Release|x64
+		{E9557D28-76EE-564F-BEC7-28C4262620D3}.Debug|x64.ActiveCfg = Debug|x64
+		{E9557D28-76EE-564F-BEC7-28C4262620D3}.Debug|x64.Build.0 = Debug|x64
+		{E9557D28-76EE-564F-BEC7-28C4262620D3}.Release|x64.ActiveCfg = Release|x64
+		{E9557D28-76EE-564F-BEC7-28C4262620D3}.Release|x64.Build.0 = Release|x64
+		{6D642FE8-A025-0FEB-315B-454477CFD4ED}.Debug|x64.ActiveCfg = Debug|x64
+		{6D642FE8-A025-0FEB-315B-454477CFD4ED}.Debug|x64.Build.0 = Debug|x64
+		{6D642FE8-A025-0FEB-315B-454477CFD4ED}.Release|x64.ActiveCfg = Release|x64
+		{6D642FE8-A025-0FEB-315B-454477CFD4ED}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -71,6 +81,8 @@ Global
 		{49399A38-1BEC-068C-3B42-BEFB77D927BF} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 		{35D20B69-88AC-879D-B6BE-36C38947F557} = {C0FDFFE1-3EDE-48B7-9551-AB5406A7AD4A}
 		{796CB677-EC26-A3AB-E8DD-724579C6C84E} = {C0FDFFE1-3EDE-48B7-9551-AB5406A7AD4A}
+		{E9557D28-76EE-564F-BEC7-28C4262620D3} = {FF5422DF-34A5-4C82-8312-AC3BCC41202F}
+		{6D642FE8-A025-0FEB-315B-454477CFD4ED} = {FF5422DF-34A5-4C82-8312-AC3BCC41202F}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {271CF823-5D34-427E-8578-F9C0AD612EC6}
