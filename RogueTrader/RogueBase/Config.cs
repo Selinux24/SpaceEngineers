@@ -12,14 +12,13 @@ namespace IngameScript
         public readonly string BaseParking;
         public readonly bool IsRocketBase;
 
-        public bool ShowExchanges = true;
         public bool ShowShips = true;
-        public bool ShowOrders = true;
+        public bool ShowExchanges = true;
         public bool ShowExchangeRequests = true;
         public bool EnableLogs = false;
 
         public readonly string BaseCamera;
-        public readonly string BaseWarehouses;
+
         public readonly string BaseDataLCDs;
         public readonly string BaseLogLCDs;
 
@@ -27,15 +26,10 @@ namespace IngameScript
         public readonly double ExchangePathDistance; //Meters, distance from the dock to the first waypoint
         public readonly double ExchangeDockRequestTimeThr; //Seconds
         public readonly System.Text.RegularExpressions.Regex ExchangesRegex;
-        public readonly string ExchangeUpperConnector;
-        public readonly string ExchangeLowerConnector;
-        public readonly string ExchangeSorterInput;
-        public readonly string ExchangeSorterOutput;
-        public readonly string ExchangeTimerPrepare;
-        public readonly string ExchangeTimerUnload;
+        public readonly string ExchangeMainConnector;
+        public readonly string ExchangeOtherConnector;
 
         public readonly int RequestStatusInterval; // seconds, how often to request status from ships
-        public readonly int RequestDeliveryInterval; // seconds, how often to request deliveries
         public readonly int RequestReceptionInterval; // seconds, how often to request receptions
 
         public Config(string customData)
@@ -44,31 +38,24 @@ namespace IngameScript
             BaseParking = ReadConfig(customData, "Parking");
             IsRocketBase = ReadConfig(customData, "IsRocketBase").ToLower() == "true";
 
-            ShowExchanges = ReadConfig(customData, "ShowExchanges", "true") == "true";
             ShowShips = ReadConfig(customData, "ShowShips", "true") == "true";
-            ShowOrders = ReadConfig(customData, "ShowOrders", "true") == "true";
+            ShowExchanges = ReadConfig(customData, "ShowExchanges", "true") == "true";
             ShowExchangeRequests = ReadConfig(customData, "ShowExchangeRequests", "true") == "true";
             EnableLogs = ReadConfig(customData, "EnableLogs", "false") == "true";
 
-            BaseCamera = ReadConfig(customData, "Camera");
-            BaseWarehouses = ReadConfig(customData, "Warehouses");
-
             BaseDataLCDs = ReadConfig(customData, "DataLCDs");
             BaseLogLCDs = ReadConfig(customData, "LogLCDs");
+
+            BaseCamera = ReadConfig(customData, "Camera");
 
             ExchangeNumWaypoints = ReadConfigInt(customData, "ExchangeNumWaypoints");
             ExchangePathDistance = ReadConfigDouble(customData, "ExchangePathDistance");
             ExchangeDockRequestTimeThr = ReadConfigDouble(customData, "ExchangeDockRequestTimeThr");
             ExchangesRegex = new System.Text.RegularExpressions.Regex(ReadConfig(customData, "ExchangeGroupName"));
-            ExchangeUpperConnector = ReadConfig(customData, "ExchangeUpperConnector");
-            ExchangeLowerConnector = ReadConfig(customData, "ExchangeLowerConnector");
-            ExchangeSorterInput = ReadConfig(customData, "ExchangeSorterInput");
-            ExchangeSorterOutput = ReadConfig(customData, "ExchangeSorterOutput");
-            ExchangeTimerPrepare = ReadConfig(customData, "ExchangeTimerPrepare");
-            ExchangeTimerUnload = ReadConfig(customData, "ExchangeTimerUnload");
+            ExchangeMainConnector = ReadConfig(customData, "ExchangeMainConnector");
+            ExchangeOtherConnector = ReadConfig(customData, "ExchangeOtherConnector");
 
             RequestStatusInterval = ReadConfigInt(customData, "RequestStatusInterval");
-            RequestDeliveryInterval = ReadConfigInt(customData, "RequestDeliveryInterval");
             RequestReceptionInterval = ReadConfigInt(customData, "RequestReceptionInterval");
         }
         string ReadConfig(string customData, string name, string defaultValue = null)
@@ -134,9 +121,8 @@ namespace IngameScript
                 "Parking=x:y:z\n" +
                 "IsRocketBase=false\n" +
                 "\n" +
-                "ShowExchanges=true\n" +
                 "ShowShips=true\n" +
-                "ShowOrders=true\n" +
+                "ShowExchanges=true\n" +
                 "ShowExchangeRequests=true\n" +
                 "EnableLogs=false\n" +
                 "\n" +
@@ -144,21 +130,15 @@ namespace IngameScript
                 "LogLCDs=[DELIVERY_LOG]\n" +
                 "\n" +
                 "Camera=Camera\n" +
-                "Warehouses=Warehouse\n" +
                 "\n" +
                 "ExchangeNumWaypoints=5\n" +
                 "ExchangePathDistance=150\n" +
                 "ExchangeDockRequestTimeThr=900\n" +
                 $"ExchangeGroupName={@"GR_\w+"}\n" +
-                "ExchangeUpperConnector=Input\n" +
-                "ExchangeLowerConnector=Output\n" +
-                "ExchangeSorterInput=Input\n" +
-                "ExchangeSorterOutput=Output\n" +
-                "ExchangeTimerPrepare=Prepare\n" +
-                "ExchangeTimerUnload=Unload\n" +
+                "ExchangeMainConnector=Input\n" +
+                "ExchangeOtherConnector=Output\n" +
                 "\n" +
                 "RequestStatusInterval=10\n" +
-                "RequestDeliveryInterval=60\n" +
                 "RequestReceptionInterval=60\n";
         }
     }

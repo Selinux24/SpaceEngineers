@@ -1,5 +1,4 @@
 ﻿using Sandbox.ModAPI.Ingame;
-using SpaceEngineers.Game.ModAPI.Ingame;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,7 +8,7 @@ using VRageMath;
 namespace IngameScript
 {
     /// <summary>
-    /// Base script for managing ship deliveries in Space Engineers.
+    /// RogueBase script
     /// </summary>
     partial class Program : MyGridProgram
     {
@@ -17,7 +16,6 @@ namespace IngameScript
 
         #region Blocks
         readonly IMyCameraBlock camera;
-        readonly List<IMyCargoContainer> cargos = new List<IMyCargoContainer>();
         readonly IMyBroadcastListener bl;
         readonly List<IMyTextPanel> dataLCDs = new List<IMyTextPanel>();
         readonly List<IMyTextPanel> logLCDs = new List<IMyTextPanel>();
@@ -29,8 +27,8 @@ namespace IngameScript
         readonly StringBuilder sbData = new StringBuilder();
         readonly StringBuilder sbLog = new StringBuilder();
 
-        readonly List<ExchangeGroup> exchanges = new List<ExchangeGroup>();
         readonly List<Ship> ships = new List<Ship>();
+        readonly List<ExchangeGroup> exchanges = new List<ExchangeGroup>();
         readonly List<ExchangeRequest> exchangeRequests = new List<ExchangeRequest>();
 
         bool requestStatus = true;
@@ -68,7 +66,6 @@ namespace IngameScript
                 return;
             }
 
-            GridTerminalSystem.GetBlocksOfType(cargos, cargo => cargo.CubeGrid == Me.CubeGrid && cargo.CustomName.Contains(config.BaseWarehouses));
             GridTerminalSystem.GetBlocksOfType(dataLCDs, lcd => lcd.CubeGrid == Me.CubeGrid && lcd.CustomName.Contains(config.BaseDataLCDs));
             GridTerminalSystem.GetBlocksOfType(logLCDs, lcd => lcd.CubeGrid == Me.CubeGrid && lcd.CustomName.Contains(config.BaseLogLCDs));
 
@@ -112,123 +109,14 @@ namespace IngameScript
             WriteLogLCDs();
         }
 
-        #region STATUS
-        /// <summary>
-        /// BASE requests status from all ships
-        /// </summary>
-        /// <remarks>
-        /// Execute:  REQUEST_STATUS
-        /// </remarks>
-        void DoRequestStatus()
-        {
-            if (!requestStatus)
-            {
-                return;
-            }
-
-            if (DateTime.Now - lastRequestStatus < TimeSpan.FromSeconds(config.RequestStatusInterval))
-            {
-                return;
-            }
-            lastRequestStatus = DateTime.Now;
-
-            List<string> parts = new List<string>()
-            {
-                $"Command=REQUEST_STATUS",
-                $"From={baseId}",
-            };
-            BroadcastMessage(parts);
-        }
-        #endregion
-
-        #region EXCHANGE REQUEST
-        /// <summary>
-        /// BASE reviews exchange requests. It searches for free connectors and gives SHIP the exchange command on the specified connector.
-        /// </summary>
-        /// <remarks>
-        /// Execute:  DOCK
-        /// </remarks>
-        void DoRequestExchange()
-        {
-            if (!requestExchange)
-            {
-                return;
-            }
-
-            if (DateTime.Now - lastExchangeRequest < TimeSpan.FromSeconds(config.RequestReceptionInterval))
-            {
-                return;
-            }
-            lastExchangeRequest = DateTime.Now;
-
-            var exRequest = GetPendingExchangeRequests();
-            if (exRequest.Count == 0)
-            {
-                return;
-            }
-            var freeExchanges = GetFreeExchanges();
-            if (freeExchanges.Count == 0)
-            {
-                return;
-            }
-            var waitingShips = GetWaitingShips();
-            if (waitingShips.Count == 0)
-            {
-                DoRequestStatus();
-                return;
-            }
-            WriteLog($"Exchange requests: {exRequest.Count}; Free exchanges: {freeExchanges.Count}; Free ships: {waitingShips.Count}");
-
-            var shipExchangePairs = GetNearestShipsFromExchanges(waitingShips, freeExchanges);
-            if (shipExchangePairs.Count == 0)
-            {
-                return;
-            }
-
-            foreach (var request in exRequest)
-            {
-                var pair = shipExchangePairs.FirstOrDefault(s => s.Ship.Name == request.Ship);
-                if (pair == null)
-                {
-                    continue;
-                }
-
-                var ship = pair.Ship;
-                var exchange = pair.Exchange;
-
-                request.Idle = false;
-                ship.Status = ShipStatus.Docking;
-                exchange.DockRequest(ship.Name);
-
-                List<string> parts = new List<string>()
-                {
-                    $"Command=DOCK",
-                    $"To={request.Ship}",
-                    $"From={baseId}",
-                    $"Parking={config.BaseParking}",
-                    $"Landing={(config.IsRocketBase?1:0)}",
-                    $"Forward={Utils.VectorToStr(camera.WorldMatrix.Forward)}",
-                    $"Up={Utils.VectorToStr(camera.WorldMatrix.Up)}",
-                    $"WayPoints={Utils.VectorListToStr(exchange.CalculateRouteToConnector())}",
-                    $"Task={(int)request.Task}",
-                    $"Exchange={exchange.Name}",
-                };
-                BroadcastMessage(parts);
-
-                break;
-            }
-        }
-        #endregion
-
         #region TERMINAL COMMANDS
         void ParseTerminalMessage(string argument)
         {
             WriteLog($"ParseTerminalMessage: {argument}");
 
             if (argument == "RESET") Reset();
-            else if (argument == "LIST_EXCHANGES") ListExchanges();
             else if (argument == "LIST_SHIPS") ListShips();
-            else if (argument == "LIST_ORDERS") ListOrders();
+            else if (argument == "LIST_EXCHANGES") ListExchanges();
             else if (argument == "LIST_EXCHANGE_REQUESTS") ListExchangeRequests();
             else if (argument == "ENABLE_LOGS") EnableLogs();
             else if (argument == "ENABLE_STATUS_REQUEST") EnableStatusRequest();
@@ -254,13 +142,6 @@ namespace IngameScript
             InitializeExchangeGroups();
         }
         /// <summary>
-        /// Changes the state of the variable that controls the display of exchanges
-        /// </summary>
-        void ListExchanges()
-        {
-            config.ShowExchanges = !config.ShowExchanges;
-        }
-        /// <summary>
         /// Changes the state of the variable that controls the display of ships
         /// </summary>
         void ListShips()
@@ -268,11 +149,11 @@ namespace IngameScript
             config.ShowShips = !config.ShowShips;
         }
         /// <summary>
-        /// Changes the state of the variable that controls the display of orders
+        /// Changes the state of the variable that controls the display of exchanges
         /// </summary>
-        void ListOrders()
+        void ListExchanges()
         {
-            config.ShowOrders = !config.ShowOrders;
+            config.ShowExchanges = !config.ShowExchanges;
         }
         /// <summary>
         /// Changes the state of the variable that controls the display of exchange requests
@@ -435,8 +316,6 @@ namespace IngameScript
             {
                 return;
             }
-
-            exchange.TimerUnload?.StartCountdown();
         }
 
         /// <summary>
@@ -458,6 +337,114 @@ namespace IngameScript
         }
         #endregion
 
+        #region STATUS
+        /// <summary>
+        /// BASE requests status from all ships
+        /// </summary>
+        /// <remarks>
+        /// Execute:  REQUEST_STATUS
+        /// </remarks>
+        void DoRequestStatus()
+        {
+            if (!requestStatus)
+            {
+                return;
+            }
+
+            if (DateTime.Now - lastRequestStatus < TimeSpan.FromSeconds(config.RequestStatusInterval))
+            {
+                return;
+            }
+            lastRequestStatus = DateTime.Now;
+
+            List<string> parts = new List<string>()
+            {
+                $"Command=REQUEST_STATUS",
+                $"From={baseId}",
+            };
+            BroadcastMessage(parts);
+        }
+        #endregion
+
+        #region EXCHANGE REQUEST
+        /// <summary>
+        /// BASE reviews exchange requests. It searches for free connectors and gives SHIP the exchange command on the specified connector.
+        /// </summary>
+        /// <remarks>
+        /// Execute:  DOCK
+        /// </remarks>
+        void DoRequestExchange()
+        {
+            if (!requestExchange)
+            {
+                return;
+            }
+
+            if (DateTime.Now - lastExchangeRequest < TimeSpan.FromSeconds(config.RequestReceptionInterval))
+            {
+                return;
+            }
+            lastExchangeRequest = DateTime.Now;
+
+            var exRequest = GetPendingExchangeRequests();
+            if (exRequest.Count == 0)
+            {
+                return;
+            }
+            var freeExchanges = GetFreeExchanges();
+            if (freeExchanges.Count == 0)
+            {
+                return;
+            }
+            var waitingShips = GetWaitingShips();
+            if (waitingShips.Count == 0)
+            {
+                DoRequestStatus();
+                return;
+            }
+            WriteLog($"Exchange requests: {exRequest.Count}; Free exchanges: {freeExchanges.Count}; Free ships: {waitingShips.Count}");
+
+            var shipExchangePairs = GetNearestShipsFromExchanges(waitingShips, freeExchanges);
+            if (shipExchangePairs.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var request in exRequest)
+            {
+                var pair = shipExchangePairs.FirstOrDefault(s => s.Ship.Name == request.Ship);
+                if (pair == null)
+                {
+                    continue;
+                }
+
+                var ship = pair.Ship;
+                var exchange = pair.Exchange;
+
+                request.Idle = false;
+                ship.Status = ShipStatus.Docking;
+                exchange.DockRequest(ship.Name);
+
+                List<string> parts = new List<string>()
+                {
+                    $"Command=DOCK",
+                    $"To={request.Ship}",
+                    $"From={baseId}",
+                    $"Parking={config.BaseParking}",
+                    $"Landing={(config.IsRocketBase?1:0)}",
+                    $"Forward={Utils.VectorToStr(camera.WorldMatrix.Forward)}",
+                    $"Up={Utils.VectorToStr(camera.WorldMatrix.Up)}",
+                    $"WayPoints={Utils.VectorListToStr(exchange.CalculateRouteToConnector())}",
+                    $"Task={(int)request.Task}",
+                    $"Exchange={exchange.Name}",
+                };
+                BroadcastMessage(parts);
+
+                break;
+            }
+        }
+        #endregion
+
         #region UPDATE BASE STATE
         void UpdateBaseState()
         {
@@ -470,12 +457,12 @@ namespace IngameScript
                 //TODO: If there is a dock request and it does not match the connected ships, abort and return the ship to the parking position, and put it on hold.
             }
 
+            //Gets all docked ship names
             var dockedShips = exchanges
-                .Select(e => e.UpperShipName)
-                .Concat(exchanges.Select(e => e.LowerShipName))
-                .Where(e => !string.IsNullOrEmpty(e))
+                .SelectMany(e => e.DockedShips())
                 .ToList();
 
+            //Removes all exchange requests for ships that are already docked
             exchangeRequests.RemoveAll(e => dockedShips.Contains(e.Ship));
         }
         #endregion
@@ -503,32 +490,10 @@ namespace IngameScript
                     var connector = block as IMyShipConnector;
                     if (connector != null)
                     {
-                        if (connector.CustomName.Contains(config.ExchangeUpperConnector)) exchangeGroup.UpperConnector = connector;
-                        else if (connector.CustomName.Contains(config.ExchangeLowerConnector)) exchangeGroup.LowerConnector = connector;
+                        if (connector.CustomName.Contains(config.ExchangeMainConnector)) exchangeGroup.MainConnector = connector;
+                        else if (connector.CustomName.Contains(config.ExchangeOtherConnector)) exchangeGroup.Connectors.Add(connector);
 
                         continue;
-                    }
-
-                    var cargo = block as IMyCargoContainer;
-                    if (cargo != null)
-                    {
-                        exchangeGroup.Cargo = cargo;
-                        continue;
-                    }
-
-                    var sorter = block as IMyConveyorSorter;
-                    if (sorter != null)
-                    {
-                        if (sorter.CustomName.Contains(config.ExchangeSorterInput)) exchangeGroup.SorterInput = sorter;
-                        else if (sorter.CustomName.Contains(config.ExchangeSorterOutput)) exchangeGroup.SorterOutput = sorter;
-                        continue;
-                    }
-
-                    var timer = block as IMyTimerBlock;
-                    if (timer != null)
-                    {
-                        if (timer.CustomName.Contains(config.ExchangeTimerPrepare)) exchangeGroup.TimerPrepare = timer;
-                        else if (timer.CustomName.Contains(config.ExchangeTimerUnload)) exchangeGroup.TimerUnload = timer;
                     }
                 }
 
@@ -582,7 +547,7 @@ namespace IngameScript
             {
                 foreach (var exchange in freeExchanges)
                 {
-                    double distance = Vector3D.Distance(ship.Position, exchange.UpperConnector.GetPosition());
+                    double distance = Vector3D.Distance(ship.Position, exchange.MainConnector.GetPosition());
                     shipExchangePairs.Add(new ShipExchangePair
                     {
                         Ship = ship,
@@ -610,10 +575,10 @@ namespace IngameScript
 
             foreach (var exchange in exchanges)
             {
-                var upStatus = exchange.UpperConnector?.Status.ToString() ?? "None";
-                var lowStatus = exchange.LowerConnector?.Status.ToString() ?? "None";
+                bool isFree = exchange.IsFree();
+                string status = isFree ? "Free" : string.Join(", ", exchange.DockedShips());
 
-                sbData.AppendLine($"Exchange {exchange.Name} - {exchange.DockedShipName ?? "Free"}. A {upStatus} - B {lowStatus}");
+                sbData.AppendLine($"Exchange {exchange.Name} - {status}");
             }
         }
         void PrintShipStatus()

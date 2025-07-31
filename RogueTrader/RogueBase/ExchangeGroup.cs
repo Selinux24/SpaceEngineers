@@ -1,10 +1,6 @@
 ﻿using Sandbox.ModAPI.Ingame;
-using SpaceEngineers.Game.ModAPI.Ingame;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using VRage;
-using VRage.Game.ModAPI.Ingame;
 using VRageMath;
 
 namespace IngameScript
@@ -15,19 +11,10 @@ namespace IngameScript
         private double dockRequestTime = 0;
 
         public string Name;
-        public IMyShipConnector UpperConnector;
-        public IMyShipConnector LowerConnector;
-        public IMyCargoContainer Cargo;
-        public IMyConveyorSorter SorterInput;
-        public IMyConveyorSorter SorterOutput;
-        public IMyTimerBlock TimerPrepare;
-        public IMyTimerBlock TimerUnload;
+        public IMyShipConnector MainConnector;
+        public readonly List<IMyShipConnector> Connectors = new List<IMyShipConnector>();
 
         public string DockedShipName { get; private set; }
-        public bool UpperConnected => UpperConnector.Status == MyShipConnectorStatus.Connected;
-        public bool LowerConnected => LowerConnector == null || LowerConnector.Status == MyShipConnectorStatus.Connected;
-        public string UpperShipName => UpperConnected ? UpperConnector.OtherConnector.CubeGrid.CustomName : null;
-        public string LowerShipName => LowerConnected ? LowerConnector?.OtherConnector.CubeGrid.CustomName : UpperShipName;
 
         public ExchangeGroup(Config config)
         {
@@ -36,47 +23,84 @@ namespace IngameScript
 
         public bool IsValid()
         {
-            return UpperConnector != null;
+            return MainConnector != null;
         }
         public bool IsFree()
         {
-            return
-                string.IsNullOrWhiteSpace(DockedShipName) &&
-                UpperConnector.Status == MyShipConnectorStatus.Unconnected &&
-                (LowerConnector?.Status ?? MyShipConnectorStatus.Unconnected) == MyShipConnectorStatus.Unconnected;
+            if (!string.IsNullOrWhiteSpace(DockedShipName) &&
+                MainConnector.Status != MyShipConnectorStatus.Unconnected)
+            {
+                return false;
+            }
+
+            foreach (var connector in Connectors)
+            {
+                if (connector.Status != MyShipConnectorStatus.Unconnected)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+        public List<string> DockedShips()
+        {
+            var names = new List<string>();
+
+            if (MainConnector.Status == MyShipConnectorStatus.Connected)
+            {
+                names.Add(MainConnector.OtherConnector.CubeGrid.Name);
+            }
+
+            foreach (var connector in Connectors)
+            {
+                if (connector.Status == MyShipConnectorStatus.Connected)
+                {
+                    names.Add(connector.OtherConnector.CubeGrid.Name);
+                }
+            }
+
+            return names;
         }
 
         public bool Update(double time)
         {
             dockRequestTime += time;
 
-            bool upperConnected = UpperConnected;
-            bool lowerConnected = LowerConnected;
+            bool mainConnected = MainConnector.Status == MyShipConnectorStatus.Connected;
 
-            string newShipU = null;
-            if (upperConnected)
+            string newShip = null;
+            if (mainConnected)
             {
-                newShipU = UpperConnector.OtherConnector.CubeGrid.CustomName;
+                newShip = MainConnector.OtherConnector.CubeGrid.CustomName;
             }
 
-            string newShipL = null;
-            if (lowerConnected)
+            bool moreThanOneShip = false;
+            foreach (var con in Connectors)
             {
-                newShipL = LowerConnector?.OtherConnector.CubeGrid.CustomName ?? DockedShipName;
+                if (con.Status != MyShipConnectorStatus.Connected) continue;
+
+                string ship = con.OtherConnector.CubeGrid.CustomName;
+                if (newShip != ship)
+                {
+                    moreThanOneShip = true;
+                    break;
+                }
             }
 
             bool hasDockRequested = !string.IsNullOrWhiteSpace(DockedShipName) && dockRequestTime <= config.ExchangeDockRequestTimeThr;
             if (hasDockRequested)
             {
-                if ((upperConnected && DockedShipName != newShipU) || (lowerConnected && DockedShipName != newShipL))
+                if ((mainConnected && DockedShipName != newShip) || moreThanOneShip)
                 {
+                    //Another ship is docked at least. Not valid for dock
                     return false;
                 }
             }
             else
             {
                 //Update ship name
-                DockedShipName = newShipU ?? newShipL;
+                DockedShipName = moreThanOneShip ? "Several ships" : newShip;
             }
 
             return true;
@@ -90,16 +114,16 @@ namespace IngameScript
 
         public List<Vector3D> CalculateRouteToConnector()
         {
-            List<Vector3D> waypoints = new List<Vector3D>();
+            var waypoints = new List<Vector3D>();
 
-            Vector3D targetDock = UpperConnector.GetPosition();   //Last point
-            Vector3D forward = UpperConnector.WorldMatrix.Forward;
-            Vector3D approachStart = targetDock + forward * config.ExchangePathDistance;  //Initial approach point
+            var targetDock = MainConnector.GetPosition();   //Last point
+            var forward = MainConnector.WorldMatrix.Forward;
+            var approachStart = targetDock + forward * config.ExchangePathDistance;  //Initial approach point
 
             for (int i = 0; i <= config.ExchangeNumWaypoints; i++)
             {
                 double t = i / (double)config.ExchangeNumWaypoints;
-                Vector3D point = Vector3D.Lerp(approachStart, targetDock, t) + forward * 2.3;
+                var point = Vector3D.Lerp(approachStart, targetDock, t) + forward * 2.3;
                 waypoints.Add(point);
             }
 
@@ -108,7 +132,7 @@ namespace IngameScript
 
         public string SaveToStorage()
         {
-            List<string> parts = new List<string>
+            var parts = new List<string>
             {
                 $"Name={Name}",
                 $"DockedShipName={DockedShipName}",
