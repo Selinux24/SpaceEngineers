@@ -125,6 +125,7 @@ namespace Sandbox.ModAPI.Ingame
 
     public interface IMyTerminalBlock
     {
+        string Name { get; set; }
         bool Enabled { get; set; }
         string CustomName { get; set; }
         IMyTerminalBlock CubeGrid { get; set; }
