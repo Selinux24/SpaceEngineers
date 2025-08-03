@@ -31,42 +31,7 @@ namespace IngameScript
         public readonly string ShipConnectorA;
         public readonly string ShipAntennaName;
 
-        public readonly double GyrosThr; //Alignment accuracy
-        public readonly double GyrosSpeed; //Gyroscope speed
-
-
-        public readonly int ArrivalTicks;
-
-        public readonly int AlignTicks;
-        public readonly double AlignExchangeApproachingSpeed; //Maximum approach speed to the connector
-        public readonly double AlignExchangeSlowdownDistance = 50.0; //Braking distance to the first point of the connector
-        public readonly double AlignExchangeDistanceThr; //Accuracy of approximation to the first point of the connector
-        public readonly double AlignSpeedWaypointFirst = 10.0; //Maximum speed at first waypoint
-        public readonly double AlignSpeedWaypoints = 5.0; //Maximum speed between waypoints
-        public readonly double AlignSpeedWaypointLast = 1.0; //Maximum speed at the last waypoint
-        public readonly double AlignDistanceThrWaypoints; //Approximation accuracy between waypoints
-
-        public readonly int CruisingTicks;
-        public readonly double CruisingMaxSpeed; //Maximum cruising speed
-        public readonly double CruisingMaxSpeedThr;
-        public readonly double CruisingMaxAccelerationSpeed; //Maximum cruising speed near base
-        public readonly double CruisingToBasesDistanceThr; //Distance to the departure point to activate maximum cruising speed
-        public readonly double CruisingToTargetDistanceThr; //Braking range to target
-        public readonly double CruisingThrustAlignSeconds; //Thruster ignition time until alignment
-        public readonly double CruisingLocateAlignThr; //Alignment accuracy
-        public readonly double CruisingCruiseAlignThr; //Alignment accuracy
-        public readonly double CruisingCollisionDetectRange; //Collision detection range
-        public readonly double CruisingEvadingWaypointDistance;
-        public readonly double CruisingEvadingMaxSpeed;
-
-        public readonly int AtmNavigationTicks;
-        public readonly double AtmNavigationMaxSpeed; //Maximum takeoff speed
-        public readonly double AtmNavigationToTargetDistanceThr; //Braking range to target
-        public readonly double AtmNavigationAlignThr; //Alignment accuracy
-        public readonly double AtmNavigationMinLoad;
-        public readonly double AtmNavigationMaxLoad;
-        public readonly Route AtmNavigationRoute;
-        public readonly double AtmNavigationSeparationSecs; //Separation thrust time before acceleration
+        public readonly Route Route;
 
         public Config(string customData)
         {
@@ -91,45 +56,11 @@ namespace IngameScript
             ShipConnectorA = ReadConfig(customData, "ShipConnectorA");
             ShipAntennaName = ReadConfig(customData, "ShipAntennaName");
 
-            GyrosThr = ReadConfigDouble(customData, "GyrosThr");
-            GyrosSpeed = ReadConfigDouble(customData, "GyrosSpeed");
-
-            ArrivalTicks = ReadConfigInt(customData, "ArrivalTicks");
-
-            AlignTicks = ReadConfigInt(customData, "AlignTicks");
-            AlignExchangeApproachingSpeed = ReadConfigDouble(customData, "AlignExchangeApproachingSpeed");
-            AlignExchangeSlowdownDistance = ReadConfigDouble(customData, "AlignExchangeSlowdownDistance");
-            AlignExchangeDistanceThr = ReadConfigDouble(customData, "AlignExchangeDistanceThr");
-            AlignSpeedWaypointFirst = ReadConfigDouble(customData, "AlignSpeedWaypointFirst");
-            AlignSpeedWaypoints = ReadConfigDouble(customData, "AlignSpeedWaypoints");
-            AlignSpeedWaypointLast = ReadConfigDouble(customData, "AlignSpeedWaypointLast");
-            AlignDistanceThrWaypoints = ReadConfigDouble(customData, "AlignDistanceThrWaypoints");
-
-            CruisingTicks = ReadConfigInt(customData, "CruisingTicks");
-            CruisingMaxSpeed = ReadConfigDouble(customData, "CruisingMaxSpeed");
-            CruisingMaxSpeedThr = ReadConfigDouble(customData, "CruisingMaxSpeedThr");
-            CruisingMaxAccelerationSpeed = ReadConfigDouble(customData, "CruisingMaxAccelerationSpeed");
-            CruisingToBasesDistanceThr = ReadConfigDouble(customData, "CruisingToBasesDistanceThr");
-            CruisingToTargetDistanceThr = ReadConfigDouble(customData, "CruisingToTargetDistanceThr");
-            CruisingThrustAlignSeconds = ReadConfigDouble(customData, "CruisingThrustAlignSeconds");
-            CruisingLocateAlignThr = ReadConfigDouble(customData, "CruisingLocateAlignThr");
-            CruisingCruiseAlignThr = ReadConfigDouble(customData, "CruisingCruiseAlignThr");
-            CruisingCollisionDetectRange = ReadConfigDouble(customData, "CruisingCollisionDetectRange");
-            CruisingEvadingWaypointDistance = ReadConfigDouble(customData, "CruisingEvadingWaypointDistance");
-            CruisingEvadingMaxSpeed = ReadConfigDouble(customData, "CruisingEvadingMaxSpeed");
-
-            AtmNavigationTicks = ReadConfigInt(customData, "AtmNavigationTicks");
-            AtmNavigationMaxSpeed = ReadConfigDouble(customData, "AtmNavigationMaxSpeed");
-            AtmNavigationToTargetDistanceThr = ReadConfigDouble(customData, "AtmNavigationToTargetDistanceThr");
-            AtmNavigationAlignThr = ReadConfigDouble(customData, "AtmNavigationAlignThr");
-            AtmNavigationMinLoad = ReadConfigDouble(customData, "AtmNavigationMinLoad", 0.1);
-            AtmNavigationMaxLoad = ReadConfigDouble(customData, "AtmNavigationMaxLoad", 0.9);
-            AtmNavigationRoute = new Route(
+            Route = new Route(
                 ReadConfig(customData, "AtmNavigationLoadBase"),
                 ReadConfig(customData, "AtmNavigationUnloadBase"),
                 ReadConfigVectorList(customData, "AtmNavigationToLoadBaseWaypoints", new List<Vector3D>()),
                 ReadConfigVectorList(customData, "AtmNavigationToUnloadBaseWaypoints", new List<Vector3D>()));
-            AtmNavigationSeparationSecs = ReadConfigDouble(customData, "AtmNavigationSeparationSecs");
         }
         string ReadConfig(string customData, string name, string defaultValue = null)
         {

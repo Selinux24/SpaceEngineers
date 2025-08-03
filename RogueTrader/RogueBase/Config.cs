@@ -10,7 +10,7 @@ namespace IngameScript
 
         public readonly string Channel;
         public readonly string BaseParking;
-        public readonly bool IsRocketBase;
+        public readonly bool InGravity;
 
         public bool ShowShips = true;
         public bool ShowExchanges = true;
@@ -36,7 +36,7 @@ namespace IngameScript
         {
             Channel = ReadConfig(customData, "Channel");
             BaseParking = ReadConfig(customData, "Parking");
-            IsRocketBase = ReadConfig(customData, "IsRocketBase").ToLower() == "true";
+            InGravity = ReadConfig(customData, "InGravity").ToLower() == "true";
 
             ShowShips = ReadConfig(customData, "ShowShips", "true") == "true";
             ShowExchanges = ReadConfig(customData, "ShowExchanges", "true") == "true";
@@ -119,7 +119,7 @@ namespace IngameScript
             return
                 "Channel=name\n" +
                 "Parking=x:y:z\n" +
-                "IsRocketBase=false\n" +
+                "InGravity=false\n" +
                 "\n" +
                 "ShowShips=true\n" +
                 "ShowExchanges=true\n" +

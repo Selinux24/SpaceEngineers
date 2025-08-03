@@ -121,10 +121,8 @@ namespace IngameScript
             else if (argument == "ENABLE_LOGS") EnableLogs();
             else if (argument == "ENABLE_STATUS_REQUEST") EnableStatusRequest();
             else if (argument == "ENABLE_EXCHANGE_REQUEST") EnableExchangeRequest();
-            else if (argument.StartsWith("SHIP_LOADED")) ShipLoaded(argument);
-            else if (argument.StartsWith("START_LOAD_ROUTE")) StartLoadRoute(argument);
-            else if (argument.StartsWith("START_UNLOAD_ROUTE")) StartUnloadRoute(argument);
         }
+
         /// <summary>
         /// Resets the state
         /// </summary>
@@ -183,65 +181,6 @@ namespace IngameScript
         {
             requestExchange = !requestExchange;
         }
-        /// <summary>
-        /// Seq_C_3b - WH completes loading and notifies SHIPX
-        /// Request:  SHIP_LOADED
-        /// Execute:  LOADED
-        /// </summary>
-        void ShipLoaded(string argument)
-        {
-            string[] lines = argument.Split('|');
-
-            string exchangeName = Utils.ReadString(lines, "Exchange");
-            var exchange = exchanges.Find(e => e.Name == exchangeName);
-            if (exchange == null)
-            {
-                return;
-            }
-
-            List<string> parts = new List<string>()
-            {
-                $"Command=LOADED",
-                $"To={exchange.DockedShipName}",
-                $"From={baseId}"
-            };
-            BroadcastMessage(parts);
-        }
-        /// <summary>
-        /// The base calls a ship to load cargo.
-        /// </summary>
-        void StartLoadRoute(string argument)
-        {
-            string[] lines = argument.Split('|');
-            string ship = Utils.ReadString(lines, "Ship");
-
-            List<string> parts = new List<string>()
-            {
-                $"Command=REQUEST_LOAD",
-                $"From={baseId}",
-                $"To={ship}",
-                $"Route={config.BaseParking}",
-            };
-            BroadcastMessage(parts);
-        }
-        /// <summary>
-        /// The base calls a ship to unload cargo.
-        /// </summary>
-        /// <param name="argument"></param>
-        void StartUnloadRoute(string argument)
-        {
-            string[] lines = argument.Split('|');
-            string ship = Utils.ReadString(lines, "Ship");
-
-            List<string> parts = new List<string>()
-            {
-                $"Command=REQUEST_UNLOAD",
-                $"From={baseId}",
-                $"To={ship}",
-                $"Route={config.BaseParking}",
-            };
-            BroadcastMessage(parts);
-        }
         #endregion
 
         #region IGC COMMANDS
@@ -256,23 +195,23 @@ namespace IngameScript
 
             if (command == "RESPONSE_STATUS") CmdResponseStatus(lines);
 
-            else if (command == "REQUEST_LOAD") CmdRequestExchange(lines, ExchangeTasks.Load);
-            else if (command == "REQUEST_UNLOAD") CmdRequestExchange(lines, ExchangeTasks.Unload);
-            else if (command == "UNLOADING") CmdUnloading(lines);
-
-            else if (command == "REQUEST_DOCK") CmdRequestDock(lines);
+            else if (command == "WAITING_LOAD") CmdWaitingLoad(lines);
+            else if (command == "WAITING_UNLOAD") CmdWaitingUnload(lines);
         }
+
         /// <summary>
-        /// Seq_A_3 - WH updates the ship's status
-        /// Request:  RESPONSE_STATUS
+        /// BASE updates the SHIP status
         /// </summary>
+        /// <remarks>
+        /// Request: RESPONSE_STATUS
+        /// </remarks>
         void CmdResponseStatus(string[] lines)
         {
             string from = Utils.ReadString(lines, "From");
             ShipStatus status = (ShipStatus)Utils.ReadInt(lines, "Status");
-            var cargo = Utils.ReadDouble(lines, "Cargo");
-            var position = Utils.ReadVector(lines, "Position");
             string statusMessage = Utils.ReadString(lines, "StatusMessage");
+            var position = Utils.ReadVector(lines, "Position");
+            var cargo = Utils.ReadDouble(lines, "Cargo");
 
             var ship = ships.Find(s => s.Name == from);
             if (ship == null)
@@ -282,58 +221,35 @@ namespace IngameScript
             }
 
             ship.Status = status;
-            ship.Cargo = cargo;
-            ship.Position = position;
             ship.StatusMessage = statusMessage;
+            ship.Position = position;
+            ship.Cargo = cargo;
             ship.UpdateTime = DateTime.Now;
         }
 
         /// <summary>
-        /// Seq_XXX/Seq_C_5 - BASEX registers exchange request (exchange request list)
-        /// Request:  REQUEST_DELIVERY_LOAD/REQUEST_DELIVERY_UNLOAD
+        /// Enqueues a request to load cargo in a SHIP.
         /// </summary>
-        void CmdRequestExchange(string[] lines, ExchangeTasks task)
+        /// <remarks>
+        /// Request: WAITING_LOAD
+        /// </remarks>
+        void CmdWaitingLoad(string[] lines)
         {
             string from = Utils.ReadString(lines, "From");
 
-            exchangeRequests.RemoveAll(r => r.Ship == from);
-
-            exchangeRequests.Add(new ExchangeRequest
-            {
-                Ship = from,
-                Idle = true,
-                Task = task,
-            });
+            EnqueueExchangeRequest(from, ExchangeTasks.Load);
         }
         /// <summary>
-        /// Seq_D_2c - BASEX puts the exchange in unload mode
+        /// Enqueues a request to unload cargo from a SHIP.
         /// </summary>
-        void CmdUnloading(string[] lines)
-        {
-            string exchangeName = Utils.ReadString(lines, "Exchange");
-            var exchange = exchanges.Find(e => e.Name == exchangeName);
-            if (exchange == null)
-            {
-                return;
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        void CmdRequestDock(string[] lines)
+        /// <remarks>
+        /// Request: WAITING_UNLOAD
+        /// </remarks>
+        void CmdWaitingUnload(string[] lines)
         {
             string from = Utils.ReadString(lines, "From");
-            ExchangeTasks task = (ExchangeTasks)Utils.ReadInt(lines, "Task");
 
-            exchangeRequests.RemoveAll(r => r.Ship == from);
-
-            exchangeRequests.Add(new ExchangeRequest
-            {
-                Ship = from,
-                Idle = true,
-                Task = task,
-            });
+            EnqueueExchangeRequest(from, ExchangeTasks.Unload);
         }
         #endregion
 
@@ -399,7 +315,6 @@ namespace IngameScript
             var waitingShips = GetWaitingShips();
             if (waitingShips.Count == 0)
             {
-                DoRequestStatus();
                 return;
             }
             WriteLog($"Exchange requests: {exRequest.Count}; Free exchanges: {freeExchanges.Count}; Free ships: {waitingShips.Count}");
@@ -418,6 +333,11 @@ namespace IngameScript
                     continue;
                 }
 
+                if (request.Task == ExchangeTasks.None)
+                {
+                    continue;
+                }
+
                 var ship = pair.Ship;
                 var exchange = pair.Exchange;
 
@@ -425,18 +345,20 @@ namespace IngameScript
                 ship.Status = ShipStatus.Docking;
                 exchange.DockRequest(ship.Name);
 
+                string command = request.Task == ExchangeTasks.Load ? "COME_TO_LOAD" : "COME_TO_UNLOAD";
+
                 List<string> parts = new List<string>()
                 {
-                    $"Command=DOCK",
+                    $"Command={command}",
                     $"To={request.Ship}",
                     $"From={baseId}",
-                    $"Parking={config.BaseParking}",
-                    $"Landing={(config.IsRocketBase?1:0)}",
+                    $"Exchange={exchange.Name}",
+                    $"InGravitry={(config.InGravity?1:0)}",
+
                     $"Forward={Utils.VectorToStr(camera.WorldMatrix.Forward)}",
                     $"Up={Utils.VectorToStr(camera.WorldMatrix.Up)}",
                     $"WayPoints={Utils.VectorListToStr(exchange.CalculateRouteToConnector())}",
-                    $"Task={(int)request.Task}",
-                    $"Exchange={exchange.Name}",
+                    $"Parking={config.BaseParking}",
                 };
                 BroadcastMessage(parts);
 
@@ -471,7 +393,7 @@ namespace IngameScript
         void InitializeExchangeGroups()
         {
             //Find all blocks that have the exchange regex in their name
-            List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
+            var blocks = new List<IMyTerminalBlock>();
             GridTerminalSystem.GetBlocksOfType(blocks, i => i.CubeGrid == Me.CubeGrid && config.ExchangesRegex.IsMatch(i.CustomName));
 
             //Group them by the group name
@@ -514,19 +436,28 @@ namespace IngameScript
             return Utils.ReadString(lines, "To") == baseId;
         }
 
+        void EnqueueExchangeRequest(string ship, ExchangeTasks task)
+        {
+            exchangeRequests.RemoveAll(r => r.Ship == ship);
+
+            exchangeRequests.Add(new ExchangeRequest
+            {
+                Ship = ship,
+                Idle = true,
+                Task = task,
+            });
+        }
         List<ExchangeRequest> GetPendingExchangeRequests()
         {
             return exchangeRequests.Where(r => r.Idle && r.Task != ExchangeTasks.None).ToList();
         }
-        List<Ship> GetWaitingShips()
-        {
-            return ships.Where(s =>
-                s.Status == ShipStatus.WaitingDock ||
-                s.Status == ShipStatus.Idle).ToList();
-        }
         List<ExchangeGroup> GetFreeExchanges()
         {
             return exchanges.Where(e => e.IsFree()).ToList();
+        }
+        List<Ship> GetWaitingShips()
+        {
+            return ships.Where(s => s.Status == ShipStatus.WaitingDock).ToList();
         }
         static List<ShipExchangePair> GetNearestShipsFromExchanges(List<Ship> freeShips, List<ExchangeGroup> freeExchanges)
         {

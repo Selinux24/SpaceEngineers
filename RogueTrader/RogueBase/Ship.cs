@@ -7,9 +7,9 @@ namespace IngameScript
     {
         public string Name;
         public ShipStatus Status;
-        public double Cargo;
-        public Vector3D Position;
         public string StatusMessage;
+        public Vector3D Position;
+        public double Cargo;
         public DateTime UpdateTime;
     }
 }
