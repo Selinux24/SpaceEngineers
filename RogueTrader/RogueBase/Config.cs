@@ -9,7 +9,7 @@ namespace IngameScript
         readonly StringBuilder errors = new StringBuilder();
 
         public readonly string Channel;
-        public readonly string BaseParking;
+        public readonly string Parking;
         public readonly bool InGravity;
 
         public bool ShowShips = true;
@@ -17,10 +17,8 @@ namespace IngameScript
         public bool ShowExchangeRequests = true;
         public bool EnableLogs = false;
 
-        public readonly string BaseCamera;
-
-        public readonly string BaseDataLCDs;
-        public readonly string BaseLogLCDs;
+        public readonly string DataLCDs;
+        public readonly string LogLCDs;
 
         public readonly int ExchangeNumWaypoints;
         public readonly double ExchangePathDistance; //Meters, distance from the dock to the first waypoint
@@ -35,18 +33,16 @@ namespace IngameScript
         public Config(string customData)
         {
             Channel = ReadConfig(customData, "Channel");
-            BaseParking = ReadConfig(customData, "Parking");
-            InGravity = ReadConfig(customData, "InGravity").ToLower() == "true";
+            Parking = ReadConfig(customData, "Parking");
+            InGravity = ReadConfigBool(customData, "InGravity");
 
-            ShowShips = ReadConfig(customData, "ShowShips", "true") == "true";
-            ShowExchanges = ReadConfig(customData, "ShowExchanges", "true") == "true";
-            ShowExchangeRequests = ReadConfig(customData, "ShowExchangeRequests", "true") == "true";
-            EnableLogs = ReadConfig(customData, "EnableLogs", "false") == "true";
+            ShowShips = ReadConfigBool(customData, "ShowShips", true);
+            ShowExchanges = ReadConfigBool(customData, "ShowExchanges", true);
+            ShowExchangeRequests = ReadConfigBool(customData, "ShowExchangeRequests", true);
+            EnableLogs = ReadConfigBool(customData, "EnableLogs", false);
 
-            BaseDataLCDs = ReadConfig(customData, "DataLCDs");
-            BaseLogLCDs = ReadConfig(customData, "LogLCDs");
-
-            BaseCamera = ReadConfig(customData, "Camera");
+            DataLCDs = ReadConfig(customData, "DataLCDs");
+            LogLCDs = ReadConfig(customData, "LogLCDs");
 
             ExchangeNumWaypoints = ReadConfigInt(customData, "ExchangeNumWaypoints");
             ExchangePathDistance = ReadConfigDouble(customData, "ExchangePathDistance");
@@ -73,26 +69,47 @@ namespace IngameScript
 
             return value;
         }
-        int ReadConfigInt(string customData, string name, int defaultValue = 0)
+        bool ReadConfigBool(string customData, string name, bool? defaultValue = null)
         {
             var value = ReadConfigLine(customData, name);
             if (string.IsNullOrWhiteSpace(value))
             {
-                errors.AppendLine($"{name} not set.");
+                if (!defaultValue.HasValue)
+                {
+                    errors.AppendLine($"{name} not set.");
+                }
 
-                return defaultValue;
+                return defaultValue ?? false;
             }
 
-            return int.Parse(value);
+            return bool.Parse(value.Trim());
         }
-        double ReadConfigDouble(string customData, string name, double defaultValue = 0)
+        int ReadConfigInt(string customData, string name, int? defaultValue = null)
         {
             var value = ReadConfigLine(customData, name);
             if (string.IsNullOrWhiteSpace(value))
             {
-                errors.AppendLine($"{name} not set.");
+                if (!defaultValue.HasValue)
+                {
+                    errors.AppendLine($"{name} not set.");
+                }
 
-                return defaultValue;
+                return defaultValue ?? 0;
+            }
+
+            return int.Parse(value.Trim());
+        }
+        double ReadConfigDouble(string customData, string name, double? defaultValue = null)
+        {
+            var value = ReadConfigLine(customData, name);
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                if (!defaultValue.HasValue)
+                {
+                    errors.AppendLine($"{name} not set.");
+                }
+
+                return defaultValue ?? 0;
             }
 
             return double.Parse(value.Trim());
@@ -129,8 +146,6 @@ namespace IngameScript
                 "DataLCDs=[DELIVERY_DATA]\n" +
                 "LogLCDs=[DELIVERY_LOG]\n" +
                 "\n" +
-                "Camera=Camera\n" +
-                "\n" +
                 "ExchangeNumWaypoints=5\n" +
                 "ExchangePathDistance=150\n" +
                 "ExchangeDockRequestTimeThr=900\n" +
@@ -138,7 +153,7 @@ namespace IngameScript
                 "ExchangeMainConnector=Input\n" +
                 "ExchangeOtherConnector=Output\n" +
                 "\n" +
-                "RequestStatusInterval=10\n" +
+                "RequestStatusInterval=30\n" +
                 "RequestReceptionInterval=60\n";
         }
     }

@@ -6,10 +6,14 @@ namespace IngameScript
         Unknown,
         Idle,
 
-        OnRoute,
         WaitingDock,
         Docking,
+        Loading,
+        Unloading,
 
-        Distress,
+        WaitingUndock,
+        Undocking,
+
+        OnRoute,
     }
 }

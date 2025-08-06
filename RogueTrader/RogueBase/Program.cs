@@ -3,7 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using VRageMath;
 
 namespace IngameScript
 {
@@ -15,7 +14,6 @@ namespace IngameScript
         const string Separate = "-";
 
         #region Blocks
-        readonly IMyCameraBlock camera;
         readonly IMyBroadcastListener bl;
         readonly List<IMyTextPanel> dataLCDs = new List<IMyTextPanel>();
         readonly List<IMyTextPanel> logLCDs = new List<IMyTextPanel>();
@@ -59,15 +57,8 @@ namespace IngameScript
 
             LoadFromStorage();
 
-            camera = GetBlockWithName<IMyCameraBlock>(config.BaseCamera);
-            if (camera == null)
-            {
-                Echo("Camera not found.");
-                return;
-            }
-
-            GridTerminalSystem.GetBlocksOfType(dataLCDs, lcd => lcd.CubeGrid == Me.CubeGrid && lcd.CustomName.Contains(config.BaseDataLCDs));
-            GridTerminalSystem.GetBlocksOfType(logLCDs, lcd => lcd.CubeGrid == Me.CubeGrid && lcd.CustomName.Contains(config.BaseLogLCDs));
+            GridTerminalSystem.GetBlocksOfType(dataLCDs, lcd => lcd.CubeGrid == Me.CubeGrid && lcd.CustomName.Contains(config.DataLCDs));
+            GridTerminalSystem.GetBlocksOfType(logLCDs, lcd => lcd.CubeGrid == Me.CubeGrid && lcd.CustomName.Contains(config.LogLCDs));
 
             WriteLCDs("[baseId]", baseId);
 
@@ -193,10 +184,11 @@ namespace IngameScript
 
             if (!IsForMe(lines)) return;
 
-            if (command == "RESPONSE_STATUS") CmdResponseStatus(lines);
+            if (command == "RESPONSE_STATUS") ProcessResponseStatus(lines);
 
-            else if (command == "WAITING_LOAD") CmdWaitingLoad(lines);
-            else if (command == "WAITING_UNLOAD") CmdWaitingUnload(lines);
+            else if (command == "WAITING_LOAD") ProcessWaitingLoad(lines);
+            else if (command == "WAITING_UNLOAD") ProcessWaitingUnload(lines);
+            else if (command == "WAITING_UNDOCK") ProcessWaitingUndock(lines);
         }
 
         /// <summary>
@@ -205,7 +197,7 @@ namespace IngameScript
         /// <remarks>
         /// Request: RESPONSE_STATUS
         /// </remarks>
-        void CmdResponseStatus(string[] lines)
+        void ProcessResponseStatus(string[] lines)
         {
             string from = Utils.ReadString(lines, "From");
             ShipStatus status = (ShipStatus)Utils.ReadInt(lines, "Status");
@@ -233,7 +225,7 @@ namespace IngameScript
         /// <remarks>
         /// Request: WAITING_LOAD
         /// </remarks>
-        void CmdWaitingLoad(string[] lines)
+        void ProcessWaitingLoad(string[] lines)
         {
             string from = Utils.ReadString(lines, "From");
 
@@ -245,11 +237,19 @@ namespace IngameScript
         /// <remarks>
         /// Request: WAITING_UNLOAD
         /// </remarks>
-        void CmdWaitingUnload(string[] lines)
+        void ProcessWaitingUnload(string[] lines)
         {
             string from = Utils.ReadString(lines, "From");
 
             EnqueueExchangeRequest(from, ExchangeTasks.Unload);
+        }
+        /// <summary>
+        /// Enqueues a request to undock from a SHIP.
+        /// </summary>
+        /// <param name="lines"></param>
+        void ProcessWaitingUndock(string[] lines)
+        {
+
         }
         #endregion
 
@@ -319,7 +319,7 @@ namespace IngameScript
             }
             WriteLog($"Exchange requests: {exRequest.Count}; Free exchanges: {freeExchanges.Count}; Free ships: {waitingShips.Count}");
 
-            var shipExchangePairs = GetNearestShipsFromExchanges(waitingShips, freeExchanges);
+            var shipExchangePairs = ShipExchangePair.GetNearestShipsFromExchanges(waitingShips, freeExchanges);
             if (shipExchangePairs.Count == 0)
             {
                 return;
@@ -352,13 +352,14 @@ namespace IngameScript
                     $"Command={command}",
                     $"To={request.Ship}",
                     $"From={baseId}",
-                    $"Exchange={exchange.Name}",
-                    $"InGravitry={(config.InGravity?1:0)}",
 
-                    $"Forward={Utils.VectorToStr(camera.WorldMatrix.Forward)}",
-                    $"Up={Utils.VectorToStr(camera.WorldMatrix.Up)}",
+                    $"InGravitry={(config.InGravity?1:0)}",
+                    $"Parking={config.Parking}",
+
+                    $"Exchange={exchange.Name}",
+                    $"Forward={Utils.VectorToStr(exchange.Forward)}",
+                    $"Up={Utils.VectorToStr(exchange.Up)}",
                     $"WayPoints={Utils.VectorListToStr(exchange.CalculateRouteToConnector())}",
-                    $"Parking={config.BaseParking}",
                 };
                 BroadcastMessage(parts);
 
@@ -390,181 +391,6 @@ namespace IngameScript
         #endregion
 
         #region UTILITY
-        void InitializeExchangeGroups()
-        {
-            //Find all blocks that have the exchange regex in their name
-            var blocks = new List<IMyTerminalBlock>();
-            GridTerminalSystem.GetBlocksOfType(blocks, i => i.CubeGrid == Me.CubeGrid && config.ExchangesRegex.IsMatch(i.CustomName));
-
-            //Group them by the group name
-            var groups = blocks.GroupBy(b => ExtractGroupName(b.CustomName)).ToList();
-
-            //For each group, initialize the blocks of the ExchangeGroup class
-            foreach (var group in groups)
-            {
-                var exchangeGroup = new ExchangeGroup(config)
-                {
-                    Name = group.Key,
-                };
-
-                foreach (var block in group)
-                {
-                    var connector = block as IMyShipConnector;
-                    if (connector != null)
-                    {
-                        if (connector.CustomName.Contains(config.ExchangeMainConnector)) exchangeGroup.MainConnector = connector;
-                        else if (connector.CustomName.Contains(config.ExchangeOtherConnector)) exchangeGroup.Connectors.Add(connector);
-
-                        continue;
-                    }
-                }
-
-                if (exchangeGroup.IsValid())
-                {
-                    WriteLog($"ExchangeGroup {exchangeGroup.Name} initialized.");
-                    exchanges.Add(exchangeGroup);
-                }
-                else
-                {
-                    WriteLog($"ExchangeGroup {exchangeGroup.Name} is invalid.");
-                }
-            }
-        }
-
-        bool IsForMe(string[] lines)
-        {
-            return Utils.ReadString(lines, "To") == baseId;
-        }
-
-        void EnqueueExchangeRequest(string ship, ExchangeTasks task)
-        {
-            exchangeRequests.RemoveAll(r => r.Ship == ship);
-
-            exchangeRequests.Add(new ExchangeRequest
-            {
-                Ship = ship,
-                Idle = true,
-                Task = task,
-            });
-        }
-        List<ExchangeRequest> GetPendingExchangeRequests()
-        {
-            return exchangeRequests.Where(r => r.Idle && r.Task != ExchangeTasks.None).ToList();
-        }
-        List<ExchangeGroup> GetFreeExchanges()
-        {
-            return exchanges.Where(e => e.IsFree()).ToList();
-        }
-        List<Ship> GetWaitingShips()
-        {
-            return ships.Where(s => s.Status == ShipStatus.WaitingDock).ToList();
-        }
-        static List<ShipExchangePair> GetNearestShipsFromExchanges(List<Ship> freeShips, List<ExchangeGroup> freeExchanges)
-        {
-            var shipExchangePairs = new List<ShipExchangePair>();
-
-            if (freeShips.Count == 1 && freeExchanges.Count == 1)
-            {
-                shipExchangePairs.Add(new ShipExchangePair
-                {
-                    Ship = freeShips[0],
-                    Exchange = freeExchanges[0],
-                });
-
-                return shipExchangePairs;
-            }
-
-            foreach (var ship in freeShips)
-            {
-                foreach (var exchange in freeExchanges)
-                {
-                    double distance = Vector3D.Distance(ship.Position, exchange.MainConnector.GetPosition());
-                    shipExchangePairs.Add(new ShipExchangePair
-                    {
-                        Ship = ship,
-                        Exchange = exchange,
-                        Distance = distance
-                    });
-                }
-            }
-
-            return shipExchangePairs.OrderBy(pair => pair.Distance).ToList();
-        }
-
-        void PrintExchanges()
-        {
-            if (!config.ShowExchanges) return;
-
-            sbData.AppendLine();
-            sbData.AppendLine("EXCHANGE STATUS");
-
-            if (exchanges.Count == 0)
-            {
-                sbData.AppendLine("No exchanges available.");
-                return;
-            }
-
-            foreach (var exchange in exchanges)
-            {
-                bool isFree = exchange.IsFree();
-                string status = isFree ? "Free" : string.Join(", ", exchange.DockedShips());
-
-                sbData.AppendLine($"Exchange {exchange.Name} - {status}");
-            }
-        }
-        void PrintShipStatus()
-        {
-            if (!config.ShowShips) return;
-
-            sbData.AppendLine();
-            sbData.AppendLine("SHIPS STATUS");
-
-            if (ships.Count == 0)
-            {
-                sbData.AppendLine("No ships available.");
-                return;
-            }
-
-            foreach (var ship in ships)
-            {
-                sbData.AppendLine($"+{ship.Name} - {ship.Status}. Cargo at {ship.Cargo:P1}. Last update: {(DateTime.Now - ship.UpdateTime).TotalSeconds:F0}secs");
-                sbData.AppendLine(ship.StatusMessage);
-                sbData.AppendLine(Separate);
-            }
-
-            //Remove ships that have not been updated in a while
-            ships.RemoveAll(s => (DateTime.Now - s.UpdateTime).TotalMinutes > 5);
-        }
-        void PrintExchangeRequests()
-        {
-            if (!config.ShowExchangeRequests) return;
-
-            sbData.AppendLine();
-            sbData.AppendLine("EXCHANGE REQUESTS");
-
-            if (exchangeRequests.Count == 0)
-            {
-                sbData.AppendLine("No requests available.");
-                return;
-            }
-
-            foreach (var req in exchangeRequests)
-            {
-                string unloadStatus = req.Idle ? "Pending" : "On route";
-                sbData.AppendLine($"{req.Ship} {req.Task}. {unloadStatus}");
-            }
-        }
-
-        string ExtractGroupName(string input)
-        {
-            var match = config.ExchangesRegex.Match(input);
-            if (match.Success)
-            {
-                return match.Value;
-            }
-
-            return string.Empty;
-        }
         T GetBlockWithName<T>(string name) where T : class, IMyTerminalBlock
         {
             List<T> blocks = new List<T>();
@@ -629,6 +455,121 @@ namespace IngameScript
             WriteLog($"SendIGCMessage: {message}");
 
             IGC.SendBroadcastMessage(config.Channel, message);
+        }
+
+        bool IsForMe(string[] lines)
+        {
+            return Utils.ReadString(lines, "To") == baseId;
+        }
+
+        void InitializeExchangeGroups()
+        {
+            //Find all blocks that have the exchange regex in their name
+            var blocks = new List<IMyTerminalBlock>();
+            GridTerminalSystem.GetBlocksOfType(blocks, i => i.CubeGrid == Me.CubeGrid && config.ExchangesRegex.IsMatch(i.CustomName));
+
+            var exchanges = ExchangeGroup.InitializeExchangeGroups(blocks, config);
+
+            foreach (var exchangeGroup in exchanges)
+            {
+                if (exchangeGroup.IsValid())
+                {
+                    WriteLog($"ExchangeGroup {exchangeGroup.Name} initialized.");
+                    exchanges.Add(exchangeGroup);
+                }
+                else
+                {
+                    WriteLog($"ExchangeGroup {exchangeGroup.Name} is invalid.");
+                }
+            }
+        }
+
+        void EnqueueExchangeRequest(string ship, ExchangeTasks task)
+        {
+            exchangeRequests.RemoveAll(r => r.Ship == ship);
+
+            exchangeRequests.Add(new ExchangeRequest
+            {
+                Ship = ship,
+                Idle = true,
+                Task = task,
+            });
+        }
+        List<ExchangeRequest> GetPendingExchangeRequests()
+        {
+            return exchangeRequests.Where(r => r.Idle && r.Task != ExchangeTasks.None).ToList();
+        }
+        List<ExchangeGroup> GetFreeExchanges()
+        {
+            return exchanges.Where(e => e.IsFree()).ToList();
+        }
+        List<Ship> GetWaitingShips()
+        {
+            return ships.Where(s => s.Status == ShipStatus.WaitingDock).ToList();
+        }
+
+        void PrintExchanges()
+        {
+            if (!config.ShowExchanges) return;
+
+            sbData.AppendLine();
+            sbData.AppendLine("EXCHANGE STATUS");
+
+            if (exchanges.Count == 0)
+            {
+                sbData.AppendLine("No exchanges available.");
+                return;
+            }
+
+            foreach (var exchange in exchanges)
+            {
+                bool isFree = exchange.IsFree();
+                string status = isFree ? "Free" : string.Join(", ", exchange.DockedShips());
+
+                sbData.AppendLine($"Exchange {exchange.Name} - {status}");
+            }
+        }
+        void PrintShipStatus()
+        {
+            if (!config.ShowShips) return;
+
+            sbData.AppendLine();
+            sbData.AppendLine("SHIPS STATUS");
+
+            if (ships.Count == 0)
+            {
+                sbData.AppendLine("No ships available.");
+                return;
+            }
+
+            foreach (var ship in ships)
+            {
+                sbData.AppendLine($"+{ship.Name} - {ship.Status}. Cargo at {ship.Cargo:P1}. Last update: {(DateTime.Now - ship.UpdateTime).TotalSeconds:F0}secs");
+                sbData.AppendLine(ship.StatusMessage);
+                sbData.AppendLine(Separate);
+            }
+
+            //Remove ships that have not been updated in a while
+            ships.RemoveAll(s => (DateTime.Now - s.UpdateTime).TotalMinutes > 5);
+        }
+        void PrintExchangeRequests()
+        {
+            if (!config.ShowExchangeRequests) return;
+
+            sbData.AppendLine();
+            sbData.AppendLine("EXCHANGE REQUESTS");
+
+            if (exchangeRequests.Count == 0)
+            {
+                sbData.AppendLine("No requests available.");
+                return;
+            }
+
+            foreach (var req in exchangeRequests)
+            {
+                string unloadStatus = req.Idle ? "Pending" : "On route";
+                sbData.AppendLine($"{req.Ship} {req.Task}. {unloadStatus}");
+            }
         }
         #endregion
 

@@ -5,8 +5,15 @@ namespace IngameScript
     {
         Unknown,
         Idle,
+
         WaitingDock,
         Docking,
+        Loading,
+        Unloading,
+
+        WaitingUndock,
+        Undocking,
+
         OnRoute,
     }
 }

@@ -18,18 +18,21 @@ namespace IngameScript
         public readonly string WildcardShipInfo;
         public readonly string WildcardLogLCDs;
 
-        public readonly string ShipTimerPilot;
-        public readonly string ShipTimerLock;
-        public readonly string ShipTimerUnlock;
-        public readonly string ShipTimerLoad;
-        public readonly string ShipTimerUnload;
-        public readonly string ShipTimerWaiting;
-        public readonly string ShipRemoteControlPilot;
-        public readonly string ShipCameraPilot;
-        public readonly string ShipRemoteControlAlign;
-        public readonly string ShipRemoteControlLanding;
-        public readonly string ShipConnectorA;
-        public readonly string ShipAntennaName;
+        public readonly string TimerPilot;
+        public readonly string TimerLock;
+        public readonly string TimerUnlock;
+        public readonly string TimerLoad;
+        public readonly string TimerUnload;
+        public readonly string TimerWaiting;
+        public readonly string RemoteControlPilot;
+        public readonly string CameraPilot;
+        public readonly string RemoteControlAlign;
+        public readonly string RemoteControlLanding;
+        public readonly string ConnectorA;
+        public readonly string Antenna;
+
+        public readonly double MaxLoad;
+        public readonly double MinLoad;
 
         public readonly Route Route;
 
@@ -37,30 +40,33 @@ namespace IngameScript
         {
             Channel = Utils.ReadConfig(customData, "Channel");
 
-            EnableLogs = ReadConfig(customData, "EnableLogs", "false") == "true";
+            EnableLogs = ReadConfigBool(customData, "EnableLogs");
 
             WildcardShipId = ReadConfig(customData, "WildcardShipId");
             WildcardShipInfo = ReadConfig(customData, "WildcardShipInfo");
             WildcardLogLCDs = ReadConfig(customData, "WildcardLogLCDs");
 
-            ShipTimerPilot = ReadConfig(customData, "ShipTimerPilot", "");
-            ShipTimerLock = ReadConfig(customData, "ShipTimerLock");
-            ShipTimerUnlock = ReadConfig(customData, "ShipTimerUnlock");
-            ShipTimerLoad = ReadConfig(customData, "ShipTimerLoad", "");
-            ShipTimerUnload = ReadConfig(customData, "ShipTimerUnload", "");
-            ShipTimerWaiting = ReadConfig(customData, "ShipTimerWaiting");
-            ShipRemoteControlPilot = ReadConfig(customData, "ShipRemoteControlPilot");
-            ShipCameraPilot = ReadConfig(customData, "ShipCameraPilot");
-            ShipRemoteControlAlign = ReadConfig(customData, "ShipRemoteControlAlign");
-            ShipRemoteControlLanding = ReadConfig(customData, "ShipRemoteControlLanding");
-            ShipConnectorA = ReadConfig(customData, "ShipConnectorA");
-            ShipAntennaName = ReadConfig(customData, "ShipAntennaName");
+            TimerPilot = ReadConfig(customData, "TimerPilot", "");
+            TimerLock = ReadConfig(customData, "TimerLock");
+            TimerUnlock = ReadConfig(customData, "TimerUnlock");
+            TimerLoad = ReadConfig(customData, "TimerLoad", "");
+            TimerUnload = ReadConfig(customData, "TimerUnload", "");
+            TimerWaiting = ReadConfig(customData, "TimerWaiting");
+            RemoteControlPilot = ReadConfig(customData, "RemoteControlPilot");
+            CameraPilot = ReadConfig(customData, "CameraPilot");
+            RemoteControlAlign = ReadConfig(customData, "RemoteControlAlign");
+            RemoteControlLanding = ReadConfig(customData, "RemoteControlLanding");
+            ConnectorA = ReadConfig(customData, "ConnectorA");
+            Antenna = ReadConfig(customData, "Antenna");
+
+            MaxLoad = ReadConfigDouble(customData, "MaxLoad", 1);
+            MinLoad = ReadConfigDouble(customData, "MinLoad", 0);
 
             Route = new Route(
-                ReadConfig(customData, "AtmNavigationLoadBase"),
-                ReadConfig(customData, "AtmNavigationUnloadBase"),
-                ReadConfigVectorList(customData, "AtmNavigationToLoadBaseWaypoints", new List<Vector3D>()),
-                ReadConfigVectorList(customData, "AtmNavigationToUnloadBaseWaypoints", new List<Vector3D>()));
+                ReadConfig(customData, "RouteLoadBase"),
+                ReadConfig(customData, "RouteUnloadBase"),
+                ReadConfigVectorList(customData, "RouteToLoadBaseWaypoints", new List<Vector3D>()),
+                ReadConfigVectorList(customData, "RouteToUnloadBaseWaypoints", new List<Vector3D>()));
         }
         string ReadConfig(string customData, string name, string defaultValue = null)
         {
@@ -77,6 +83,21 @@ namespace IngameScript
 
             return value;
         }
+        bool ReadConfigBool(string customData, string name, bool? defaultValue = null)
+        {
+            var value = ReadConfigLine(customData, name);
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                if (!defaultValue.HasValue)
+                {
+                    errors.AppendLine($"{name} not set.");
+                }
+
+                return defaultValue ?? false;
+            }
+
+            return bool.Parse(value.Trim());
+        }
         int ReadConfigInt(string customData, string name, int? defaultValue = null)
         {
             var value = ReadConfigLine(customData, name);
@@ -87,7 +108,7 @@ namespace IngameScript
                     errors.AppendLine($"{name} not set.");
                 }
 
-                return 0;
+                return defaultValue ?? 0;
             }
 
             return int.Parse(value.Trim());
@@ -102,7 +123,7 @@ namespace IngameScript
                     errors.AppendLine($"{name} not set.");
                 }
 
-                return 0;
+                return defaultValue ?? 0;
             }
 
             return double.Parse(value.Trim());
@@ -150,56 +171,26 @@ namespace IngameScript
                 "WildcardShipInfo=[DELIVERY_INFO]\n" +
                 "WildcardLogLCDs=[DELIVERY_LOG]\n" +
                 "\n" +
-                "ShipTimerPilot=Timer Block Pilot\n" +
-                "ShipTimerLock=Timer Block Locking\n" +
-                "ShipTimerUnlock=Timer Block Unlocking\n" +
-                "ShipTimerLoad=Timer Block Load\n" +
-                "ShipTimerUnload=Timer Block Unload\n" +
-                "ShipTimerWaiting=Timer Block Waiting\n" +
-                "ShipRemoteControlPilot=Remote Control Pilot\n" +
-                "ShipCameraPilot=Camera Pilot\n" +
-                "ShipRemoteControlAlign=Remote Control Locking\n" +
-                "ShipRemoteControlLanding=Remote Control Landing\n" +
-                "ShipConnectorA=Connector A\n" +
-                "ShipBeaconName=Distress Beacon\n" +
-                "ShipAntennaName=Compact Antenna\n" +
+                "TimerPilot=Timer Block Pilot\n" +
+                "TimerLock=Timer Block Locking\n" +
+                "TimerUnlock=Timer Block Unlocking\n" +
+                "TimerLoad=Timer Block Load\n" +
+                "TimerUnload=Timer Block Unload\n" +
+                "TimerWaiting=Timer Block Waiting\n" +
+                "RemoteControlPilot=Remote Control Pilot\n" +
+                "CameraPilot=Camera Pilot\n" +
+                "RemoteControlAlign=Remote Control Locking\n" +
+                "RemoteControlLanding=Remote Control Landing\n" +
+                "ConnectorA=Connector A\n" +
+                "Antenna=Compact Antenna\n" +
                 "\n" +
-                "GyrosThr=0.001\n" +
-                "GyrosSpeed=2.0\n" +
+                "MaxLoad=1\n" +
+                "MinLoad=0\n" +
                 "\n" +
-                "ArrivalTicks=100\n" +
-                "\n" +
-                "AlignTicks=1\n" +
-                "AlignExchangeApproachingSpeed=5\n" +
-                "AlignExchangeSlowdownDistance=50.0\n" +
-                "AlignExchangeDistanceThr=200.0\n" +
-                "AlignSpeedWaypointFirst=10.0\n" +
-                "AlignSpeedWaypoints=5.0\n" +
-                "AlignSpeedWaypointLast=1.0\n" +
-                "AlignDistanceThrWaypoints=0.5\n" +
-                "\n" +
-                "CruisingTicks=1\n" +
-                "CruisingMaxSpeed=100.0\n" +
-                "CruisingMaxSpeedThr=0.95\n" +
-                "CruisingMaxAccelerationSpeed=19.5\n" +
-                "CruisingToBasesDistanceThr=2000.0\n" +
-                "CruisingToTargetDistanceThr=3000.0\n" +
-                "CruisingThrustAlignSeconds=5.0\n" +
-                "CruisingLocateAlignThr=0.001\n" +
-                "CruisingCruiseAlignThr=0.01\n" +
-                "CruisingCollisionDetectRange=10000.0\n" +
-                "CruisingEvadingWaypointDistance=100.0\n" +
-                "CruisingEvadingMaxSpeed=19.5\n" +
-                "\n" +
-                "AtmNavigationTicks=1\n" +
-                "AtmNavigationMaxSpeed=100.0\n" +
-                "AtmNavigationToTargetDistanceThr=1000.0\n" +
-                "AtmNavigationAlignThr=0.01\n" +
-                "AtmNavigationMinLoad=0.1\n" +
-                "AtmNavigationMaxLoad=0.9\n" +
-                "AtmNavigationLoadBase=name\n" +
-                "AtmNavigationUnloadBase=name\n" +
-                "AtmNavigationSeparationSecs=3";
+                "RouteLoadBase=base1\n" +
+                "RouteUnloadBase=base2\n" +
+                "RouteToLoadBaseWaypoints=x:y:z;x:y:z\n" +
+                "RouteToUnloadBaseWaypoints=x:y:z;x:y:z\n";
         }
     }
 }

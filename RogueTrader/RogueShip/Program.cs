@@ -44,8 +44,9 @@ namespace IngameScript
 
         readonly StringBuilder sbLog = new StringBuilder();
 
-        ShipStatus shipStatus = ShipStatus.Idle;
         bool paused = false;
+        ShipStatus shipStatus = ShipStatus.Idle;
+        readonly Navigator navigator;
 
         public Program()
         {
@@ -65,79 +66,81 @@ namespace IngameScript
                 return;
             }
 
-            timerPilot = GetBlockWithName<IMyTimerBlock>(config.ShipTimerPilot);
+            navigator = new Navigator(config);
+
+            timerPilot = GetBlockWithName<IMyTimerBlock>(config.TimerPilot);
             if (timerPilot == null)
             {
-                Echo($"Timer '{config.ShipTimerPilot}' not found.");
+                Echo($"Timer '{config.TimerPilot}' not found.");
                 return;
             }
-            timerLock = GetBlockWithName<IMyTimerBlock>(config.ShipTimerLock);
+            timerLock = GetBlockWithName<IMyTimerBlock>(config.TimerLock);
             if (timerLock == null)
             {
-                Echo($"Timer '{config.ShipTimerLock}' not found.");
+                Echo($"Timer '{config.TimerLock}' not found.");
                 return;
             }
-            timerUnlock = GetBlockWithName<IMyTimerBlock>(config.ShipTimerUnlock);
+            timerUnlock = GetBlockWithName<IMyTimerBlock>(config.TimerUnlock);
             if (timerUnlock == null)
             {
-                Echo($"Timer '{config.ShipTimerUnlock}' not found.");
+                Echo($"Timer '{config.TimerUnlock}' not found.");
                 return;
             }
-            timerLoad = GetBlockWithName<IMyTimerBlock>(config.ShipTimerLoad);
+            timerLoad = GetBlockWithName<IMyTimerBlock>(config.TimerLoad);
             if (timerLoad == null)
             {
-                Echo($"Timer '{config.ShipTimerLoad}' not found.");
+                Echo($"Timer '{config.TimerLoad}' not found.");
                 return;
             }
-            timerUnload = GetBlockWithName<IMyTimerBlock>(config.ShipTimerUnload);
+            timerUnload = GetBlockWithName<IMyTimerBlock>(config.TimerUnload);
             if (timerUnload == null)
             {
-                Echo($"Timer '{config.ShipTimerUnload}' not found.");
+                Echo($"Timer '{config.TimerUnload}' not found.");
                 return;
             }
-            timerWaiting = GetBlockWithName<IMyTimerBlock>(config.ShipTimerWaiting);
+            timerWaiting = GetBlockWithName<IMyTimerBlock>(config.TimerWaiting);
             if (timerWaiting == null)
             {
-                Echo($"Timer '{config.ShipTimerWaiting}' not found.");
+                Echo($"Timer '{config.TimerWaiting}' not found.");
                 return;
             }
 
-            remotePilot = GetBlockWithName<IMyRemoteControl>(config.ShipRemoteControlPilot);
+            remotePilot = GetBlockWithName<IMyRemoteControl>(config.RemoteControlPilot);
             if (remotePilot == null)
             {
-                Echo($"Remote Control '{config.ShipRemoteControlPilot}' not found.");
+                Echo($"Remote Control '{config.RemoteControlPilot}' not found.");
                 return;
             }
-            cameraPilot = GetBlockWithName<IMyCameraBlock>(config.ShipCameraPilot);
+            cameraPilot = GetBlockWithName<IMyCameraBlock>(config.CameraPilot);
             if (cameraPilot == null)
             {
-                Echo($"Camera {config.ShipCameraPilot} not found.");
+                Echo($"Camera {config.CameraPilot} not found.");
                 return;
             }
 
-            remoteAlign = GetBlockWithName<IMyRemoteControl>(config.ShipRemoteControlAlign);
+            remoteAlign = GetBlockWithName<IMyRemoteControl>(config.RemoteControlAlign);
             if (remoteAlign == null)
             {
-                Echo($"Remote Control '{config.ShipRemoteControlAlign}' not found.");
+                Echo($"Remote Control '{config.RemoteControlAlign}' not found.");
                 return;
             }
-            connectorA = GetBlockWithName<IMyShipConnector>(config.ShipConnectorA);
+            connectorA = GetBlockWithName<IMyShipConnector>(config.ConnectorA);
             if (connectorA == null)
             {
-                Echo($"Connector '{config.ShipConnectorA}' not found.");
+                Echo($"Connector '{config.ConnectorA}' not found.");
                 return;
             }
 
-            remoteLanding = GetBlockWithName<IMyRemoteControl>(config.ShipRemoteControlLanding);
+            remoteLanding = GetBlockWithName<IMyRemoteControl>(config.RemoteControlLanding);
             if (remoteLanding == null)
             {
-                Echo($"Remote Control '{config.ShipRemoteControlLanding}' not found. This ship is not available for landing.");
+                Echo($"Remote Control '{config.RemoteControlLanding}' not found. This ship is not available for landing.");
             }
 
-            antenna = GetBlockWithName<IMyRadioAntenna>(config.ShipAntennaName);
+            antenna = GetBlockWithName<IMyRadioAntenna>(config.Antenna);
             if (antenna == null)
             {
-                Echo($"Antenna {config.ShipAntennaName} not found.");
+                Echo($"Antenna {config.Antenna} not found.");
                 return;
             }
 
@@ -180,6 +183,8 @@ namespace IngameScript
             WriteInfoLCDs($"{shipId} in channel {config.Channel}");
             WriteInfoLCDs($"{CalculateCargoPercentage():P1} cargo.");
 
+            if (DoPause()) return;
+
             if (!string.IsNullOrEmpty(argument))
             {
                 ParseTerminalMessage(argument);
@@ -191,6 +196,8 @@ namespace IngameScript
                 var message = bl.AcceptMessage();
                 ParseMessage(message.Data.ToString());
             }
+
+            MonitorizeLoad();
         }
 
         #region TERMINAL COMMANDS
@@ -203,7 +210,7 @@ namespace IngameScript
             else if (argument == "RESUME") Resume();
             else if (argument == "ENABLE_LOGS") EnableLogs();
 
-            else if (argument == "START_ROUTE") StartRoute();
+            else if (argument == "START_ROUTE") SendWaitingMessage(ExchangeTasks.Load);
         }
 
         /// <summary>
@@ -243,20 +250,6 @@ namespace IngameScript
         {
             config.EnableLogs = !config.EnableLogs;
         }
-
-        /// <summary>
-        /// Starts a route to the configured load base.
-        /// </summary>
-        void StartRoute()
-        {
-            List<string> parts = new List<string>()
-            {
-                $"Command=WAITING_LOAD",
-                $"To={config.Route.LoadBase}",
-                $"From={shipId}",
-            };
-            BroadcastMessage(parts);
-        }
         #endregion
 
         #region IGC COMMANDS
@@ -267,12 +260,12 @@ namespace IngameScript
             string[] lines = signal.Split('|');
             string command = Utils.ReadArgument(lines, "Command");
 
-            if (command == "REQUEST_STATUS") CmdRequestStatus(lines);
+            if (command == "REQUEST_STATUS") ProcessRequestStatus(lines);
 
             if (!IsForMe(lines)) return;
 
-            if (command == "COME_TO_LOAD") CmdDock(lines, ExchangeTasks.Load);
-            if (command == "COME_TO_UNLOAD") CmdDock(lines, ExchangeTasks.Unload);
+            if (command == "COME_TO_LOAD") ProcessDock(lines, ExchangeTasks.Load);
+            if (command == "COME_TO_UNLOAD") ProcessDock(lines, ExchangeTasks.Unload);
         }
 
         /// <summary>
@@ -282,7 +275,7 @@ namespace IngameScript
         /// Request:  REQUEST_STATUS
         /// Execute:  RESPONSE_STATUS
         /// </remarks>
-        void CmdRequestStatus(string[] lines)
+        void ProcessRequestStatus(string[] lines)
         {
             string from = Utils.ReadString(lines, "From");
 
@@ -301,15 +294,81 @@ namespace IngameScript
         /// <summary>
         /// SHIP begins navigation to the specified connector and docks in LOADING or UNLOADING MODE.
         /// </summary>
-        void CmdDock(string[] lines, ExchangeTasks task)
+        void ProcessDock(string[] lines, ExchangeTasks task)
         {
+            //Get exchange parameters
+            bool inGravity = Utils.ReadInt(lines, "InGravity") == 1;
+            var parking = Utils.ReadVector(lines, "Parking");
+
+            string exchange = Utils.ReadString(lines, "Exchange");
+            var fw = Utils.ReadVector(lines, "Forward");
+            var up = Utils.ReadVector(lines, "Up");
+            var wpList = Utils.ReadVectorList(lines, "Waypoints");
+
+            navigator.AproximateToDock(inGravity, parking, exchange, fw, up, wpList, () => OnAproximationCompleted(task));
+
+            shipStatus = ShipStatus.Docking;
+        }
+        void OnAproximationCompleted(ExchangeTasks task)
+        {
+            timerLock?.StartCountdown();
+
             if (task == ExchangeTasks.Load)
             {
-
+                timerLoad?.StartCountdown();
+                shipStatus = ShipStatus.Loading;
             }
             else if (task == ExchangeTasks.Unload)
             {
+                timerUnload?.StartCountdown();
+                shipStatus = ShipStatus.Unloading;
+            }
+        }
+        #endregion
 
+        #region PAUSE
+        bool DoPause()
+        {
+            if (!paused)
+            {
+                return false;
+            }
+
+            WriteInfoLCDs("Paused...");
+
+            ResetThrust();
+            ResetGyros();
+            return true;
+        }
+        #endregion
+
+        #region LOAD/UNLOAD Monitors
+        void MonitorizeLoad()
+        {
+            if (shipStatus == ShipStatus.Loading)
+            {
+                WriteInfoLCDs("Loading cargo...");
+
+                double capacity = CalculateCargoPercentage();
+                if (capacity >= config.MaxLoad)
+                {
+                    SendWaitingUndockMessage(ExchangeTasks.Load);
+                }
+
+                return;
+            }
+
+            if (shipStatus == ShipStatus.Unloading)
+            {
+                WriteInfoLCDs("Unloading cargo...");
+
+                double capacity = CalculateCargoPercentage();
+                if (capacity <= config.MinLoad)
+                {
+                    SendWaitingUndockMessage(ExchangeTasks.Unload);
+                }
+
+                return;
             }
         }
         #endregion
@@ -435,6 +494,42 @@ namespace IngameScript
 
             return curr / max;
         }
+
+        void SendWaitingMessage(ExchangeTasks task)
+        {
+            string message = task == ExchangeTasks.Load ? "WAITING_LOAD" : "WAITING_UNLOAD";
+            string to = task == ExchangeTasks.Load ? config.Route.LoadBase : config.Route.UnloadBase;
+
+            List<string> parts = new List<string>()
+            {
+                $"Command={message}",
+                $"To={to}",
+                $"From={shipId}",
+            };
+            BroadcastMessage(parts);
+
+            shipStatus = ShipStatus.WaitingDock;
+        }
+        void SendWaitingUndockMessage(ExchangeTasks task)
+        {
+            //Send a message to the base to undock the ship from the exchange connector
+            string to = task == ExchangeTasks.Load ? config.Route.LoadBase : config.Route.UnloadBase;
+
+            List<string> parts = new List<string>()
+            {
+                $"Command=WAITING_UNDOCK",
+                $"To={to}",
+                $"From={shipId}",
+            };
+            BroadcastMessage(parts);
+
+            shipStatus = ShipStatus.WaitingUndock;
+
+            //The base will send a message to the ship to undock, and the ship will start the undocking process
+
+            //When the undocking process is completed, the ship will start the trip to the other base
+
+        }
         #endregion
 
         void LoadFromStorage()
@@ -446,12 +541,16 @@ namespace IngameScript
             }
 
             paused = Utils.ReadInt(storageLines, "Paused", 0) == 1;
+            shipStatus = (ShipStatus)Utils.ReadInt(storageLines, "ShipStatus", (int)ShipStatus.Idle);
+            navigator.LoadFromStorage(Utils.ReadString(storageLines, "Navigator"));
         }
         void SaveToStorage()
         {
             List<string> parts = new List<string>
             {
                 $"Paused={(paused ? 1 : 0)}",
+                $"ShipStatus={(int)shipStatus}",
+                $"Navigator={navigator.SaveToStorage()}",
             };
 
             Storage = string.Join(Environment.NewLine, parts);
