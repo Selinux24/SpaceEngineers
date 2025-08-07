@@ -36,6 +36,16 @@ namespace IngameScript
 
         public readonly Route Route;
 
+        public readonly int NavigationTicks;
+        public readonly double DockingSpeedWaypointFirst;
+        public readonly double DockingSpeedWaypointLast;
+        public readonly double DockingSpeedWaypoints;
+        public readonly double DockingSlowdownDistance;
+        public readonly double DockingDistanceThrWaypoints;
+
+        public readonly double GyrosThr;
+        public readonly double GyrosSpeed;
+
         public Config(string customData)
         {
             Channel = Utils.ReadConfig(customData, "Channel");

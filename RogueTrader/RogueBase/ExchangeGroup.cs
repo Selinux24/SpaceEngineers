@@ -182,6 +182,12 @@ namespace IngameScript
 
             return waypoints;
         }
+        public List<Vector3D> CalculateRouteFromConnector()
+        {
+            var waypoints = CalculateRouteToConnector();
+            waypoints.Reverse();
+            return waypoints;
+        }
 
         public string SaveToStorage()
         {

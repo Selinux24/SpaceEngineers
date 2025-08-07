@@ -76,7 +76,7 @@ namespace IngameScript
         public void Main(string argument)
         {
             DoRequestStatus();
-            DoRequestExchange();
+            DoExchangeRequest();
 
             if (!string.IsNullOrEmpty(argument))
             {
@@ -186,9 +186,10 @@ namespace IngameScript
 
             if (command == "RESPONSE_STATUS") ProcessResponseStatus(lines);
 
-            else if (command == "WAITING_LOAD") ProcessWaitingLoad(lines);
-            else if (command == "WAITING_UNLOAD") ProcessWaitingUnload(lines);
-            else if (command == "WAITING_UNDOCK") ProcessWaitingUndock(lines);
+            else if (command == "WAITING_LOAD") ProcessWaitingStartLoad(lines);
+            else if (command == "WAITING_UNLOAD") ProcessWaitingStartUnload(lines);
+            else if (command == "WAITING_UNDOCK_LOAD") ProcessWaitingEndLoad(lines);
+            else if (command == "WAITING_UNDOCK_UNLOAD") ProcessWaitingEndUnload(lines);
         }
 
         /// <summary>
@@ -225,11 +226,11 @@ namespace IngameScript
         /// <remarks>
         /// Request: WAITING_LOAD
         /// </remarks>
-        void ProcessWaitingLoad(string[] lines)
+        void ProcessWaitingStartLoad(string[] lines)
         {
             string from = Utils.ReadString(lines, "From");
 
-            EnqueueExchangeRequest(from, ExchangeTasks.Load);
+            EnqueueExchangeRequest(from, ExchangeTasks.StartLoad);
         }
         /// <summary>
         /// Enqueues a request to unload cargo from a SHIP.
@@ -237,19 +238,29 @@ namespace IngameScript
         /// <remarks>
         /// Request: WAITING_UNLOAD
         /// </remarks>
-        void ProcessWaitingUnload(string[] lines)
+        void ProcessWaitingStartUnload(string[] lines)
         {
             string from = Utils.ReadString(lines, "From");
 
-            EnqueueExchangeRequest(from, ExchangeTasks.Unload);
+            EnqueueExchangeRequest(from, ExchangeTasks.StartUnload);
         }
         /// <summary>
         /// Enqueues a request to undock from a SHIP.
         /// </summary>
-        /// <param name="lines"></param>
-        void ProcessWaitingUndock(string[] lines)
+        void ProcessWaitingEndLoad(string[] lines)
         {
+            string from = Utils.ReadString(lines, "From");
 
+            EnqueueExchangeRequest(from, ExchangeTasks.EndLoad);
+        }
+        /// <summary>
+        /// Enqueues a request to undock from a SHIP.
+        /// </summary>
+        void ProcessWaitingEndUnload(string[] lines)
+        {
+            string from = Utils.ReadString(lines, "From");
+
+            EnqueueExchangeRequest(from, ExchangeTasks.EndUnload);
         }
         #endregion
 
@@ -289,7 +300,7 @@ namespace IngameScript
         /// <remarks>
         /// Execute:  DOCK
         /// </remarks>
-        void DoRequestExchange()
+        void DoExchangeRequest()
         {
             if (!requestExchange)
             {
@@ -302,38 +313,42 @@ namespace IngameScript
             }
             lastExchangeRequest = DateTime.Now;
 
-            var exRequest = GetPendingExchangeRequests();
-            if (exRequest.Count == 0)
+            if (DoExchangeUndockRequest())
             {
                 return;
+            }
+
+            DoExchangeDockRequest();
+        }
+        bool DoExchangeDockRequest()
+        {
+            var exRequest = GetPendingExchangeDockRequests();
+            if (exRequest.Count == 0)
+            {
+                return false;
             }
             var freeExchanges = GetFreeExchanges();
             if (freeExchanges.Count == 0)
             {
-                return;
+                return false;
             }
             var waitingShips = GetWaitingShips();
             if (waitingShips.Count == 0)
             {
-                return;
+                return false;
             }
             WriteLog($"Exchange requests: {exRequest.Count}; Free exchanges: {freeExchanges.Count}; Free ships: {waitingShips.Count}");
 
             var shipExchangePairs = ShipExchangePair.GetNearestShipsFromExchanges(waitingShips, freeExchanges);
             if (shipExchangePairs.Count == 0)
             {
-                return;
+                return false;
             }
 
             foreach (var request in exRequest)
             {
                 var pair = shipExchangePairs.FirstOrDefault(s => s.Ship.Name == request.Ship);
                 if (pair == null)
-                {
-                    continue;
-                }
-
-                if (request.Task == ExchangeTasks.None)
                 {
                     continue;
                 }
@@ -345,7 +360,18 @@ namespace IngameScript
                 ship.Status = ShipStatus.Docking;
                 exchange.DockRequest(ship.Name);
 
-                string command = request.Task == ExchangeTasks.Load ? "COME_TO_LOAD" : "COME_TO_UNLOAD";
+                var wayPoints = exchange.CalculateRouteToConnector();
+
+                string command = null;
+                switch (request.Task)
+                {
+                    case ExchangeTasks.StartLoad:
+                        command = "COME_TO_LOAD";
+                        break;
+                    case ExchangeTasks.StartUnload:
+                        command = "COME_TO_UNLOAD";
+                        break;
+                }
 
                 List<string> parts = new List<string>()
                 {
@@ -359,12 +385,64 @@ namespace IngameScript
                     $"Exchange={exchange.Name}",
                     $"Forward={Utils.VectorToStr(exchange.Forward)}",
                     $"Up={Utils.VectorToStr(exchange.Up)}",
-                    $"WayPoints={Utils.VectorListToStr(exchange.CalculateRouteToConnector())}",
+                    $"WayPoints={Utils.VectorListToStr(wayPoints)}",
                 };
                 BroadcastMessage(parts);
 
-                break;
+                return true;
             }
+
+            return false;
+        }
+        bool DoExchangeUndockRequest()
+        {
+            var exRequest = GetPendingExchangeUndockRequests();
+            if (exRequest.Count == 0)
+            {
+                return false;
+            }
+
+            foreach (var request in exRequest)
+            {
+                var exchange = exchanges.FirstOrDefault(e => e.DockedShipName == request.Ship);
+                if (exchange == null)
+                {
+                    continue;
+                }
+
+                var wayPoints = exchange.CalculateRouteFromConnector();
+
+                string command = null;
+                switch (request.Task)
+                {
+                    case ExchangeTasks.StartLoad:
+                        command = "UNDOCK_TO_LOAD";
+                        break;
+                    case ExchangeTasks.StartUnload:
+                        command = "UNDOCK_TO_UNLOAD";
+                        break;
+                }
+
+                List<string> parts = new List<string>()
+                {
+                    $"Command={command}",
+                    $"To={request.Ship}",
+                    $"From={baseId}",
+
+                    $"InGravitry={(config.InGravity?1:0)}",
+                    $"Parking={config.Parking}",
+
+                    $"Exchange={exchange.Name}",
+                    $"Forward={Utils.VectorToStr(exchange.Forward)}",
+                    $"Up={Utils.VectorToStr(exchange.Up)}",
+                    $"WayPoints={Utils.VectorListToStr(wayPoints)}",
+                };
+                BroadcastMessage(parts);
+
+                return true;
+            }
+
+            return false;
         }
         #endregion
 
@@ -495,9 +573,13 @@ namespace IngameScript
                 Task = task,
             });
         }
-        List<ExchangeRequest> GetPendingExchangeRequests()
+        List<ExchangeRequest> GetPendingExchangeDockRequests()
         {
-            return exchangeRequests.Where(r => r.Idle && r.Task != ExchangeTasks.None).ToList();
+            return exchangeRequests.Where(r => r.Idle && (r.Task == ExchangeTasks.StartLoad || r.Task == ExchangeTasks.StartUnload)).ToList();
+        }
+        List<ExchangeRequest> GetPendingExchangeUndockRequests()
+        {
+            return exchangeRequests.Where(r => r.Idle && (r.Task == ExchangeTasks.EndLoad || r.Task == ExchangeTasks.EndUnload)).ToList();
         }
         List<ExchangeGroup> GetFreeExchanges()
         {

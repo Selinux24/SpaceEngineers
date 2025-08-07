@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using VRageMath;
 
 namespace IngameScript
 {
@@ -66,7 +67,7 @@ namespace IngameScript
                 return;
             }
 
-            navigator = new Navigator(config);
+            navigator = new Navigator(this, config);
 
             timerPilot = GetBlockWithName<IMyTimerBlock>(config.TimerPilot);
             if (timerPilot == null)
@@ -198,6 +199,8 @@ namespace IngameScript
             }
 
             MonitorizeLoad();
+
+            navigator.Update();
         }
 
         #region TERMINAL COMMANDS
@@ -210,7 +213,7 @@ namespace IngameScript
             else if (argument == "RESUME") Resume();
             else if (argument == "ENABLE_LOGS") EnableLogs();
 
-            else if (argument == "START_ROUTE") SendWaitingMessage(ExchangeTasks.Load);
+            else if (argument == "START_ROUTE") SendWaitingMessage(ExchangeTasks.StartLoad);
         }
 
         /// <summary>
@@ -264,8 +267,10 @@ namespace IngameScript
 
             if (!IsForMe(lines)) return;
 
-            if (command == "COME_TO_LOAD") ProcessDock(lines, ExchangeTasks.Load);
-            if (command == "COME_TO_UNLOAD") ProcessDock(lines, ExchangeTasks.Unload);
+            if (command == "COME_TO_LOAD") ProcessDock(lines, ExchangeTasks.StartLoad);
+            if (command == "COME_TO_UNLOAD") ProcessDock(lines, ExchangeTasks.StartUnload);
+            if (command == "UNDOCK_TO_LOAD") ProcessUndock(lines, ExchangeTasks.EndLoad);
+            if (command == "UNDOCK_TO_UNLOAD") ProcessUndock(lines, ExchangeTasks.EndUnload);
         }
 
         /// <summary>
@@ -296,7 +301,6 @@ namespace IngameScript
         /// </summary>
         void ProcessDock(string[] lines, ExchangeTasks task)
         {
-            //Get exchange parameters
             bool inGravity = Utils.ReadInt(lines, "InGravity") == 1;
             var parking = Utils.ReadVector(lines, "Parking");
 
@@ -313,15 +317,59 @@ namespace IngameScript
         {
             timerLock?.StartCountdown();
 
-            if (task == ExchangeTasks.Load)
+            if (task == ExchangeTasks.StartLoad)
             {
                 timerLoad?.StartCountdown();
                 shipStatus = ShipStatus.Loading;
             }
-            else if (task == ExchangeTasks.Unload)
+            else if (task == ExchangeTasks.StartUnload)
             {
                 timerUnload?.StartCountdown();
                 shipStatus = ShipStatus.Unloading;
+            }
+        }
+
+        /// <summary>
+        /// SHIP undocks and begins navigation from the specified connector to the parking position.
+        /// </summary>
+        void ProcessUndock(string[] lines, ExchangeTasks task)
+        {
+            bool inGravity = Utils.ReadInt(lines, "InGravity") == 1;
+            var parking = Utils.ReadVector(lines, "Parking");
+
+            string exchange = Utils.ReadString(lines, "Exchange");
+            var fw = Utils.ReadVector(lines, "Forward");
+            var up = Utils.ReadVector(lines, "Up");
+            var wpList = Utils.ReadVectorList(lines, "Waypoints");
+
+            navigator.SeparateFromDock(inGravity, parking, exchange, fw, up, wpList, () => OnSeparationCompleted(task));
+
+            timerUnlock?.StartCountdown();
+
+            shipStatus = ShipStatus.Undocking;
+        }
+        void OnSeparationCompleted(ExchangeTasks task)
+        {
+            shipStatus = ShipStatus.OnRoute;
+
+            if (task == ExchangeTasks.EndLoad)
+            {
+                navigator.NavigateTo(config.Route.ToUnloadBaseWaypoints, () => OnNavigationCompleted(task));
+            }
+            else if (task == ExchangeTasks.EndUnload)
+            {
+                navigator.NavigateTo(config.Route.ToLoadBaseWaypoints, () => OnNavigationCompleted(task));
+            }
+        }
+        void OnNavigationCompleted(ExchangeTasks task)
+        {
+            if (task == ExchangeTasks.EndLoad)
+            {
+                SendWaitingMessage(ExchangeTasks.StartUnload);
+            }
+            else if (task == ExchangeTasks.EndUnload)
+            {
+                SendWaitingMessage(ExchangeTasks.StartLoad);
             }
         }
         #endregion
@@ -352,7 +400,7 @@ namespace IngameScript
                 double capacity = CalculateCargoPercentage();
                 if (capacity >= config.MaxLoad)
                 {
-                    SendWaitingUndockMessage(ExchangeTasks.Load);
+                    SendWaitingUndockMessage(ExchangeTasks.EndLoad);
                 }
 
                 return;
@@ -365,7 +413,7 @@ namespace IngameScript
                 double capacity = CalculateCargoPercentage();
                 if (capacity <= config.MinLoad)
                 {
-                    SendWaitingUndockMessage(ExchangeTasks.Unload);
+                    SendWaitingUndockMessage(ExchangeTasks.EndUnload);
                 }
 
                 return;
@@ -398,7 +446,7 @@ namespace IngameScript
             return Utils.ReadString(lines, "To") == shipId;
         }
 
-        void WriteLCDs(string wildcard, string text)
+        public void WriteLCDs(string wildcard, string text)
         {
             List<IMyTextPanel> lcds = new List<IMyTextPanel>();
             GridTerminalSystem.GetBlocksOfType(lcds, lcd => lcd.CubeGrid == Me.CubeGrid && lcd.CustomName.Contains(wildcard));
@@ -408,7 +456,7 @@ namespace IngameScript
                 lcd.WriteText(text, false);
             }
         }
-        void WriteInfoLCDs(string text, bool append = true)
+        public void WriteInfoLCDs(string text, bool append = true)
         {
             Echo(text);
 
@@ -418,7 +466,7 @@ namespace IngameScript
                 lcd.WriteText(text + Environment.NewLine, append);
             }
         }
-        void WriteLogLCDs(string text)
+        public void WriteLogLCDs(string text)
         {
             if (!config.EnableLogs)
             {
@@ -447,7 +495,7 @@ namespace IngameScript
                 }
             }
         }
-        void BroadcastMessage(List<string> parts)
+        public void BroadcastMessage(List<string> parts)
         {
             string message = string.Join("|", parts);
 
@@ -456,7 +504,66 @@ namespace IngameScript
             IGC.SendBroadcastMessage(config.Channel, message);
         }
 
-        void ResetThrust()
+        public void ApplyThrust(Vector3D force)
+        {
+            foreach (var t in thrusters)
+            {
+                var thrustDir = t.WorldMatrix.Backward;
+                double alignment = thrustDir.Dot(force);
+
+                t.Enabled = true;
+                t.ThrustOverridePercentage = alignment > 0 ? (float)Math.Min(alignment / t.MaxEffectiveThrust, 1f) : 0f;
+            }
+        }
+        public void ApplyThrust(Vector3D force, Vector3D gravity, double mass)
+        {
+            if (gravity.Length() < 0.001)
+            {
+                ApplyThrust(force);
+                return;
+            }
+
+            //Find opposing thrusters to counteract gravity, to obtain total effective thrust
+            var opposingThrusters = new List<IMyThrust>();
+            double totalEffectiveThrust = 0;
+            foreach (var t in thrusters)
+            {
+                var thrustDir = t.WorldMatrix.Backward;
+                double alignment = thrustDir.Dot(-gravity);
+
+                if (alignment >= 0.9)
+                {
+                    opposingThrusters.Add(t);
+                    totalEffectiveThrust += t.MaxEffectiveThrust;
+
+                    continue;
+                }
+
+                //Apply force to thrusters, no opposing thrusters
+                alignment = thrustDir.Dot(force);
+
+                t.Enabled = true;
+                t.ThrustOverridePercentage = alignment > 0 ? (float)Math.Min(alignment / t.MaxEffectiveThrust, 1f) : 0f;
+            }
+
+            //Apply force to opposing thrusters, distributing the gravity force over them
+            if (totalEffectiveThrust <= 0.01) return;
+
+            var gravForce = -Vector3D.Normalize(gravity) * (mass * gravity.Length());
+
+            foreach (var t in opposingThrusters)
+            {
+                double share = t.MaxEffectiveThrust / totalEffectiveThrust;
+                var targetForce = gravForce * share;
+
+                var thrustDir = t.WorldMatrix.Backward;
+                double alignment = thrustDir.Dot(targetForce);
+
+                t.Enabled = true;
+                t.ThrustOverridePercentage = alignment > 0 ? (float)Math.Min(alignment / t.MaxEffectiveThrust, 1f) : 0f;
+            }
+        }
+        public void ResetThrust()
         {
             foreach (var t in thrusters)
             {
@@ -464,8 +571,84 @@ namespace IngameScript
                 t.ThrustOverridePercentage = 0f;
             }
         }
+        public void StopThrust()
+        {
+            foreach (var t in thrusters)
+            {
+                t.Enabled = false;
+                t.ThrustOverridePercentage = 0;
+            }
+        }
 
-        void ResetGyros()
+        public bool AlignToDirection(Vector3D direction, Vector3D toTarget, double thr)
+        {
+            double angle = Utils.AngleBetweenVectors(direction, toTarget);
+            WriteInfoLCDs($"Target angle: {angle:F4}");
+
+            if (angle <= thr)
+            {
+                ResetGyros();
+                WriteInfoLCDs("Aligned.");
+                return false;
+            }
+            WriteInfoLCDs("Aligning...");
+
+            var rotationAxis = Vector3D.Cross(direction, toTarget);
+            if (rotationAxis.Length() <= 0.001) rotationAxis = new Vector3D(1, 0, 0);
+            ApplyGyroOverride(rotationAxis);
+
+            return true;
+        }
+        public bool AlignToVectors(Vector3D targetForward, Vector3D targetUp, double thr)
+        {
+            var shipMatrix = remoteAlign.WorldMatrix;
+            var shipForward = shipMatrix.Forward;
+            var shipUp = shipMatrix.Up;
+
+            double angleFW = Utils.AngleBetweenVectors(shipForward, targetForward);
+            double angleUP = Utils.AngleBetweenVectors(shipUp, targetUp);
+            WriteInfoLCDs($"Target angles: {angleFW:F2} | {angleUP:F2}");
+
+            if (angleFW <= thr && angleUP <= thr)
+            {
+                ResetGyros();
+                WriteInfoLCDs("Aligned.");
+                return false;
+            }
+            WriteInfoLCDs("Aligning...");
+
+            bool corrected = false;
+            if (angleFW > thr)
+            {
+                var rotationAxisFW = Vector3D.Cross(shipForward, targetForward);
+                if (rotationAxisFW.Length() <= 0.001) rotationAxisFW = new Vector3D(0, 1, 0);
+                ApplyGyroOverride(rotationAxisFW);
+                corrected = true;
+            }
+
+            if (angleUP > thr)
+            {
+                var rotationAxisUP = Vector3D.Cross(shipUp, targetUp);
+                if (rotationAxisUP.Length() <= 0.001) rotationAxisUP = new Vector3D(1, 0, 0);
+                ApplyGyroOverride(rotationAxisUP);
+                corrected = true;
+            }
+
+            return corrected;
+        }
+        public void ApplyGyroOverride(Vector3D axis)
+        {
+            foreach (var gyro in gyros)
+            {
+                var localAxis = Vector3D.TransformNormal(axis, MatrixD.Transpose(gyro.WorldMatrix));
+                var gyroRot = localAxis * -config.GyrosSpeed;
+                gyro.GyroOverride = true;
+                gyro.Pitch = (float)gyroRot.X;
+                gyro.Yaw = (float)gyroRot.Y;
+                gyro.Roll = (float)gyroRot.Z;
+            }
+        }
+        public void ResetGyros()
         {
             foreach (var gyro in gyros)
             {
@@ -474,6 +657,23 @@ namespace IngameScript
                 gyro.Yaw = 0;
                 gyro.Roll = 0;
             }
+        }
+
+        public bool IsConnected()
+        {
+            return connectorA.Status == MyShipConnectorStatus.Connected;
+        }
+        public Vector3D GetPosition()
+        {
+            return connectorA.GetPosition();
+        }
+        public Vector3D GetLinearVelocity()
+        {
+            return remoteAlign.GetShipVelocities().LinearVelocity;
+        }
+        public double GetPhysicalMass()
+        {
+            return remoteAlign.CalculateShipMass().PhysicalMass;
         }
 
         double CalculateCargoPercentage()
@@ -497,8 +697,8 @@ namespace IngameScript
 
         void SendWaitingMessage(ExchangeTasks task)
         {
-            string message = task == ExchangeTasks.Load ? "WAITING_LOAD" : "WAITING_UNLOAD";
-            string to = task == ExchangeTasks.Load ? config.Route.LoadBase : config.Route.UnloadBase;
+            string message = task == ExchangeTasks.StartLoad ? "WAITING_LOAD" : "WAITING_UNLOAD";
+            string to = task == ExchangeTasks.StartLoad ? config.Route.LoadBase : config.Route.UnloadBase;
 
             List<string> parts = new List<string>()
             {
@@ -513,11 +713,12 @@ namespace IngameScript
         void SendWaitingUndockMessage(ExchangeTasks task)
         {
             //Send a message to the base to undock the ship from the exchange connector
-            string to = task == ExchangeTasks.Load ? config.Route.LoadBase : config.Route.UnloadBase;
+            string message = task == ExchangeTasks.EndLoad ? "WAITING_UNDOCK_LOAD" : "WAITING_UNDOCK_UNLOAD";
+            string to = task == ExchangeTasks.EndLoad ? config.Route.LoadBase : config.Route.UnloadBase;
 
             List<string> parts = new List<string>()
             {
-                $"Command=WAITING_UNDOCK",
+                $"Command={message}",
                 $"To={to}",
                 $"From={shipId}",
             };
