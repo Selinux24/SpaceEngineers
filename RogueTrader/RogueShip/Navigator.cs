@@ -6,34 +6,38 @@ namespace IngameScript
 {
     class Navigator
     {
-        readonly Program parent;
-        readonly Config config;
+        readonly Program ship;
         int tickCount = 0;
+        bool monitorize = false;
+        Vector3D monitorizePosition;
+        double monitorizeDistance;
 
         public bool InGravity = false;
+        public Vector3D Parking;
         public string Exchange = null;
         public Vector3D TargetForward = new Vector3D(1, 0, 0);
         public Vector3D TargetUp = new Vector3D(0, 1, 0);
         public readonly List<Vector3D> Waypoints = new List<Vector3D>();
         public int CurrentTarget = 0;
-        public Action Callback = null;
-        public bool HasTarget = false;
+        public string Callback = null;
+        public ExchangeTasks ExchangeTask = ExchangeTasks.None;
+        public NavigatorTasks Task = NavigatorTasks.None;
 
-        public Vector3D CurrentPos = Vector3D.Zero;
+        public Config Config => ship.Config;
+        public Vector3D CurrentPos => ship.GetPosition();
         public Vector3D TargetPos => Waypoints[CurrentTarget];
         public Vector3D ToTarget => TargetPos - CurrentPos;
         public double Distance => ToTarget.Length();
-        public bool Done => HasTarget && CurrentTarget >= Waypoints.Count;
 
-        public Navigator(Program parent, Config config)
+        public Navigator(Program ship)
         {
-            this.parent = parent;
-            this.config = config;
+            this.ship = ship;
         }
 
-        public void AproximateToDock(bool inGravity, Vector3D parking, string exchange, Vector3D fw, Vector3D up, List<Vector3D> wpList, Action onAproximationCompleted)
+        public void ApproachToDock(bool inGravity, Vector3D parking, string exchange, Vector3D fw, Vector3D up, List<Vector3D> wpList, string onAproximationCompleted = null, ExchangeTasks exchangeTask = ExchangeTasks.None)
         {
             InGravity = inGravity;
+            Parking = parking;
             Exchange = exchange;
             TargetForward = -Vector3D.Normalize(fw);
             TargetUp = Vector3D.Normalize(up);
@@ -41,11 +45,22 @@ namespace IngameScript
             Waypoints.AddRange(wpList);
             CurrentTarget = 0;
             Callback = onAproximationCompleted;
-            HasTarget = true;
+            ExchangeTask = exchangeTask;
+
+            Task = NavigatorTasks.Approach;
+
+            //Program the remote pilot control to navigate to the parking position.
+            ship.ConfigureRemotePilot(parking, "Parking position", Config.TaxiSpeed, true);
+
+            //Monitorize the proximity to the parking position.
+            monitorize = true;
+            monitorizePosition = parking;
+            monitorizeDistance = Config.DockingDistanceThrWaypoints;
         }
-        public void SeparateFromDock(bool inGravity, Vector3D parking, string exchange, Vector3D fw, Vector3D up, List<Vector3D> wpList, Action onSeparationCompleted)
+        public void SeparateFromDock(bool inGravity, Vector3D parking, string exchange, Vector3D fw, Vector3D up, List<Vector3D> wpList, string onSeparationCompleted = null, ExchangeTasks exchangeTask = ExchangeTasks.None)
         {
             InGravity = inGravity;
+            Parking = parking;
             Exchange = exchange;
             TargetForward = -Vector3D.Normalize(fw);
             TargetUp = Vector3D.Normalize(up);
@@ -53,11 +68,19 @@ namespace IngameScript
             Waypoints.AddRange(wpList);
             CurrentTarget = 0;
             Callback = onSeparationCompleted;
-            HasTarget = true;
+            ExchangeTask = exchangeTask;
+
+            Task = NavigatorTasks.Separate;
+
+            //Start the undocking process.
+            ship.Undock();
         }
-        public void NavigateTo(List<Vector3D> waypoints, Action onNavigationCompleted)
+        public void NavigateTo(List<Vector3D> waypoints, string onNavigationCompleted = null, ExchangeTasks exchangeTask = ExchangeTasks.None)
         {
             Callback = onNavigationCompleted;
+            ExchangeTask = exchangeTask;
+
+            Task = NavigatorTasks.Navigate;
         }
         public void Clear()
         {
@@ -68,12 +91,18 @@ namespace IngameScript
             Waypoints.Clear();
             CurrentTarget = 0;
             Callback = null;
-            HasTarget = false;
+            ExchangeTask = ExchangeTasks.None;
+
+            Task = NavigatorTasks.None;
+
+            monitorize = false;
+            monitorizePosition = Vector3D.Zero;
+            monitorizeDistance = 0;
         }
 
         public void Update()
         {
-            if (!HasTarget)
+            if (Task == NavigatorTasks.None)
             {
                 return;
             }
@@ -83,76 +112,153 @@ namespace IngameScript
                 return;
             }
 
-            MonitorizeDock();
+            if (Task == NavigatorTasks.Approach) { MonitorizeApproach(); }
+            else if (Task == NavigatorTasks.Separate) { MonitorizeSeparate(); }
+            else if (Task == NavigatorTasks.Navigate) { MonitorizeNavigate(); }
         }
         bool Tick()
         {
-            if (++tickCount < config.NavigationTicks)
+            if (++tickCount < Config.NavigationTicks)
             {
                 return false;
             }
             tickCount = 0;
             return true;
         }
-        void MonitorizeDock()
+        void MonitorizeApproach()
         {
+            if (ship.IsConnected())
+            {
+                //If the remote control is connected, we are not in a docking process.
+                return;
+            }
+
+            //Monitorize approach to the parking position.
+            if (monitorize)
+            {
+                var distance = Vector3D.Distance(CurrentPos, monitorizePosition);
+                if (distance > monitorizeDistance)
+                {
+                    return;
+                }
+
+                //Reached
+                ship.DisableRemotePilot();
+                monitorize = false;
+            }
+
+            //Monitorize last waypoint.
             if (CurrentTarget >= Waypoints.Count)
             {
-                Callback?.Invoke();
+                ship.ExecuteCallback(Callback, ExchangeTask);
+
                 Clear();
-                parent.ResetGyros();
-                parent.ResetThrust();
+                ship.ResetGyros();
+                ship.ResetThrust();
+
                 return;
             }
 
-            if (parent.IsConnected())
-            {
-                return;
-            }
-
-            bool corrected = parent.AlignToVectors(TargetForward, TargetUp, config.GyrosThr);
+            bool corrected = ship.AlignToVectors(TargetForward, TargetUp, Config.GyrosThr);
             if (corrected)
             {
                 //Wait until aligned
-                parent.ResetThrust();
+                ship.ResetThrust();
                 return;
             }
 
-            CurrentPos = parent.GetPosition();
-
-            NavigateWaypoints();
+            Taxi();
         }
-        void NavigateWaypoints()
+        void MonitorizeSeparate()
         {
-            parent.WriteInfoLCDs(GetState());
+            if (ship.IsConnected())
+            {
+                //If the remote control is connected, we are not in a undocking process.
+                return;
+            }
+
+            //Monitorize approach to the parking position.
+            if (monitorize)
+            {
+                var distance = Vector3D.Distance(CurrentPos, monitorizePosition);
+                if (distance > monitorizeDistance)
+                {
+                    return;
+                }
+
+                //Reached
+                ship.DisableRemotePilot();
+                monitorize = false;
+
+                ship.ExecuteCallback(Callback, ExchangeTask);
+
+                Clear();
+                ship.ResetGyros();
+                ship.ResetThrust();
+            }
+
+            //Monitorize last waypoint.
+            if (CurrentTarget >= Waypoints.Count)
+            {
+                //Program the remote pilot to navigate from the last waypoint to the parking position.
+                ship.ConfigureRemotePilot(Parking, "Parking position", Config.TaxiSpeed, true);
+
+                //Monitorize the proximity to the parking position.
+                monitorize = true;
+                monitorizePosition = Parking;
+                monitorizeDistance = Config.DockingDistanceThrWaypoints;
+
+                ship.ResetGyros();
+                ship.ResetThrust();
+
+                return;
+            }
+
+            bool corrected = ship.AlignToVectors(TargetForward, TargetUp, Config.GyrosThr);
+            if (corrected)
+            {
+                //Wait until aligned
+                ship.ResetThrust();
+                return;
+            }
+
+            Taxi();
+        }
+        void MonitorizeNavigate()
+        {
+
+        }
+        void Taxi()
+        {
+            ship.WriteInfoLCDs(GetState());
 
             var distance = Distance;
-            if (distance < config.DockingDistanceThrWaypoints)
+            if (distance < Config.DockingDistanceThrWaypoints)
             {
                 CurrentTarget++;
-                parent.ResetThrust();
+                ship.ResetThrust();
                 return;
             }
 
             double desiredSpeed = CalculateDesiredSpeed(distance);
-            var currentVelocity = parent.GetLinearVelocity();
-            double mass = parent.GetPhysicalMass();
+            var currentVelocity = ship.GetLinearVelocity();
+            double mass = ship.GetPhysicalMass();
             var neededForce = Utils.CalculateThrustForce(ToTarget, desiredSpeed, currentVelocity, mass);
 
-            parent.ApplyThrust(neededForce);
+            ship.ApplyThrust(neededForce);
         }
         double CalculateDesiredSpeed(double distance)
         {
             //Calculates desired speed based on distance, when we are moving towards the last waypoint.
             double approachSpeed;
-            if (CurrentTarget == 0) approachSpeed = config.DockingSpeedWaypointFirst; //Speed ​​to the first approach point.
-            else if (CurrentTarget == Waypoints.Count - 1) approachSpeed = config.DockingSpeedWaypointLast; //Speed ​​from the last approach point.
-            else approachSpeed = config.DockingSpeedWaypoints; //Speed ​​between approach points.
+            if (CurrentTarget == 0) approachSpeed = Config.DockingSpeedWaypointFirst; //Speed ​​to the first approach point.
+            else if (CurrentTarget == Waypoints.Count - 1) approachSpeed = Config.DockingSpeedWaypointLast; //Speed ​​from the last approach point.
+            else approachSpeed = Config.DockingSpeedWaypoints; //Speed ​​between approach points.
 
             double desiredSpeed = approachSpeed;
-            if (distance < config.DockingSlowdownDistance && (CurrentTarget == 0 || CurrentTarget == Waypoints.Count - 1))
+            if (distance < Config.DockingSlowdownDistance && (CurrentTarget == 0 || CurrentTarget == Waypoints.Count - 1))
             {
-                desiredSpeed = Math.Max(distance / config.DockingSlowdownDistance * approachSpeed, 0.5);
+                desiredSpeed = Math.Max(distance / Config.DockingSlowdownDistance * approachSpeed, 0.5);
             }
 
             return desiredSpeed;
@@ -171,25 +277,41 @@ namespace IngameScript
             if (parts.Length != 6) return;
 
             InGravity = Utils.ReadInt(parts, "InGravity") == 1;
+            Parking = Utils.ReadVector(parts, "Parking");
             Exchange = Utils.ReadString(parts, "Exchange");
             TargetForward = Utils.ReadVector(parts, "TargetForward");
             TargetUp = Utils.ReadVector(parts, "TargetUp");
             Waypoints.Clear();
             Waypoints.AddRange(Utils.ReadVectorList(parts, "Waypoints"));
             CurrentTarget = Utils.ReadInt(parts, "CurrentTarget");
-            HasTarget = Utils.ReadInt(parts, "HasTarget") == 1;
+            Callback = Utils.ReadString(parts, "Callback");
+            ExchangeTask = (ExchangeTasks)Utils.ReadInt(parts, "ExchangeTask");
+
+            Task = (NavigatorTasks)Utils.ReadInt(parts, "Task");
+
+            monitorize = Utils.ReadInt(parts, "Monitorize") == 1;
+            monitorizePosition = Utils.ReadVector(parts, "MonitorizePosition");
+            monitorizeDistance = Utils.ReadDouble(parts, "MonitorizeDistance");
         }
         public string SaveToStorage()
         {
             List<string> parts = new List<string>()
             {
                 $"InGravity={(InGravity ? 1 : 0)}",
+                $"Parking={Utils.VectorToStr(Parking)}",
                 $"Exchange={Exchange}",
                 $"TargetForward={Utils.VectorToStr(TargetForward)}",
                 $"TargetUp={Utils.VectorToStr(TargetUp)}",
                 $"Waypoints={Utils.VectorListToStr(Waypoints)}",
                 $"CurrentTarget={CurrentTarget}",
-                $"HasTarget={(HasTarget ? 1 : 0)}",
+                $"Callback={Callback}",
+                $"ExchangeTask={(int)ExchangeTask}",
+
+                $"Task={(int)Task}",
+
+                $"Monitorize={(monitorize ? 1 : 0)}",
+                $"MonitorizePosition={Utils.VectorToStr(monitorizePosition)}",
+                $"MonitorizeDistance={monitorizeDistance:F2}",
             };
 
             return string.Join("¬", parts);

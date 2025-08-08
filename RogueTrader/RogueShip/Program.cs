@@ -9,7 +9,7 @@ using VRageMath;
 namespace IngameScript
 {
     /// <summary>
-    /// Ship script for delivery and distress signals.
+    /// Rogue ship
     /// </summary>
     partial class Program : MyGridProgram
     {
@@ -17,21 +17,21 @@ namespace IngameScript
         readonly IMyBroadcastListener bl;
 
         readonly IMyTimerBlock timerPilot;
-        readonly IMyTimerBlock timerLock;
-        readonly IMyTimerBlock timerUnlock;
-        readonly IMyTimerBlock timerLoad;
-        readonly IMyTimerBlock timerUnload;
         readonly IMyTimerBlock timerWaiting;
 
+        readonly IMyTimerBlock timerDock;
+        readonly IMyTimerBlock timerUndock;
+
+        readonly IMyTimerBlock timerLoad;
+        readonly IMyTimerBlock timerUnload;
+
         readonly IMyRemoteControl remotePilot;
-        readonly IMyCameraBlock cameraPilot;
-
-        readonly IMyRemoteControl remoteAlign;
-        readonly IMyShipConnector connectorA;
-
+        readonly IMyRemoteControl remoteDocking;
         readonly IMyRemoteControl remoteLanding;
 
+        readonly IMyCameraBlock cameraPilot;
         readonly IMyRadioAntenna antenna;
+        readonly IMyShipConnector connectorA;
 
         readonly List<IMyThrust> thrusters = new List<IMyThrust>();
         readonly List<IMyGyro> gyros = new List<IMyGyro>();
@@ -41,13 +41,12 @@ namespace IngameScript
         #endregion
 
         readonly string shipId;
-        readonly Config config;
-
         readonly StringBuilder sbLog = new StringBuilder();
-
         bool paused = false;
         ShipStatus shipStatus = ShipStatus.Idle;
         readonly Navigator navigator;
+
+        public readonly Config Config;
 
         public Program()
         {
@@ -60,88 +59,88 @@ namespace IngameScript
             }
 
             shipId = Me.CubeGrid.CustomName;
-            config = new Config(Me.CustomData);
-            if (!config.IsValid())
+            Config = new Config(Me.CustomData);
+            if (!Config.IsValid())
             {
-                Echo(config.GetErrors());
+                Echo(Config.GetErrors());
                 return;
             }
 
-            navigator = new Navigator(this, config);
+            navigator = new Navigator(this);
 
-            timerPilot = GetBlockWithName<IMyTimerBlock>(config.TimerPilot);
+            timerPilot = GetBlockWithName<IMyTimerBlock>(Config.TimerPilot);
             if (timerPilot == null)
             {
-                Echo($"Timer '{config.TimerPilot}' not found.");
+                Echo($"Timer '{Config.TimerPilot}' not found.");
                 return;
             }
-            timerLock = GetBlockWithName<IMyTimerBlock>(config.TimerLock);
-            if (timerLock == null)
-            {
-                Echo($"Timer '{config.TimerLock}' not found.");
-                return;
-            }
-            timerUnlock = GetBlockWithName<IMyTimerBlock>(config.TimerUnlock);
-            if (timerUnlock == null)
-            {
-                Echo($"Timer '{config.TimerUnlock}' not found.");
-                return;
-            }
-            timerLoad = GetBlockWithName<IMyTimerBlock>(config.TimerLoad);
-            if (timerLoad == null)
-            {
-                Echo($"Timer '{config.TimerLoad}' not found.");
-                return;
-            }
-            timerUnload = GetBlockWithName<IMyTimerBlock>(config.TimerUnload);
-            if (timerUnload == null)
-            {
-                Echo($"Timer '{config.TimerUnload}' not found.");
-                return;
-            }
-            timerWaiting = GetBlockWithName<IMyTimerBlock>(config.TimerWaiting);
+            timerWaiting = GetBlockWithName<IMyTimerBlock>(Config.TimerWaiting);
             if (timerWaiting == null)
             {
-                Echo($"Timer '{config.TimerWaiting}' not found.");
+                Echo($"Timer '{Config.TimerWaiting}' not found.");
                 return;
             }
 
-            remotePilot = GetBlockWithName<IMyRemoteControl>(config.RemoteControlPilot);
+            timerDock = GetBlockWithName<IMyTimerBlock>(Config.TimerDock);
+            if (timerDock == null)
+            {
+                Echo($"Timer '{Config.TimerDock}' not found.");
+                return;
+            }
+            timerUndock = GetBlockWithName<IMyTimerBlock>(Config.TimerUndock);
+            if (timerUndock == null)
+            {
+                Echo($"Timer '{Config.TimerUndock}' not found.");
+                return;
+            }
+
+            timerLoad = GetBlockWithName<IMyTimerBlock>(Config.TimerLoad);
+            if (timerLoad == null)
+            {
+                Echo($"Timer '{Config.TimerLoad}' not found.");
+                return;
+            }
+            timerUnload = GetBlockWithName<IMyTimerBlock>(Config.TimerUnload);
+            if (timerUnload == null)
+            {
+                Echo($"Timer '{Config.TimerUnload}' not found.");
+                return;
+            }
+
+            remotePilot = GetBlockWithName<IMyRemoteControl>(Config.RemoteControlPilot);
             if (remotePilot == null)
             {
-                Echo($"Remote Control '{config.RemoteControlPilot}' not found.");
+                Echo($"Remote Control '{Config.RemoteControlPilot}' not found.");
                 return;
             }
-            cameraPilot = GetBlockWithName<IMyCameraBlock>(config.CameraPilot);
-            if (cameraPilot == null)
+            remoteDocking = GetBlockWithName<IMyRemoteControl>(Config.RemoteControlDocking);
+            if (remoteDocking == null)
             {
-                Echo($"Camera {config.CameraPilot} not found.");
+                Echo($"Remote Control '{Config.RemoteControlDocking}' not found.");
                 return;
             }
-
-            remoteAlign = GetBlockWithName<IMyRemoteControl>(config.RemoteControlAlign);
-            if (remoteAlign == null)
-            {
-                Echo($"Remote Control '{config.RemoteControlAlign}' not found.");
-                return;
-            }
-            connectorA = GetBlockWithName<IMyShipConnector>(config.ConnectorA);
-            if (connectorA == null)
-            {
-                Echo($"Connector '{config.ConnectorA}' not found.");
-                return;
-            }
-
-            remoteLanding = GetBlockWithName<IMyRemoteControl>(config.RemoteControlLanding);
+            remoteLanding = GetBlockWithName<IMyRemoteControl>(Config.RemoteControlLanding);
             if (remoteLanding == null)
             {
-                Echo($"Remote Control '{config.RemoteControlLanding}' not found. This ship is not available for landing.");
+                Echo($"Remote Control '{Config.RemoteControlLanding}' not found. This ship is not available for landing.");
             }
 
-            antenna = GetBlockWithName<IMyRadioAntenna>(config.Antenna);
+            antenna = GetBlockWithName<IMyRadioAntenna>(Config.Antenna);
             if (antenna == null)
             {
-                Echo($"Antenna {config.Antenna} not found.");
+                Echo($"Antenna {Config.Antenna} not found.");
+                return;
+            }
+            connectorA = GetBlockWithName<IMyShipConnector>(Config.Connector);
+            if (connectorA == null)
+            {
+                Echo($"Connector '{Config.Connector}' not found.");
+                return;
+            }
+            cameraPilot = GetBlockWithName<IMyCameraBlock>(Config.Camera);
+            if (cameraPilot == null)
+            {
+                Echo($"Camera {Config.Camera} not found.");
                 return;
             }
 
@@ -158,14 +157,14 @@ namespace IngameScript
                 return;
             }
 
-            logLCDs = GetBlocksOfType<IMyTextPanel>(config.WildcardLogLCDs);
-            infoLCDs = GetBlocksOfType<IMyTextPanel>(config.WildcardShipInfo);
+            logLCDs = GetBlocksOfType<IMyTextPanel>(Config.WildcardLogLCDs);
+            infoLCDs = GetBlocksOfType<IMyTextPanel>(Config.WildcardShipInfo);
             shipCargos = GetBlocksOfType<IMyCargoContainer>();
 
-            WriteLCDs(config.WildcardShipId, shipId);
+            WriteLCDs(Config.WildcardShipId, shipId);
 
-            bl = IGC.RegisterBroadcastListener(config.Channel);
-            Echo($"Listening in channel {config.Channel}");
+            bl = IGC.RegisterBroadcastListener(Config.Channel);
+            Echo($"Listening in channel {Config.Channel}");
 
             LoadFromStorage();
 
@@ -181,7 +180,7 @@ namespace IngameScript
 
         public void Main(string argument)
         {
-            WriteInfoLCDs($"{shipId} in channel {config.Channel}");
+            WriteInfoLCDs($"{shipId} in channel {Config.Channel}");
             WriteInfoLCDs($"{CalculateCargoPercentage():P1} cargo.");
 
             if (DoPause()) return;
@@ -225,8 +224,8 @@ namespace IngameScript
 
             remotePilot.SetAutoPilotEnabled(false);
             remotePilot.ClearWaypoints();
-            remoteAlign.SetAutoPilotEnabled(false);
-            remoteAlign.ClearWaypoints();
+            remoteDocking.SetAutoPilotEnabled(false);
+            remoteDocking.ClearWaypoints();
             ResetGyros();
             ResetThrust();
 
@@ -251,7 +250,7 @@ namespace IngameScript
         /// </summary>
         void EnableLogs()
         {
-            config.EnableLogs = !config.EnableLogs;
+            Config.EnableLogs = !Config.EnableLogs;
         }
         #endregion
 
@@ -309,24 +308,9 @@ namespace IngameScript
             var up = Utils.ReadVector(lines, "Up");
             var wpList = Utils.ReadVectorList(lines, "Waypoints");
 
-            navigator.AproximateToDock(inGravity, parking, exchange, fw, up, wpList, () => OnAproximationCompleted(task));
+            navigator.ApproachToDock(inGravity, parking, exchange, fw, up, wpList, "ON_APPROACHING_COMPLETED", task);
 
             shipStatus = ShipStatus.Docking;
-        }
-        void OnAproximationCompleted(ExchangeTasks task)
-        {
-            timerLock?.StartCountdown();
-
-            if (task == ExchangeTasks.StartLoad)
-            {
-                timerLoad?.StartCountdown();
-                shipStatus = ShipStatus.Loading;
-            }
-            else if (task == ExchangeTasks.StartUnload)
-            {
-                timerUnload?.StartCountdown();
-                shipStatus = ShipStatus.Unloading;
-            }
         }
 
         /// <summary>
@@ -342,35 +326,11 @@ namespace IngameScript
             var up = Utils.ReadVector(lines, "Up");
             var wpList = Utils.ReadVectorList(lines, "Waypoints");
 
-            navigator.SeparateFromDock(inGravity, parking, exchange, fw, up, wpList, () => OnSeparationCompleted(task));
+            navigator.SeparateFromDock(inGravity, parking, exchange, fw, up, wpList, "ON_SEPARATION_COMPLETED", task);
 
-            timerUnlock?.StartCountdown();
+            Undock();
 
             shipStatus = ShipStatus.Undocking;
-        }
-        void OnSeparationCompleted(ExchangeTasks task)
-        {
-            shipStatus = ShipStatus.OnRoute;
-
-            if (task == ExchangeTasks.EndLoad)
-            {
-                navigator.NavigateTo(config.Route.ToUnloadBaseWaypoints, () => OnNavigationCompleted(task));
-            }
-            else if (task == ExchangeTasks.EndUnload)
-            {
-                navigator.NavigateTo(config.Route.ToLoadBaseWaypoints, () => OnNavigationCompleted(task));
-            }
-        }
-        void OnNavigationCompleted(ExchangeTasks task)
-        {
-            if (task == ExchangeTasks.EndLoad)
-            {
-                SendWaitingMessage(ExchangeTasks.StartUnload);
-            }
-            else if (task == ExchangeTasks.EndUnload)
-            {
-                SendWaitingMessage(ExchangeTasks.StartLoad);
-            }
         }
         #endregion
 
@@ -398,7 +358,7 @@ namespace IngameScript
                 WriteInfoLCDs("Loading cargo...");
 
                 double capacity = CalculateCargoPercentage();
-                if (capacity >= config.MaxLoad)
+                if (capacity >= Config.MaxLoad)
                 {
                     SendWaitingUndockMessage(ExchangeTasks.EndLoad);
                 }
@@ -411,12 +371,60 @@ namespace IngameScript
                 WriteInfoLCDs("Unloading cargo...");
 
                 double capacity = CalculateCargoPercentage();
-                if (capacity <= config.MinLoad)
+                if (capacity <= Config.MinLoad)
                 {
                     SendWaitingUndockMessage(ExchangeTasks.EndUnload);
                 }
 
                 return;
+            }
+        }
+        #endregion
+
+        #region CALLBACKS
+        public void ExecuteCallback(string name, ExchangeTasks task)
+        {
+            if (name == "ON_APPROACHING_COMPLETED") OnApproachingCompleted(task);
+            else if (name == "ON_SEPARATION_COMPLETED") OnSeparationCompleted(task);
+            else if (name == "ON_NAVIGATION_COMPLETED") OnNavigationCompleted(task);
+        }
+        void OnApproachingCompleted(ExchangeTasks task)
+        {
+            Dock();
+
+            if (task == ExchangeTasks.StartLoad)
+            {
+                Load();
+                shipStatus = ShipStatus.Loading;
+            }
+            else if (task == ExchangeTasks.StartUnload)
+            {
+                Unload();
+                shipStatus = ShipStatus.Unloading;
+            }
+        }
+        void OnSeparationCompleted(ExchangeTasks task)
+        {
+            shipStatus = ShipStatus.OnRoute;
+
+            if (task == ExchangeTasks.EndLoad)
+            {
+                navigator.NavigateTo(Config.Route.ToUnloadBaseWaypoints, "ON_NAVIGATION_COMPLETED", task);
+            }
+            else if (task == ExchangeTasks.EndUnload)
+            {
+                navigator.NavigateTo(Config.Route.ToLoadBaseWaypoints, "ON_NAVIGATION_COMPLETED", task);
+            }
+        }
+        void OnNavigationCompleted(ExchangeTasks task)
+        {
+            if (task == ExchangeTasks.EndLoad)
+            {
+                SendWaitingMessage(ExchangeTasks.StartUnload);
+            }
+            else if (task == ExchangeTasks.EndUnload)
+            {
+                SendWaitingMessage(ExchangeTasks.StartLoad);
             }
         }
         #endregion
@@ -468,7 +476,7 @@ namespace IngameScript
         }
         public void WriteLogLCDs(string text)
         {
-            if (!config.EnableLogs)
+            if (!Config.EnableLogs)
             {
                 return;
             }
@@ -501,7 +509,63 @@ namespace IngameScript
 
             WriteLogLCDs($"BroadcastMessage: {message}");
 
-            IGC.SendBroadcastMessage(config.Channel, message);
+            IGC.SendBroadcastMessage(Config.Channel, message);
+        }
+
+        public void Pilot()
+        {
+            timerPilot?.StartCountdown();
+        }
+        public void Waiting()
+        {
+            timerWaiting?.StartCountdown();
+        }
+
+        public void Dock()
+        {
+            timerDock?.StartCountdown();
+        }
+        public void Undock()
+        {
+            timerUndock?.StartCountdown();
+        }
+
+        public void Load()
+        {
+            timerLoad?.StartCountdown();
+        }
+        public void Unload()
+        {
+            timerUnload?.StartCountdown();
+        }
+
+        public void ConfigureRemotePilot(Vector3D position, string positionName, double velocity, bool activateNow)
+        {
+            ConfigureRemote(remotePilot, position, positionName, velocity, activateNow);
+        }
+        void ConfigureRemote(IMyRemoteControl remote, Vector3D position, string positionName, double velocity, bool activateNow)
+        {
+            Pilot();
+
+            DisableRemote(remote);
+
+            remote.AddWaypoint(position, positionName);
+            remote.SetCollisionAvoidance(true);
+            remote.WaitForFreeWay = false;
+            remote.FlightMode = FlightMode.OneWay;
+            remote.SpeedLimit = (float)velocity;
+
+            if (activateNow) remote.SetAutoPilotEnabled(true);
+        }
+
+        public void DisableRemotePilot()
+        {
+            DisableRemote(remotePilot);
+        }
+        void DisableRemote(IMyRemoteControl remote)
+        {
+            remote.ClearWaypoints();
+            remote.SetAutoPilotEnabled(false);
         }
 
         public void ApplyThrust(Vector3D force)
@@ -601,7 +665,7 @@ namespace IngameScript
         }
         public bool AlignToVectors(Vector3D targetForward, Vector3D targetUp, double thr)
         {
-            var shipMatrix = remoteAlign.WorldMatrix;
+            var shipMatrix = remoteDocking.WorldMatrix;
             var shipForward = shipMatrix.Forward;
             var shipUp = shipMatrix.Up;
 
@@ -641,7 +705,7 @@ namespace IngameScript
             foreach (var gyro in gyros)
             {
                 var localAxis = Vector3D.TransformNormal(axis, MatrixD.Transpose(gyro.WorldMatrix));
-                var gyroRot = localAxis * -config.GyrosSpeed;
+                var gyroRot = localAxis * -Config.GyrosSpeed;
                 gyro.GyroOverride = true;
                 gyro.Pitch = (float)gyroRot.X;
                 gyro.Yaw = (float)gyroRot.Y;
@@ -669,11 +733,11 @@ namespace IngameScript
         }
         public Vector3D GetLinearVelocity()
         {
-            return remoteAlign.GetShipVelocities().LinearVelocity;
+            return remoteDocking.GetShipVelocities().LinearVelocity;
         }
         public double GetPhysicalMass()
         {
-            return remoteAlign.CalculateShipMass().PhysicalMass;
+            return remoteDocking.CalculateShipMass().PhysicalMass;
         }
 
         double CalculateCargoPercentage()
@@ -698,7 +762,7 @@ namespace IngameScript
         void SendWaitingMessage(ExchangeTasks task)
         {
             string message = task == ExchangeTasks.StartLoad ? "WAITING_LOAD" : "WAITING_UNLOAD";
-            string to = task == ExchangeTasks.StartLoad ? config.Route.LoadBase : config.Route.UnloadBase;
+            string to = task == ExchangeTasks.StartLoad ? Config.Route.LoadBase : Config.Route.UnloadBase;
 
             List<string> parts = new List<string>()
             {
@@ -714,7 +778,7 @@ namespace IngameScript
         {
             //Send a message to the base to undock the ship from the exchange connector
             string message = task == ExchangeTasks.EndLoad ? "WAITING_UNDOCK_LOAD" : "WAITING_UNDOCK_UNLOAD";
-            string to = task == ExchangeTasks.EndLoad ? config.Route.LoadBase : config.Route.UnloadBase;
+            string to = task == ExchangeTasks.EndLoad ? Config.Route.LoadBase : Config.Route.UnloadBase;
 
             List<string> parts = new List<string>()
             {

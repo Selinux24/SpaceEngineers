@@ -19,16 +19,18 @@ namespace IngameScript
         public readonly string WildcardLogLCDs;
 
         public readonly string TimerPilot;
-        public readonly string TimerLock;
-        public readonly string TimerUnlock;
+        public readonly string TimerWaiting;
+        public readonly string TimerDock;
+        public readonly string TimerUndock;
         public readonly string TimerLoad;
         public readonly string TimerUnload;
-        public readonly string TimerWaiting;
+
         public readonly string RemoteControlPilot;
-        public readonly string CameraPilot;
-        public readonly string RemoteControlAlign;
+        public readonly string RemoteControlDocking;
         public readonly string RemoteControlLanding;
-        public readonly string ConnectorA;
+
+        public readonly string Camera;
+        public readonly string Connector;
         public readonly string Antenna;
 
         public readonly double MaxLoad;
@@ -42,6 +44,8 @@ namespace IngameScript
         public readonly double DockingSpeedWaypoints;
         public readonly double DockingSlowdownDistance;
         public readonly double DockingDistanceThrWaypoints;
+
+        public readonly double TaxiSpeed;
 
         public readonly double GyrosThr;
         public readonly double GyrosSpeed;
@@ -57,16 +61,20 @@ namespace IngameScript
             WildcardLogLCDs = ReadConfig(customData, "WildcardLogLCDs");
 
             TimerPilot = ReadConfig(customData, "TimerPilot", "");
-            TimerLock = ReadConfig(customData, "TimerLock");
-            TimerUnlock = ReadConfig(customData, "TimerUnlock");
+            TimerWaiting = ReadConfig(customData, "TimerWaiting");
+
+            TimerDock = ReadConfig(customData, "TimerDock");
+            TimerUndock = ReadConfig(customData, "TimerUndock");
+
             TimerLoad = ReadConfig(customData, "TimerLoad", "");
             TimerUnload = ReadConfig(customData, "TimerUnload", "");
-            TimerWaiting = ReadConfig(customData, "TimerWaiting");
+
             RemoteControlPilot = ReadConfig(customData, "RemoteControlPilot");
-            CameraPilot = ReadConfig(customData, "CameraPilot");
-            RemoteControlAlign = ReadConfig(customData, "RemoteControlAlign");
+            RemoteControlDocking = ReadConfig(customData, "RemoteControlDocking");
             RemoteControlLanding = ReadConfig(customData, "RemoteControlLanding");
-            ConnectorA = ReadConfig(customData, "ConnectorA");
+          
+            Camera = ReadConfig(customData, "Camera");
+            Connector = ReadConfig(customData, "Connector");
             Antenna = ReadConfig(customData, "Antenna");
 
             MaxLoad = ReadConfigDouble(customData, "MaxLoad", 1);
@@ -77,6 +85,18 @@ namespace IngameScript
                 ReadConfig(customData, "RouteUnloadBase"),
                 ReadConfigVectorList(customData, "RouteToLoadBaseWaypoints", new List<Vector3D>()),
                 ReadConfigVectorList(customData, "RouteToUnloadBaseWaypoints", new List<Vector3D>()));
+
+            NavigationTicks = ReadConfigInt(customData, "NavigationTicks", 1);
+            DockingSpeedWaypointFirst = ReadConfigDouble(customData, "DockingSpeedWaypointFirst");
+            DockingSpeedWaypointLast = ReadConfigDouble(customData, "DockingSpeedWaypointLast");
+            DockingSpeedWaypoints = ReadConfigDouble(customData, "DockingSpeedWaypoints");
+            DockingSlowdownDistance = ReadConfigDouble(customData, "DockingSlowdownDistance");
+            DockingDistanceThrWaypoints = ReadConfigDouble(customData, "DockingDistanceThrWaypoints");
+         
+            TaxiSpeed = ReadConfigDouble(customData, "TaxiSpeed");
+
+            GyrosThr = ReadConfigDouble(customData, "GyrosThr");
+            GyrosSpeed = ReadConfigDouble(customData, "GyrosSpeed");
         }
         string ReadConfig(string customData, string name, string defaultValue = null)
         {
@@ -182,17 +202,21 @@ namespace IngameScript
                 "WildcardLogLCDs=[DELIVERY_LOG]\n" +
                 "\n" +
                 "TimerPilot=Timer Block Pilot\n" +
-                "TimerLock=Timer Block Locking\n" +
-                "TimerUnlock=Timer Block Unlocking\n" +
+                "TimerWaiting=Timer Block Waiting\n" +
+                "\n" +
+                "TimerDock=Timer Block Dock\n" +
+                "TimerUndock=Timer Block Undock\n" +
+                "\n" +
                 "TimerLoad=Timer Block Load\n" +
                 "TimerUnload=Timer Block Unload\n" +
-                "TimerWaiting=Timer Block Waiting\n" +
+                "\n" +
                 "RemoteControlPilot=Remote Control Pilot\n" +
-                "CameraPilot=Camera Pilot\n" +
-                "RemoteControlAlign=Remote Control Locking\n" +
+                "RemoteControlDocking=Remote Control Docking\n" +
                 "RemoteControlLanding=Remote Control Landing\n" +
-                "ConnectorA=Connector A\n" +
-                "Antenna=Compact Antenna\n" +
+                "\n" +
+                "Camera=Main Camera\n" +
+                "Connector=Main Connector\n" +
+                "Antenna=Main Antenna\n" +
                 "\n" +
                 "MaxLoad=1\n" +
                 "MinLoad=0\n" +
@@ -200,7 +224,19 @@ namespace IngameScript
                 "RouteLoadBase=base1\n" +
                 "RouteUnloadBase=base2\n" +
                 "RouteToLoadBaseWaypoints=x:y:z;x:y:z\n" +
-                "RouteToUnloadBaseWaypoints=x:y:z;x:y:z\n";
+                "RouteToUnloadBaseWaypoints=x:y:z;x:y:z\n" +
+                "\n" +
+                "NavigationTicks=1\n" +
+                "DockingSpeedWaypointFirst=10.0\n" +
+                "DockingSpeedWaypointLast=1.0\n" +
+                "DockingSpeedWaypoints=5.0\n" +
+                "DockingSlowdownDistance=50.0\n" +
+                "DockingDistanceThrWaypoints=0.5\n" +
+                "\n" +
+                "TaxiSpeed=25\n" +
+                "\n" +
+                "GyrosThr=0.001\n" +
+                "GyrosSpeed=2.0\n";
         }
     }
 }
