@@ -266,10 +266,10 @@ namespace IngameScript
 
             if (!IsForMe(lines)) return;
 
-            if (command == "COME_TO_LOAD") ProcessDock(lines, ExchangeTasks.StartLoad);
-            if (command == "COME_TO_UNLOAD") ProcessDock(lines, ExchangeTasks.StartUnload);
-            if (command == "UNDOCK_TO_LOAD") ProcessUndock(lines, ExchangeTasks.EndLoad);
-            if (command == "UNDOCK_TO_UNLOAD") ProcessUndock(lines, ExchangeTasks.EndUnload);
+            if (command == "COME_TO_LOAD") ProcessDocking(lines, ExchangeTasks.StartLoad);
+            if (command == "COME_TO_UNLOAD") ProcessDocking(lines, ExchangeTasks.StartUnload);
+            if (command == "UNDOCK_TO_LOAD") ProcessDocking(lines, ExchangeTasks.EndLoad);
+            if (command == "UNDOCK_TO_UNLOAD") ProcessDocking(lines, ExchangeTasks.EndUnload);
         }
 
         /// <summary>
@@ -296,11 +296,10 @@ namespace IngameScript
         }
 
         /// <summary>
-        /// SHIP begins navigation to the specified connector and docks in LOADING or UNLOADING MODE.
+        /// SHIP begins navigation to/from the specified connector and docks/undocks.
         /// </summary>
-        void ProcessDock(string[] lines, ExchangeTasks task)
+        void ProcessDocking(string[] lines, ExchangeTasks task)
         {
-            bool inGravity = Utils.ReadInt(lines, "InGravity") == 1;
             var parking = Utils.ReadVector(lines, "Parking");
 
             string exchange = Utils.ReadString(lines, "Exchange");
@@ -308,29 +307,16 @@ namespace IngameScript
             var up = Utils.ReadVector(lines, "Up");
             var wpList = Utils.ReadVectorList(lines, "Waypoints");
 
-            navigator.ApproachToDock(inGravity, parking, exchange, fw, up, wpList, "ON_APPROACHING_COMPLETED", task);
-
-            shipStatus = ShipStatus.Docking;
-        }
-
-        /// <summary>
-        /// SHIP undocks and begins navigation from the specified connector to the parking position.
-        /// </summary>
-        void ProcessUndock(string[] lines, ExchangeTasks task)
-        {
-            bool inGravity = Utils.ReadInt(lines, "InGravity") == 1;
-            var parking = Utils.ReadVector(lines, "Parking");
-
-            string exchange = Utils.ReadString(lines, "Exchange");
-            var fw = Utils.ReadVector(lines, "Forward");
-            var up = Utils.ReadVector(lines, "Up");
-            var wpList = Utils.ReadVectorList(lines, "Waypoints");
-
-            navigator.SeparateFromDock(inGravity, parking, exchange, fw, up, wpList, "ON_SEPARATION_COMPLETED", task);
-
-            Undock();
-
-            shipStatus = ShipStatus.Undocking;
+            if (task == ExchangeTasks.StartLoad || task == ExchangeTasks.StartUnload)
+            {
+                navigator.ApproachToDock(parking, exchange, fw, up, wpList, "ON_APPROACHING_COMPLETED", task);
+                shipStatus = ShipStatus.Docking;
+            }
+            else if (task == ExchangeTasks.EndLoad || task == ExchangeTasks.EndUnload)
+            {
+                navigator.SeparateFromDock(parking, exchange, fw, up, wpList, "ON_SEPARATION_COMPLETED", task);
+                shipStatus = ShipStatus.Undocking;
+            }
         }
         #endregion
 
@@ -409,11 +395,11 @@ namespace IngameScript
 
             if (task == ExchangeTasks.EndLoad)
             {
-                navigator.NavigateTo(Config.Route.ToUnloadBaseWaypoints, "ON_NAVIGATION_COMPLETED", task);
+                navigator.NavigateTo(Config.Route.UnloadBaseOnPlanet, Config.Route.ToUnloadBaseWaypoints, "ON_NAVIGATION_COMPLETED", task);
             }
             else if (task == ExchangeTasks.EndUnload)
             {
-                navigator.NavigateTo(Config.Route.ToLoadBaseWaypoints, "ON_NAVIGATION_COMPLETED", task);
+                navigator.NavigateTo(Config.Route.LoadBaseOnPlanet, Config.Route.ToLoadBaseWaypoints, "ON_NAVIGATION_COMPLETED", task);
             }
         }
         void OnNavigationCompleted(ExchangeTasks task)
@@ -568,17 +554,36 @@ namespace IngameScript
             remote.SetAutoPilotEnabled(false);
         }
 
-        public void ApplyThrust(Vector3D force)
+        public bool IsObstacleAhead(double collisionDetectRange, Vector3D velocity, out MyDetectedEntityInfo hit)
         {
-            foreach (var t in thrusters)
-            {
-                var thrustDir = t.WorldMatrix.Backward;
-                double alignment = thrustDir.Dot(force);
+            cameraPilot.EnableRaycast = true;
 
-                t.Enabled = true;
-                t.ThrustOverridePercentage = alignment > 0 ? (float)Math.Min(alignment / t.MaxEffectiveThrust, 1f) : 0f;
+            MatrixD cameraMatrixInv = MatrixD.Invert(cameraPilot.WorldMatrix);
+            Vector3D localDirection = Vector3D.TransformNormal(Vector3D.Normalize(velocity), cameraMatrixInv);
+            if (cameraPilot.CanScan(collisionDetectRange, localDirection))
+            {
+                hit = cameraPilot.Raycast(collisionDetectRange, localDirection);
+                return
+                    !hit.IsEmpty() &&
+                    hit.Type != MyDetectedEntityType.Planet &&
+                    Vector3D.Distance(hit.HitPosition.Value, cameraPilot.GetPosition()) <= collisionDetectRange;
             }
+
+            hit = new MyDetectedEntityInfo();
+            return false;
         }
+
+        public void ThrustToTarget(bool landing, Vector3D toTarget, double maxSpeed)
+        {
+            var remote = landing ? remoteLanding : remotePilot;
+
+            var currentVelocity = remote.GetShipVelocities().LinearVelocity;
+            double mass = remote.CalculateShipMass().PhysicalMass;
+
+            var force = Utils.CalculateThrustForce(toTarget, maxSpeed, currentVelocity, mass);
+            ApplyThrust(force);
+        }
+
         public void ApplyThrust(Vector3D force, Vector3D gravity, double mass)
         {
             if (gravity.Length() < 0.001)
@@ -627,6 +632,17 @@ namespace IngameScript
                 t.ThrustOverridePercentage = alignment > 0 ? (float)Math.Min(alignment / t.MaxEffectiveThrust, 1f) : 0f;
             }
         }
+        void ApplyThrust(Vector3D force)
+        {
+            foreach (var t in thrusters)
+            {
+                var thrustDir = t.WorldMatrix.Backward;
+                double alignment = thrustDir.Dot(force);
+
+                t.Enabled = true;
+                t.ThrustOverridePercentage = alignment > 0 ? (float)Math.Min(alignment / t.MaxEffectiveThrust, 1f) : 0f;
+            }
+        }
         public void ResetThrust()
         {
             foreach (var t in thrusters)
@@ -644,8 +660,11 @@ namespace IngameScript
             }
         }
 
-        public bool AlignToDirection(Vector3D direction, Vector3D toTarget, double thr)
+        public bool AlignToDirection(bool landing, Vector3D toTarget, double thr)
         {
+            var remote = landing ? remoteLanding : remotePilot;
+            var direction = remote.WorldMatrix.Forward;
+
             double angle = Utils.AngleBetweenVectors(direction, toTarget);
             WriteInfoLCDs($"Target angle: {angle:F4}");
 
@@ -723,21 +742,69 @@ namespace IngameScript
             }
         }
 
+        public double GetSpeed(bool landing)
+        {
+            var remote = landing ? remoteLanding : remotePilot;
+
+            return remote.GetShipSpeed();
+        }
+
+        public Vector3D GetPosition()
+        {
+            return antenna.GetPosition();
+        }
+
+        public double GetPilotSpeed()
+        {
+            return remotePilot.GetShipSpeed();
+        }
+        public Vector3D GetPilotLinearVelocity()
+        {
+            return remotePilot.GetShipVelocities().LinearVelocity;
+        }
+        public Vector3D GetPilotNaturalGravity()
+        {
+            return remotePilot.GetNaturalGravity();
+        }
+
+        public double GetLandingSpeed()
+        {
+            return remoteLanding.GetShipSpeed();
+        }
+
         public bool IsConnected()
         {
             return connectorA.Status == MyShipConnectorStatus.Connected;
         }
-        public Vector3D GetPosition()
+        public Vector3D GetDockingPosition()
         {
             return connectorA.GetPosition();
         }
-        public Vector3D GetLinearVelocity()
+        public double GetDockingPhysicalMass()
+        {
+            return remoteDocking.CalculateShipMass().PhysicalMass;
+        }
+        public Vector3D GetDockingLinearVelocity()
         {
             return remoteDocking.GetShipVelocities().LinearVelocity;
         }
-        public double GetPhysicalMass()
+        public Vector3D GetDockingNaturalGravity()
         {
-            return remoteDocking.CalculateShipMass().PhysicalMass;
+            return remoteDocking.GetNaturalGravity();
+        }
+
+        public IMyCameraBlock GetCameraPilot()
+        {
+            return cameraPilot;
+        }
+
+        public void EnableSystems()
+        {
+            antenna.Enabled = true;
+        }
+        public void DisableSystems()
+        {
+            antenna.Enabled = false;
         }
 
         double CalculateCargoPercentage()
@@ -772,6 +839,8 @@ namespace IngameScript
             };
             BroadcastMessage(parts);
 
+            Waiting();
+
             shipStatus = ShipStatus.WaitingDock;
         }
         void SendWaitingUndockMessage(ExchangeTasks task)
@@ -788,12 +857,9 @@ namespace IngameScript
             };
             BroadcastMessage(parts);
 
+            Waiting();
+
             shipStatus = ShipStatus.WaitingUndock;
-
-            //The base will send a message to the ship to undock, and the ship will start the undocking process
-
-            //When the undocking process is completed, the ship will start the trip to the other base
-
         }
         #endregion
 

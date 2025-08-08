@@ -47,6 +47,24 @@ namespace IngameScript
 
         public readonly double TaxiSpeed;
 
+        public readonly double AtmNavigationAlignThr;
+        public readonly double AtmNavigationMaxSpeed;
+        public readonly double AtmNavigationDistanceThr;
+
+        public readonly double CrsNavigationAlignThr;
+        public readonly double CrsNavigationAlignSeconds;
+
+        public readonly double CrsNavigationMaxSpeedThr;
+        public readonly double CrsNavigationMaxAccelerationSpeed;
+        public readonly double CrsNavigationMaxCruiseSpeed;
+        public readonly double CrsNavigationMaxEvadingSpeed;
+
+        public readonly double CrsNavigationWaypointDistanceThr;
+        public readonly double CrsNavigationDestinationDistanceThr;
+
+        public readonly double CrsNavigationCollisionDetectRange;
+        public readonly double CrsNavigationEvadingWaypointDistance;
+
         public readonly double GyrosThr;
         public readonly double GyrosSpeed;
 
@@ -72,7 +90,7 @@ namespace IngameScript
             RemoteControlPilot = ReadConfig(customData, "RemoteControlPilot");
             RemoteControlDocking = ReadConfig(customData, "RemoteControlDocking");
             RemoteControlLanding = ReadConfig(customData, "RemoteControlLanding");
-          
+
             Camera = ReadConfig(customData, "Camera");
             Connector = ReadConfig(customData, "Connector");
             Antenna = ReadConfig(customData, "Antenna");
@@ -82,9 +100,11 @@ namespace IngameScript
 
             Route = new Route(
                 ReadConfig(customData, "RouteLoadBase"),
+                ReadConfigBool(customData, "RouteLoadBaseOnPlanet"),
+                ReadConfigVectorList(customData, "RouteToLoadBaseWaypoints"),
                 ReadConfig(customData, "RouteUnloadBase"),
-                ReadConfigVectorList(customData, "RouteToLoadBaseWaypoints", new List<Vector3D>()),
-                ReadConfigVectorList(customData, "RouteToUnloadBaseWaypoints", new List<Vector3D>()));
+                ReadConfigBool(customData, "RouteUnloadBaseOnPlanet"),
+                ReadConfigVectorList(customData, "RouteToUnloadBaseWaypoints"));
 
             NavigationTicks = ReadConfigInt(customData, "NavigationTicks", 1);
             DockingSpeedWaypointFirst = ReadConfigDouble(customData, "DockingSpeedWaypointFirst");
@@ -92,8 +112,23 @@ namespace IngameScript
             DockingSpeedWaypoints = ReadConfigDouble(customData, "DockingSpeedWaypoints");
             DockingSlowdownDistance = ReadConfigDouble(customData, "DockingSlowdownDistance");
             DockingDistanceThrWaypoints = ReadConfigDouble(customData, "DockingDistanceThrWaypoints");
-         
+
             TaxiSpeed = ReadConfigDouble(customData, "TaxiSpeed");
+
+            AtmNavigationAlignThr = ReadConfigDouble(customData, "AtmNavigationAlignThr");
+            AtmNavigationMaxSpeed = ReadConfigDouble(customData, "AtmNavigationMaxSpeed");
+            AtmNavigationDistanceThr = ReadConfigDouble(customData, "AtmNavigationDistanceThr");
+
+            CrsNavigationAlignThr = ReadConfigDouble(customData, "CrsNavigationAlignThr");
+            CrsNavigationAlignSeconds = ReadConfigDouble(customData, "CrsNavigationAlignSeconds");
+            CrsNavigationMaxSpeedThr = ReadConfigDouble(customData, "CrsNavigationMaxSpeedThr");
+            CrsNavigationMaxAccelerationSpeed = ReadConfigDouble(customData, "CrsNavigationMaxAccelerationSpeed");
+            CrsNavigationMaxCruiseSpeed = ReadConfigDouble(customData, "CrsNavigationMaxCruiseSpeed");
+            CrsNavigationMaxEvadingSpeed = ReadConfigDouble(customData, "CrsNavigationMaxEvadingSpeed");
+            CrsNavigationWaypointDistanceThr = ReadConfigDouble(customData, "CrsNavigationWaypointDistanceThr");
+            CrsNavigationDestinationDistanceThr = ReadConfigDouble(customData, "CrsNavigationDestinationDistanceThr");
+            CrsNavigationCollisionDetectRange = ReadConfigDouble(customData, "CrsNavigationCollisionDetectRange");
+            CrsNavigationEvadingWaypointDistance = ReadConfigDouble(customData, "CrsNavigationEvadingWaypointDistance");
 
             GyrosThr = ReadConfigDouble(customData, "GyrosThr");
             GyrosSpeed = ReadConfigDouble(customData, "GyrosSpeed");
@@ -222,8 +257,10 @@ namespace IngameScript
                 "MinLoad=0\n" +
                 "\n" +
                 "RouteLoadBase=base1\n" +
-                "RouteUnloadBase=base2\n" +
+                "RouteLoadBaseOnPlanet=false\n" +
                 "RouteToLoadBaseWaypoints=x:y:z;x:y:z\n" +
+                "RouteUnloadBase=base2\n" +
+                "RouteUnloadBaseOnPlanet=false\n" +
                 "RouteToUnloadBaseWaypoints=x:y:z;x:y:z\n" +
                 "\n" +
                 "NavigationTicks=1\n" +
@@ -234,6 +271,21 @@ namespace IngameScript
                 "DockingDistanceThrWaypoints=0.5\n" +
                 "\n" +
                 "TaxiSpeed=25\n" +
+                "\n" +
+                "AtmNavigationAlignThr=0.01\n" +
+                "AtmNavigationMaxSpeed=100.0\n" +
+                "AtmNavigationDistanceThr=1000.0\n" +
+                "\n" +
+                "CrsNavigationAlignThr=0.01\n" +
+                "CrsNavigationAlignSeconds=5.0\n" +
+                "CrsNavigationMaxSpeedThr=0.95\n" +
+                "CrsNavigationMaxAccelerationSpeed=19.5\n" +
+                "CrsNavigationMaxCruiseSpeed=100.0\n" +
+                "CrsNavigationMaxEvadingSpeed=19.5\n" +
+                "CrsNavigationWaypointDistanceThr=3000.0\n" +
+                "CrsNavigationDestinationDistanceThr=2000.0\n" +
+                "CrsNavigationCollisionDetectRange=10000.0\n" +
+                "CrsNavigationEvadingWaypointDistance=100.0\n" +
                 "\n" +
                 "GyrosThr=0.001\n" +
                 "GyrosSpeed=2.0\n";

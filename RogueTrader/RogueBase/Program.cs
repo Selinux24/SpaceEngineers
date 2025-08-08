@@ -186,10 +186,10 @@ namespace IngameScript
 
             if (command == "RESPONSE_STATUS") ProcessResponseStatus(lines);
 
-            else if (command == "WAITING_LOAD") ProcessWaitingStartLoad(lines);
-            else if (command == "WAITING_UNLOAD") ProcessWaitingStartUnload(lines);
-            else if (command == "WAITING_UNDOCK_LOAD") ProcessWaitingEndLoad(lines);
-            else if (command == "WAITING_UNDOCK_UNLOAD") ProcessWaitingEndUnload(lines);
+            else if (command == "WAITING_LOAD") ProcessWaiting(lines, ExchangeTasks.StartLoad);
+            else if (command == "WAITING_UNLOAD") ProcessWaiting(lines, ExchangeTasks.StartUnload);
+            else if (command == "WAITING_UNDOCK_LOAD") ProcessWaiting(lines, ExchangeTasks.EndLoad);
+            else if (command == "WAITING_UNDOCK_UNLOAD") ProcessWaiting(lines, ExchangeTasks.EndUnload);
         }
 
         /// <summary>
@@ -221,46 +221,13 @@ namespace IngameScript
         }
 
         /// <summary>
-        /// Enqueues a request to load cargo in a SHIP.
+        /// Enqueues a request to make a task to a SHIP.
         /// </summary>
-        /// <remarks>
-        /// Request: WAITING_LOAD
-        /// </remarks>
-        void ProcessWaitingStartLoad(string[] lines)
+        void ProcessWaiting(string[] lines, ExchangeTasks task)
         {
             string from = Utils.ReadString(lines, "From");
 
-            EnqueueExchangeRequest(from, ExchangeTasks.StartLoad);
-        }
-        /// <summary>
-        /// Enqueues a request to unload cargo from a SHIP.
-        /// </summary>
-        /// <remarks>
-        /// Request: WAITING_UNLOAD
-        /// </remarks>
-        void ProcessWaitingStartUnload(string[] lines)
-        {
-            string from = Utils.ReadString(lines, "From");
-
-            EnqueueExchangeRequest(from, ExchangeTasks.StartUnload);
-        }
-        /// <summary>
-        /// Enqueues a request to undock from a SHIP.
-        /// </summary>
-        void ProcessWaitingEndLoad(string[] lines)
-        {
-            string from = Utils.ReadString(lines, "From");
-
-            EnqueueExchangeRequest(from, ExchangeTasks.EndLoad);
-        }
-        /// <summary>
-        /// Enqueues a request to undock from a SHIP.
-        /// </summary>
-        void ProcessWaitingEndUnload(string[] lines)
-        {
-            string from = Utils.ReadString(lines, "From");
-
-            EnqueueExchangeRequest(from, ExchangeTasks.EndUnload);
+            EnqueueExchangeRequest(from, task);
         }
         #endregion
 
@@ -379,7 +346,6 @@ namespace IngameScript
                     $"To={request.Ship}",
                     $"From={baseId}",
 
-                    $"InGravitry={(config.InGravity?1:0)}",
                     $"Parking={config.Parking}",
 
                     $"Exchange={exchange.Name}",
@@ -429,7 +395,6 @@ namespace IngameScript
                     $"To={request.Ship}",
                     $"From={baseId}",
 
-                    $"InGravitry={(config.InGravity?1:0)}",
                     $"Parking={config.Parking}",
 
                     $"Exchange={exchange.Name}",
@@ -469,13 +434,6 @@ namespace IngameScript
         #endregion
 
         #region UTILITY
-        T GetBlockWithName<T>(string name) where T : class, IMyTerminalBlock
-        {
-            List<T> blocks = new List<T>();
-            GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid);
-
-            return blocks.FirstOrDefault(b => b.CustomName.Contains(name));
-        }
         void WriteLCDs(string wildcard, string text)
         {
             List<IMyTextPanel> lcds = new List<IMyTextPanel>();
