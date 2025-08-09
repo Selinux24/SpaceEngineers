@@ -500,14 +500,43 @@ namespace IngameScript
 
         void InitializeExchangeGroups()
         {
+            var regEx = config.ExchangesRegex;
+
             //Find all blocks that have the exchange regex in their name
             var blocks = new List<IMyTerminalBlock>();
-            GridTerminalSystem.GetBlocksOfType(blocks, i => i.CubeGrid == Me.CubeGrid && config.ExchangesRegex.IsMatch(i.CustomName));
+            GridTerminalSystem.GetBlocksOfType(blocks, i => i.CubeGrid == Me.CubeGrid && Utils.IsFromGroup(i.CustomName, regEx));
 
-            var exchanges = ExchangeGroup.InitializeExchangeGroups(blocks, config);
+            List<ExchangeGroup> exchanges = new List<ExchangeGroup>();
 
-            foreach (var exchangeGroup in exchanges)
+            //Group them by the group name
+            var groups = blocks.GroupBy(b => Utils.ExtractGroupName(b.CustomName, regEx)).ToList();
+
+            //For each group, initialize the blocks of the ExchangeGroup class
+            foreach (var group in groups)
             {
+                var exchangeGroup = new ExchangeGroup(config)
+                {
+                    Name = group.Key,
+                };
+
+                foreach (var block in group)
+                {
+                    var connector = block as IMyShipConnector;
+                    if (connector != null)
+                    {
+                        if (connector.CustomName.Contains(config.ExchangeMainConnector)) exchangeGroup.MainConnector = connector;
+                        else if (connector.CustomName.Contains(config.ExchangeOtherConnector)) exchangeGroup.Connectors.Add(connector);
+
+                        continue;
+                    }
+
+                    var camera = block as IMyCameraBlock;
+                    if (camera != null)
+                    {
+                        exchangeGroup.Camera = camera;
+                    }
+                }
+
                 if (exchangeGroup.IsValid())
                 {
                     WriteLog($"ExchangeGroup {exchangeGroup.Name} initialized.");

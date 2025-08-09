@@ -77,5 +77,20 @@ namespace IngameScript
 
             return StrToVector(value);
         }
+
+        public static bool IsFromGroup(string input, System.Text.RegularExpressions.Regex regEx)
+        {
+            return regEx.IsMatch(input);
+        }
+        public static string ExtractGroupName(string input, System.Text.RegularExpressions.Regex regEx)
+        {
+            var match = regEx.Match(input);
+            if (match.Success)
+            {
+                return match.Value;
+            }
+
+            return string.Empty;
+        }
     }
 }

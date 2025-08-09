@@ -13,8 +13,9 @@ namespace IngameScript
         public string Name;
         public IMyShipConnector MainConnector;
         public readonly List<IMyShipConnector> Connectors = new List<IMyShipConnector>();
-        public Vector3D Forward = Vector3D.Zero;
-        public Vector3D Up = Vector3D.Zero;
+        public IMyCameraBlock Camera;
+        public Vector3D Forward => Camera.WorldMatrix.Forward;
+        public Vector3D Up => Camera.WorldMatrix.Up;
 
         public string DockedShipName { get; private set; }
 
@@ -23,60 +24,9 @@ namespace IngameScript
             this.config = config;
         }
 
-        public static List<ExchangeGroup> InitializeExchangeGroups(List<IMyTerminalBlock> blocks, Config config)
-        {
-            List<ExchangeGroup> exchanges = new List<ExchangeGroup>();
-
-            //Group them by the group name
-            var regEx = config.ExchangesRegex;
-            var groups = blocks.GroupBy(b => ExtractGroupName(b.CustomName, regEx)).ToList();
-
-            //For each group, initialize the blocks of the ExchangeGroup class
-            foreach (var group in groups)
-            {
-                var exchangeGroup = new ExchangeGroup(config)
-                {
-                    Name = group.Key,
-                };
-
-                foreach (var block in group)
-                {
-                    var connector = block as IMyShipConnector;
-                    if (connector != null)
-                    {
-                        if (connector.CustomName.Contains(config.ExchangeMainConnector)) exchangeGroup.MainConnector = connector;
-                        else if (connector.CustomName.Contains(config.ExchangeOtherConnector)) exchangeGroup.Connectors.Add(connector);
-
-                        continue;
-                    }
-
-                    var camera = block as IMyCameraBlock;
-                    if (camera != null)
-                    {
-                        exchangeGroup.Forward = camera.WorldMatrix.Forward;
-                        exchangeGroup.Up = camera.WorldMatrix.Up;
-                    }
-                }
-
-                exchanges.Add(exchangeGroup);
-            }
-
-            return exchanges;
-        }
-        static string ExtractGroupName(string input, System.Text.RegularExpressions.Regex regEx)
-        {
-            var match = regEx.Match(input);
-            if (match.Success)
-            {
-                return match.Value;
-            }
-
-            return string.Empty;
-        }
-
         public bool IsValid()
         {
-            return MainConnector != null && Forward != Vector3D.Zero && Up != Vector3D.Zero;
+            return MainConnector != null && Camera != null;
         }
         public bool IsFree()
         {
