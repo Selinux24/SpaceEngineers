@@ -52,15 +52,22 @@ namespace IngameScript
 
             if (MainConnector.Status == MyShipConnectorStatus.Connected)
             {
-                names.Add(MainConnector.OtherConnector.CubeGrid.Name);
+                names.Add(MainConnector.OtherConnector.CubeGrid.CustomName);
             }
 
             foreach (var connector in Connectors)
             {
-                if (connector.Status == MyShipConnectorStatus.Connected)
+                if (connector.Status != MyShipConnectorStatus.Connected)
                 {
-                    names.Add(connector.OtherConnector.CubeGrid.Name);
+                    continue;
                 }
+
+                if (names.Contains(connector.OtherConnector.CubeGrid.CustomName))
+                {
+                    continue;
+                }
+
+                names.Add(connector.OtherConnector.CubeGrid.CustomName);
             }
 
             return names;

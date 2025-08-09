@@ -46,7 +46,7 @@ namespace IngameScript
         ShipStatus shipStatus = ShipStatus.Idle;
         readonly Navigator navigator;
 
-        public readonly Config Config;
+        internal readonly Config Config;
 
         public Program()
         {
@@ -368,7 +368,7 @@ namespace IngameScript
         #endregion
 
         #region CALLBACKS
-        public void ExecuteCallback(string name, ExchangeTasks task)
+        internal void ExecuteCallback(string name, ExchangeTasks task)
         {
             if (name == "ON_APPROACHING_COMPLETED") OnApproachingCompleted(task);
             else if (name == "ON_SEPARATION_COMPLETED") OnSeparationCompleted(task);

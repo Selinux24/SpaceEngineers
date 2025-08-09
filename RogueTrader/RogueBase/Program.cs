@@ -500,13 +500,13 @@ namespace IngameScript
 
         void InitializeExchangeGroups()
         {
+            exchanges.Clear();
+
             var regEx = config.ExchangesRegex;
 
             //Find all blocks that have the exchange regex in their name
             var blocks = new List<IMyTerminalBlock>();
             GridTerminalSystem.GetBlocksOfType(blocks, i => i.CubeGrid == Me.CubeGrid && Utils.IsFromGroup(i.CustomName, regEx));
-
-            List<ExchangeGroup> exchanges = new List<ExchangeGroup>();
 
             //Group them by the group name
             var groups = blocks.GroupBy(b => Utils.ExtractGroupName(b.CustomName, regEx)).ToList();
@@ -526,8 +526,6 @@ namespace IngameScript
                     {
                         if (connector.CustomName.Contains(config.ExchangeMainConnector)) exchangeGroup.MainConnector = connector;
                         else if (connector.CustomName.Contains(config.ExchangeOtherConnector)) exchangeGroup.Connectors.Add(connector);
-
-                        continue;
                     }
 
                     var camera = block as IMyCameraBlock;
