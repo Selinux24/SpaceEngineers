@@ -9,9 +9,6 @@ namespace IngameScript
     {
         readonly Program ship;
         int tickCount = 0;
-        bool monitorize = false;
-        Vector3D monitorizePosition;
-        double monitorizeDistance;
 
         DateTime alignThrustStart = DateTime.Now;
         bool thrusting = false;
@@ -74,10 +71,6 @@ namespace IngameScript
             AtmStatus = NavigatorAtmStatus.None;
             CrsStatus = NavigatorCrsStatus.None;
 
-            monitorize = false;
-            monitorizePosition = Vector3D.Zero;
-            monitorizeDistance = 0;
-
             TotalDistance = GetTotalDistance();
         }
         public void SeparateFromDock(bool landing, Vector3D parking, string exchange, Vector3D fw, Vector3D up, List<Vector3D> wpList, string onSeparationCompleted = null, ExchangeTasks exchangeTask = ExchangeTasks.None)
@@ -97,10 +90,6 @@ namespace IngameScript
             Task = NavigatorTasks.Separate;
             AtmStatus = NavigatorAtmStatus.None;
             CrsStatus = NavigatorCrsStatus.None;
-
-            monitorize = false;
-            monitorizePosition = Vector3D.Zero;
-            monitorizeDistance = 0;
 
             TotalDistance = GetTotalDistance();
 
@@ -125,10 +114,6 @@ namespace IngameScript
             AtmStatus = NavigatorAtmStatus.None;
             CrsStatus = NavigatorCrsStatus.None;
 
-            monitorize = false;
-            monitorizePosition = Vector3D.Zero;
-            monitorizeDistance = 0;
-
             TotalDistance = GetTotalDistance();
         }
         public void Clear()
@@ -147,10 +132,6 @@ namespace IngameScript
             Task = NavigatorTasks.None;
             AtmStatus = NavigatorAtmStatus.None;
             CrsStatus = NavigatorCrsStatus.None;
-
-            monitorize = false;
-            monitorizePosition = Vector3D.Zero;
-            monitorizeDistance = 0;
         }
 
         public void Update()
@@ -215,60 +196,21 @@ namespace IngameScript
         }
         void MonitorizeSeparate()
         {
-            if (ship.IsConnected())
-            {
-                //If the remote control is connected, we are not in a undocking process.
-                return;
-            }
-
-            //Monitorize approach to the parking position.
-            if (monitorize)
-            {
-                var distance = Vector3D.Distance(ConnectorPosition, monitorizePosition);
-                if (distance > monitorizeDistance)
-                {
-                    return;
-                }
-
-                //Reached
-                if (Landing)
-                {
-                    ship.DisableRemoteLanding();
-                }
-                else
-                {
-                    ship.DisableRemotePilot();
-                }
-                monitorize = false;
-
-                ship.ExecuteCallback(Callback, ExchangeTask);
-
-                Clear();
-                ship.ResetGyros();
-                ship.ResetThrust();
-            }
-
             //Monitorize last waypoint.
             if (CurrentWpIdx >= Waypoints.Count)
             {
-                //Program the remote pilot to navigate from the last waypoint to the parking position.
-                if (Landing)
-                {
-                    ship.ConfigureRemoteLanding(Parking, "Parking position", Config.TaxiSpeed, true);
-                }
-                else
-                {
-                    ship.ConfigureRemotePilot(Parking, "Parking position", Config.TaxiSpeed, true);
-                }
+                ship.ExecuteCallback(Callback, ExchangeTask);
 
-                //Monitorize the proximity to the parking position.
-                monitorize = true;
-                monitorizePosition = Parking;
-                monitorizeDistance = Config.DockingDistanceThrWaypoints;
+                Clear();
 
                 ship.ResetGyros();
                 ship.ResetThrust();
 
+                return;
+            }
+
+            if (ship.IsConnected())
+            {
                 return;
             }
 
@@ -714,10 +656,6 @@ namespace IngameScript
             AtmStatus = (NavigatorAtmStatus)Utils.ReadInt(parts, "AtmStatus");
             CrsStatus = (NavigatorCrsStatus)Utils.ReadInt(parts, "CrsStatus");
 
-            monitorize = Utils.ReadInt(parts, "Monitorize") == 1;
-            monitorizePosition = Utils.ReadVector(parts, "MonitorizePosition");
-            monitorizeDistance = Utils.ReadDouble(parts, "MonitorizeDistance");
-
             thrusting = Utils.ReadInt(parts, "Thrusting") == 1;
             evadingPoints.Clear();
             evadingPoints.AddRange(Utils.ReadVectorList(parts, "EvadingPoints"));
@@ -744,10 +682,6 @@ namespace IngameScript
                 $"Task={(int)Task}",
                 $"AtmStatus={(int)AtmStatus}",
                 $"CrsStatus={(int)CrsStatus}",
-
-                $"Monitorize={(monitorize ? 1 : 0)}",
-                $"MonitorizePosition={Utils.VectorToStr(monitorizePosition)}",
-                $"MonitorizeDistance={monitorizeDistance:F2}",
 
                 $"Thrusting={(thrusting?1:0)}",
                 $"EvadingPoints={Utils.VectorListToStr(evadingPoints)}",
