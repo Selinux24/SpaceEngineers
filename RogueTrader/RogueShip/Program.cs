@@ -42,6 +42,7 @@ namespace IngameScript
 
         readonly string shipId;
         readonly StringBuilder sbLog = new StringBuilder();
+
         bool paused = false;
         ShipStatus shipStatus = ShipStatus.Idle;
         readonly Navigator navigator;
@@ -182,6 +183,7 @@ namespace IngameScript
         {
             WriteInfoLCDs($"{shipId} in channel {Config.Channel}");
             WriteInfoLCDs($"{CalculateCargoPercentage():P1} cargo.");
+            WriteInfoLCDs($"{shipStatus}");
 
             if (!string.IsNullOrEmpty(argument))
             {
@@ -231,6 +233,7 @@ namespace IngameScript
             ResetGyros();
             ResetThrust();
 
+            shipStatus = ShipStatus.Idle;
             navigator.Clear();
 
             WriteInfoLCDs("Stopped.");
@@ -530,43 +533,6 @@ namespace IngameScript
             timerUnload?.StartCountdown();
         }
 
-        internal void ConfigureRemotePilot(Vector3D position, string positionName, double velocity, bool activateNow)
-        {
-            ConfigureRemote(remotePilot, position, positionName, velocity, activateNow);
-        }
-        internal void ConfigureRemoteLanding(Vector3D position, string positionName, double velocity, bool activateNow)
-        {
-            ConfigureRemote(remoteLanding, position, positionName, velocity, activateNow);
-        }
-        void ConfigureRemote(IMyRemoteControl remote, Vector3D position, string positionName, double velocity, bool activateNow)
-        {
-            Pilot();
-
-            DisableRemote(remote);
-
-            remote.AddWaypoint(position, positionName);
-            remote.SetCollisionAvoidance(true);
-            remote.WaitForFreeWay = false;
-            remote.FlightMode = FlightMode.OneWay;
-            remote.SpeedLimit = (float)velocity;
-
-            if (activateNow) remote.SetAutoPilotEnabled(true);
-        }
-
-        internal void DisableRemotePilot()
-        {
-            DisableRemote(remotePilot);
-        }
-        internal void DisableRemoteLanding()
-        {
-            DisableRemote(remoteLanding);
-        }
-        void DisableRemote(IMyRemoteControl remote)
-        {
-            remote.ClearWaypoints();
-            remote.SetAutoPilotEnabled(false);
-        }
-
         internal bool IsObstacleAhead(double collisionDetectRange, Vector3D velocity, out MyDetectedEntityInfo hit)
         {
             cameraPilot.EnableRaycast = true;
@@ -597,53 +563,6 @@ namespace IngameScript
             ApplyThrust(force);
         }
 
-        internal void ApplyThrust(Vector3D force, Vector3D gravity, double mass)
-        {
-            if (gravity.Length() < 0.001)
-            {
-                ApplyThrust(force);
-                return;
-            }
-
-            //Find opposing thrusters to counteract gravity, to obtain total effective thrust
-            var opposingThrusters = new List<IMyThrust>();
-            double totalEffectiveThrust = 0;
-            foreach (var t in thrusters)
-            {
-                var thrustDir = t.WorldMatrix.Backward;
-                if (thrustDir.Dot(-Vector3D.Normalize(gravity)) >= 0.9)
-                {
-                    opposingThrusters.Add(t);
-                    totalEffectiveThrust += t.MaxEffectiveThrust;
-
-                    //Not applying force to opposing thrusters
-                    continue;
-                }
-
-                //Apply force to thrusters
-                double alignment = thrustDir.Dot(force);
-
-                t.Enabled = true;
-                t.ThrustOverridePercentage = alignment > 0 ? (float)Math.Min(alignment / t.MaxEffectiveThrust, 1f) : 0f;
-            }
-
-            //Apply force to opposing thrusters, distributing the gravity force over them
-            if (totalEffectiveThrust <= 0.01) return;
-
-            var gravForce = -gravity * mass;
-
-            foreach (var t in opposingThrusters)
-            {
-                double share = t.MaxEffectiveThrust / totalEffectiveThrust;
-                var targetForce = gravForce * share;
-
-                var thrustDir = t.WorldMatrix.Backward;
-                double alignment = thrustDir.Dot(targetForce);
-
-                t.Enabled = true;
-                t.ThrustOverridePercentage = alignment > 0 ? (float)Math.Min(alignment / t.MaxEffectiveThrust, 1f) : 0f;
-            }
-        }
         internal void ApplyThrust(Vector3D force)
         {
             foreach (var t in thrusters)
@@ -755,16 +674,13 @@ namespace IngameScript
             }
         }
 
-        internal double GetSpeed(bool landing)
-        {
-            var remote = landing ? remoteLanding : remotePilot;
-
-            return remote.GetShipSpeed();
-        }
-
         internal Vector3D GetPosition()
         {
             return remotePilot.GetPosition();
+        }
+        internal double GetSpeed()
+        {
+            return remotePilot.GetShipSpeed();
         }
         internal Vector3D GetNaturalGravity()
         {
@@ -779,18 +695,9 @@ namespace IngameScript
             return remotePilot.CalculateShipMass().TotalMass;
         }
 
-        internal double GetPilotSpeed()
-        {
-            return remotePilot.GetShipSpeed();
-        }
         internal Vector3D GetPilotLinearVelocity()
         {
             return remotePilot.GetShipVelocities().LinearVelocity;
-        }
-
-        internal double GetLandingSpeed()
-        {
-            return remoteLanding.GetShipSpeed();
         }
 
         internal bool IsConnected()
@@ -801,10 +708,6 @@ namespace IngameScript
         {
             return
                 connectorA.Status != MyShipConnectorStatus.Unconnected;
-        }
-        internal double GetDockingSpeed()
-        {
-            return remoteDocking.GetShipSpeed();
         }
         internal Vector3D GetDockingPosition()
         {
