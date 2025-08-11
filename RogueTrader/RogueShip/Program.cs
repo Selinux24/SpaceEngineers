@@ -183,8 +183,6 @@ namespace IngameScript
             WriteInfoLCDs($"{shipId} in channel {Config.Channel}");
             WriteInfoLCDs($"{CalculateCargoPercentage():P1} cargo.");
 
-            if (DoPause()) return;
-
             if (!string.IsNullOrEmpty(argument))
             {
                 ParseTerminalMessage(argument);
@@ -196,6 +194,8 @@ namespace IngameScript
                 var message = bl.AcceptMessage();
                 ParseMessage(message.Data.ToString());
             }
+
+            if (DoPause()) return;
 
             MonitorizeLoad();
 
@@ -226,8 +226,12 @@ namespace IngameScript
             remotePilot.ClearWaypoints();
             remoteDocking.SetAutoPilotEnabled(false);
             remoteDocking.ClearWaypoints();
+            remoteLanding.SetAutoPilotEnabled(false);
+            remoteLanding.ClearWaypoints();
             ResetGyros();
             ResetThrust();
+
+            navigator.Clear();
 
             WriteInfoLCDs("Stopped.");
         }
@@ -300,6 +304,7 @@ namespace IngameScript
         /// </summary>
         void ProcessDocking(string[] lines, ExchangeTasks task)
         {
+            var landing = Utils.ReadInt(lines, "Landing") == 1;
             var parking = Utils.ReadVector(lines, "Parking");
 
             string exchange = Utils.ReadString(lines, "Exchange");
@@ -309,12 +314,12 @@ namespace IngameScript
 
             if (task == ExchangeTasks.StartLoad || task == ExchangeTasks.StartUnload)
             {
-                navigator.ApproachToDock(parking, exchange, fw, up, wpList, "ON_APPROACHING_COMPLETED", task);
+                navigator.ApproachToDock(landing, parking, exchange, fw, up, wpList, "ON_APPROACHING_COMPLETED", task);
                 shipStatus = ShipStatus.Docking;
             }
             else if (task == ExchangeTasks.EndLoad || task == ExchangeTasks.EndUnload)
             {
-                navigator.SeparateFromDock(parking, exchange, fw, up, wpList, "ON_SEPARATION_COMPLETED", task);
+                navigator.SeparateFromDock(landing, parking, exchange, fw, up, wpList, "ON_SEPARATION_COMPLETED", task);
                 shipStatus = ShipStatus.Undocking;
             }
         }
@@ -440,7 +445,7 @@ namespace IngameScript
             return Utils.ReadString(lines, "To") == shipId;
         }
 
-        public void WriteLCDs(string wildcard, string text)
+        internal void WriteLCDs(string wildcard, string text)
         {
             List<IMyTextPanel> lcds = new List<IMyTextPanel>();
             GridTerminalSystem.GetBlocksOfType(lcds, lcd => lcd.CubeGrid == Me.CubeGrid && lcd.CustomName.Contains(wildcard));
@@ -450,7 +455,7 @@ namespace IngameScript
                 lcd.WriteText(text, false);
             }
         }
-        public void WriteInfoLCDs(string text, bool append = true)
+        internal void WriteInfoLCDs(string text, bool append = true)
         {
             Echo(text);
 
@@ -460,7 +465,7 @@ namespace IngameScript
                 lcd.WriteText(text + Environment.NewLine, append);
             }
         }
-        public void WriteLogLCDs(string text)
+        internal void WriteLogLCDs(string text)
         {
             if (!Config.EnableLogs)
             {
@@ -489,7 +494,7 @@ namespace IngameScript
                 }
             }
         }
-        public void BroadcastMessage(List<string> parts)
+        internal void BroadcastMessage(List<string> parts)
         {
             string message = string.Join("|", parts);
 
@@ -498,36 +503,40 @@ namespace IngameScript
             IGC.SendBroadcastMessage(Config.Channel, message);
         }
 
-        public void Pilot()
+        internal void Pilot()
         {
             timerPilot?.StartCountdown();
         }
-        public void Waiting()
+        internal void Waiting()
         {
             timerWaiting?.StartCountdown();
         }
 
-        public void Dock()
+        internal void Dock()
         {
             timerDock?.StartCountdown();
         }
-        public void Undock()
+        internal void Undock()
         {
             timerUndock?.StartCountdown();
         }
 
-        public void Load()
+        internal void Load()
         {
             timerLoad?.StartCountdown();
         }
-        public void Unload()
+        internal void Unload()
         {
             timerUnload?.StartCountdown();
         }
 
-        public void ConfigureRemotePilot(Vector3D position, string positionName, double velocity, bool activateNow)
+        internal void ConfigureRemotePilot(Vector3D position, string positionName, double velocity, bool activateNow)
         {
             ConfigureRemote(remotePilot, position, positionName, velocity, activateNow);
+        }
+        internal void ConfigureRemoteLanding(Vector3D position, string positionName, double velocity, bool activateNow)
+        {
+            ConfigureRemote(remoteLanding, position, positionName, velocity, activateNow);
         }
         void ConfigureRemote(IMyRemoteControl remote, Vector3D position, string positionName, double velocity, bool activateNow)
         {
@@ -544,9 +553,13 @@ namespace IngameScript
             if (activateNow) remote.SetAutoPilotEnabled(true);
         }
 
-        public void DisableRemotePilot()
+        internal void DisableRemotePilot()
         {
             DisableRemote(remotePilot);
+        }
+        internal void DisableRemoteLanding()
+        {
+            DisableRemote(remoteLanding);
         }
         void DisableRemote(IMyRemoteControl remote)
         {
@@ -554,7 +567,7 @@ namespace IngameScript
             remote.SetAutoPilotEnabled(false);
         }
 
-        public bool IsObstacleAhead(double collisionDetectRange, Vector3D velocity, out MyDetectedEntityInfo hit)
+        internal bool IsObstacleAhead(double collisionDetectRange, Vector3D velocity, out MyDetectedEntityInfo hit)
         {
             cameraPilot.EnableRaycast = true;
 
@@ -573,7 +586,7 @@ namespace IngameScript
             return false;
         }
 
-        public void ThrustToTarget(bool landing, Vector3D toTarget, double maxSpeed)
+        internal void ThrustToTarget(bool landing, Vector3D toTarget, double maxSpeed)
         {
             var remote = landing ? remoteLanding : remotePilot;
 
@@ -584,7 +597,7 @@ namespace IngameScript
             ApplyThrust(force);
         }
 
-        public void ApplyThrust(Vector3D force, Vector3D gravity, double mass)
+        internal void ApplyThrust(Vector3D force, Vector3D gravity, double mass)
         {
             if (gravity.Length() < 0.001)
             {
@@ -598,18 +611,17 @@ namespace IngameScript
             foreach (var t in thrusters)
             {
                 var thrustDir = t.WorldMatrix.Backward;
-                double alignment = thrustDir.Dot(-gravity);
-
-                if (alignment >= 0.9)
+                if (thrustDir.Dot(-Vector3D.Normalize(gravity)) >= 0.9)
                 {
                     opposingThrusters.Add(t);
                     totalEffectiveThrust += t.MaxEffectiveThrust;
 
+                    //Not applying force to opposing thrusters
                     continue;
                 }
 
-                //Apply force to thrusters, no opposing thrusters
-                alignment = thrustDir.Dot(force);
+                //Apply force to thrusters
+                double alignment = thrustDir.Dot(force);
 
                 t.Enabled = true;
                 t.ThrustOverridePercentage = alignment > 0 ? (float)Math.Min(alignment / t.MaxEffectiveThrust, 1f) : 0f;
@@ -618,7 +630,7 @@ namespace IngameScript
             //Apply force to opposing thrusters, distributing the gravity force over them
             if (totalEffectiveThrust <= 0.01) return;
 
-            var gravForce = -Vector3D.Normalize(gravity) * (mass * gravity.Length());
+            var gravForce = -gravity * mass;
 
             foreach (var t in opposingThrusters)
             {
@@ -632,7 +644,7 @@ namespace IngameScript
                 t.ThrustOverridePercentage = alignment > 0 ? (float)Math.Min(alignment / t.MaxEffectiveThrust, 1f) : 0f;
             }
         }
-        void ApplyThrust(Vector3D force)
+        internal void ApplyThrust(Vector3D force)
         {
             foreach (var t in thrusters)
             {
@@ -643,7 +655,8 @@ namespace IngameScript
                 t.ThrustOverridePercentage = alignment > 0 ? (float)Math.Min(alignment / t.MaxEffectiveThrust, 1f) : 0f;
             }
         }
-        public void ResetThrust()
+
+        internal void ResetThrust()
         {
             foreach (var t in thrusters)
             {
@@ -651,7 +664,7 @@ namespace IngameScript
                 t.ThrustOverridePercentage = 0f;
             }
         }
-        public void StopThrust()
+        internal void StopThrust()
         {
             foreach (var t in thrusters)
             {
@@ -660,7 +673,7 @@ namespace IngameScript
             }
         }
 
-        public bool AlignToDirection(bool landing, Vector3D toTarget, double thr)
+        internal bool AlignToDirection(bool landing, Vector3D toTarget, double thr)
         {
             var remote = landing ? remoteLanding : remotePilot;
             var direction = remote.WorldMatrix.Forward;
@@ -682,7 +695,7 @@ namespace IngameScript
 
             return true;
         }
-        public bool AlignToVectors(Vector3D targetForward, Vector3D targetUp, double thr)
+        internal bool AlignToVectors(Vector3D targetForward, Vector3D targetUp, double thr)
         {
             var shipMatrix = remoteDocking.WorldMatrix;
             var shipForward = shipMatrix.Forward;
@@ -719,7 +732,7 @@ namespace IngameScript
 
             return corrected;
         }
-        public void ApplyGyroOverride(Vector3D axis)
+        internal void ApplyGyroOverride(Vector3D axis)
         {
             foreach (var gyro in gyros)
             {
@@ -731,7 +744,7 @@ namespace IngameScript
                 gyro.Roll = (float)gyroRot.Z;
             }
         }
-        public void ResetGyros()
+        internal void ResetGyros()
         {
             foreach (var gyro in gyros)
             {
@@ -742,67 +755,76 @@ namespace IngameScript
             }
         }
 
-        public double GetSpeed(bool landing)
+        internal double GetSpeed(bool landing)
         {
             var remote = landing ? remoteLanding : remotePilot;
 
             return remote.GetShipSpeed();
         }
 
-        public Vector3D GetPosition()
+        internal Vector3D GetPosition()
         {
-            return antenna.GetPosition();
+            return remotePilot.GetPosition();
         }
-
-        public double GetPilotSpeed()
-        {
-            return remotePilot.GetShipSpeed();
-        }
-        public Vector3D GetPilotLinearVelocity()
-        {
-            return remotePilot.GetShipVelocities().LinearVelocity;
-        }
-        public Vector3D GetPilotNaturalGravity()
+        internal Vector3D GetNaturalGravity()
         {
             return remotePilot.GetNaturalGravity();
         }
+        internal bool IsInGravity()
+        {
+            return GetNaturalGravity().Length() > 0.001;
+        }
+        internal double GetMass()
+        {
+            return remotePilot.CalculateShipMass().PhysicalMass;
+        }
 
-        public double GetLandingSpeed()
+        internal double GetPilotSpeed()
+        {
+            return remotePilot.GetShipSpeed();
+        }
+        internal Vector3D GetPilotLinearVelocity()
+        {
+            return remotePilot.GetShipVelocities().LinearVelocity;
+        }
+
+        internal double GetLandingSpeed()
         {
             return remoteLanding.GetShipSpeed();
         }
 
-        public bool IsConnected()
+        internal bool IsConnected()
         {
             return connectorA.Status == MyShipConnectorStatus.Connected;
         }
-        public Vector3D GetDockingPosition()
+        internal bool IsNearConnector()
+        {
+            return
+                connectorA.Status != MyShipConnectorStatus.Unconnected;
+        }
+        internal double GetDockingSpeed()
+        {
+            return remoteDocking.GetShipSpeed();
+        }
+        internal Vector3D GetDockingPosition()
         {
             return connectorA.GetPosition();
         }
-        public double GetDockingPhysicalMass()
-        {
-            return remoteDocking.CalculateShipMass().PhysicalMass;
-        }
-        public Vector3D GetDockingLinearVelocity()
+        internal Vector3D GetDockingLinearVelocity()
         {
             return remoteDocking.GetShipVelocities().LinearVelocity;
         }
-        public Vector3D GetDockingNaturalGravity()
-        {
-            return remoteDocking.GetNaturalGravity();
-        }
 
-        public IMyCameraBlock GetCameraPilot()
+        internal IMyCameraBlock GetCameraPilot()
         {
             return cameraPilot;
         }
 
-        public void EnableSystems()
+        internal void EnableSystems()
         {
             antenna.Enabled = true;
         }
-        public void DisableSystems()
+        internal void DisableSystems()
         {
             antenna.Enabled = false;
         }

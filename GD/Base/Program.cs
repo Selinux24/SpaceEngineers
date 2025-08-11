@@ -278,7 +278,7 @@ namespace IngameScript
                     $"Landing={(config.IsRocketBase?1:0)}",
                     $"Forward={Utils.VectorToStr(camera.WorldMatrix.Forward)}",
                     $"Up={Utils.VectorToStr(camera.WorldMatrix.Up)}",
-                    $"WayPoints={Utils.VectorListToStr(exchange.CalculateRouteToConnector())}",
+                    $"Waypoints={Utils.VectorListToStr(exchange.CalculateRouteToConnector())}",
                     $"Task={(int)request.Task}",
                     $"Exchange={exchange.Name}",
                 };

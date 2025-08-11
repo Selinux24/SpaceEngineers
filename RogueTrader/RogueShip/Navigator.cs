@@ -24,7 +24,7 @@ namespace IngameScript
         public Vector3D Forward = new Vector3D(1, 0, 0);
         public Vector3D Up = new Vector3D(0, 1, 0);
         public readonly List<Vector3D> Waypoints = new List<Vector3D>();
-        public int CurrentWp = 0;
+        public int CurrentWpIdx = 0;
         public string Callback = null;
         public ExchangeTasks ExchangeTask = ExchangeTasks.None;
 
@@ -34,16 +34,19 @@ namespace IngameScript
 
         public Config Config => ship.Config;
 
-        public Vector3D CurrentPos => ship.GetDockingPosition();
-        public Vector3D TargetWaypoint => Waypoints[CurrentWp];
-        public Vector3D ToTargetWaypoint => TargetWaypoint - CurrentPos;
-        public double DistanceToNextWaypoint => ToTargetWaypoint.Length();
-
         public Vector3D DirectionToTarget { get; private set; }
         public double DistanceToTarget { get; private set; }
         public double Speed { get; private set; } = 0;
-        public TimeSpan EstimatedArrival => Speed > 0.01 ? TimeSpan.FromSeconds(DistanceToTarget / Speed) : TimeSpan.Zero;
-        public double TotalDistance => GetTotalDistance();
+        public double TotalDistance { get; private set; } = 0;
+        public Vector3D CurrentWaypoint => Waypoints[CurrentWpIdx];
+
+        public double DockSpeed => ship.GetDockingSpeed();
+        public TimeSpan DockingETA => DockSpeed > 0.01 ? TimeSpan.FromSeconds(DistanceToNextDockWaypoint / DockSpeed) : TimeSpan.Zero;
+        public Vector3D ConnectorPosition => ship.GetDockingPosition();
+        public Vector3D ToDockWaypoint => CurrentWaypoint - ConnectorPosition;
+        public double DistanceToNextDockWaypoint => ToDockWaypoint.Length();
+
+        public TimeSpan NavigationETA => Speed > 0.01 ? TimeSpan.FromSeconds(DistanceToTarget / Speed) : TimeSpan.Zero;
         public double Progress => DistanceToTarget > 0 ? 1 - (DistanceToTarget / TotalDistance) : 1;
 
         public Navigator(Program ship)
@@ -51,41 +54,55 @@ namespace IngameScript
             this.ship = ship;
         }
 
-        public void ApproachToDock(Vector3D parking, string exchange, Vector3D fw, Vector3D up, List<Vector3D> wpList, string onAproximationCompleted = null, ExchangeTasks exchangeTask = ExchangeTasks.None)
+        public void ApproachToDock(bool landing, Vector3D parking, string exchange, Vector3D fw, Vector3D up, List<Vector3D> wpList, string onAproximationCompleted = null, ExchangeTasks exchangeTask = ExchangeTasks.None)
         {
+            ship.WriteLogLCDs($"Approaching to dock {exchange} with {wpList.Count} waypoints.");
+
+            Landing = landing;
             Parking = parking;
+
             Exchange = exchange;
             Forward = -Vector3D.Normalize(fw);
             Up = Vector3D.Normalize(up);
             Waypoints.Clear();
             Waypoints.AddRange(wpList);
-            CurrentWp = 0;
+            CurrentWpIdx = 0;
             Callback = onAproximationCompleted;
             ExchangeTask = exchangeTask;
 
             Task = NavigatorTasks.Approach;
+            AtmStatus = NavigatorAtmStatus.None;
+            CrsStatus = NavigatorCrsStatus.None;
 
-            //Program the remote pilot control to navigate to the parking position.
-            ship.ConfigureRemotePilot(parking, "Parking position", Config.TaxiSpeed, true);
+            monitorize = false;
+            monitorizePosition = Vector3D.Zero;
+            monitorizeDistance = 0;
 
-            //Monitorize the proximity to the parking position.
-            monitorize = true;
-            monitorizePosition = parking;
-            monitorizeDistance = Config.DockingDistanceThrWaypoints;
+            TotalDistance = GetTotalDistance();
         }
-        public void SeparateFromDock(Vector3D parking, string exchange, Vector3D fw, Vector3D up, List<Vector3D> wpList, string onSeparationCompleted = null, ExchangeTasks exchangeTask = ExchangeTasks.None)
+        public void SeparateFromDock(bool landing, Vector3D parking, string exchange, Vector3D fw, Vector3D up, List<Vector3D> wpList, string onSeparationCompleted = null, ExchangeTasks exchangeTask = ExchangeTasks.None)
         {
+            Landing = landing;
             Parking = parking;
+
             Exchange = exchange;
             Forward = -Vector3D.Normalize(fw);
             Up = Vector3D.Normalize(up);
             Waypoints.Clear();
             Waypoints.AddRange(wpList);
-            CurrentWp = 0;
+            CurrentWpIdx = 0;
             Callback = onSeparationCompleted;
             ExchangeTask = exchangeTask;
 
             Task = NavigatorTasks.Separate;
+            AtmStatus = NavigatorAtmStatus.None;
+            CrsStatus = NavigatorCrsStatus.None;
+
+            monitorize = false;
+            monitorizePosition = Vector3D.Zero;
+            monitorizeDistance = 0;
+
+            TotalDistance = GetTotalDistance();
 
             //Start the undocking process.
             ship.Undock();
@@ -93,25 +110,37 @@ namespace IngameScript
         public void NavigateTo(bool landing, List<Vector3D> wpList, string onNavigationCompleted = null, ExchangeTasks exchangeTask = ExchangeTasks.None)
         {
             Landing = landing;
-
-            Waypoints.Clear();
-            Waypoints.AddRange(wpList);
-            CurrentWp = 0;
-
-            Callback = onNavigationCompleted;
-            ExchangeTask = exchangeTask;
-
-            Task = NavigatorTasks.Navigate;
-        }
-        public void Clear()
-        {
-            Landing = false;
+            Parking = Vector3D.Zero;
 
             Exchange = null;
             Forward = Vector3D.Zero;
             Up = Vector3D.Zero;
             Waypoints.Clear();
-            CurrentWp = 0;
+            Waypoints.AddRange(wpList);
+            CurrentWpIdx = 0;
+            Callback = onNavigationCompleted;
+            ExchangeTask = exchangeTask;
+
+            Task = NavigatorTasks.Navigate;
+            AtmStatus = NavigatorAtmStatus.None;
+            CrsStatus = NavigatorCrsStatus.None;
+
+            monitorize = false;
+            monitorizePosition = Vector3D.Zero;
+            monitorizeDistance = 0;
+
+            TotalDistance = GetTotalDistance();
+        }
+        public void Clear()
+        {
+            Landing = false;
+            Parking = Vector3D.Zero;
+
+            Exchange = null;
+            Forward = Vector3D.Zero;
+            Up = Vector3D.Zero;
+            Waypoints.Clear();
+            CurrentWpIdx = 0;
             Callback = null;
             ExchangeTask = ExchangeTasks.None;
 
@@ -150,37 +179,27 @@ namespace IngameScript
             return true;
         }
 
+        #region Approach and Separation from Dock
         void MonitorizeApproach()
         {
-            if (ship.IsConnected())
+            //Monitorize last waypoint.
+            if (CurrentWpIdx >= Waypoints.Count)
             {
-                //If the remote control is connected, we are not in a docking process.
-                return;
-            }
-
-            //Monitorize approach to the parking position.
-            if (monitorize)
-            {
-                var distance = Vector3D.Distance(CurrentPos, monitorizePosition);
-                if (distance > monitorizeDistance)
+                if (ship.IsNearConnector())
                 {
-                    return;
+                    ship.ExecuteCallback(Callback, ExchangeTask);
+
+                    Clear();
                 }
 
-                //Reached
-                ship.DisableRemotePilot();
-                monitorize = false;
-            }
-
-            //Monitorize last waypoint.
-            if (CurrentWp >= Waypoints.Count)
-            {
-                ship.ExecuteCallback(Callback, ExchangeTask);
-
-                Clear();
                 ship.ResetGyros();
                 ship.ResetThrust();
 
+                return;
+            }
+
+            if (ship.IsConnected())
+            {
                 return;
             }
 
@@ -205,14 +224,21 @@ namespace IngameScript
             //Monitorize approach to the parking position.
             if (monitorize)
             {
-                var distance = Vector3D.Distance(CurrentPos, monitorizePosition);
+                var distance = Vector3D.Distance(ConnectorPosition, monitorizePosition);
                 if (distance > monitorizeDistance)
                 {
                     return;
                 }
 
                 //Reached
-                ship.DisableRemotePilot();
+                if (Landing)
+                {
+                    ship.DisableRemoteLanding();
+                }
+                else
+                {
+                    ship.DisableRemotePilot();
+                }
                 monitorize = false;
 
                 ship.ExecuteCallback(Callback, ExchangeTask);
@@ -223,10 +249,17 @@ namespace IngameScript
             }
 
             //Monitorize last waypoint.
-            if (CurrentWp >= Waypoints.Count)
+            if (CurrentWpIdx >= Waypoints.Count)
             {
                 //Program the remote pilot to navigate from the last waypoint to the parking position.
-                ship.ConfigureRemotePilot(Parking, "Parking position", Config.TaxiSpeed, true);
+                if (Landing)
+                {
+                    ship.ConfigureRemoteLanding(Parking, "Parking position", Config.TaxiSpeed, true);
+                }
+                else
+                {
+                    ship.ConfigureRemotePilot(Parking, "Parking position", Config.TaxiSpeed, true);
+                }
 
                 //Monitorize the proximity to the parking position.
                 monitorize = true;
@@ -253,10 +286,12 @@ namespace IngameScript
         {
             ship.WriteInfoLCDs(GetState());
 
-            var distance = DistanceToNextWaypoint;
+            var distance = DistanceToNextDockWaypoint;
             if (distance < Config.DockingDistanceThrWaypoints)
             {
-                CurrentWp++;
+                ship.WriteLogLCDs($"Next Wp {distance:F1} < {Config.DockingDistanceThrWaypoints}.");
+
+                CurrentWpIdx++;
                 ship.ResetThrust();
                 return;
             }
@@ -264,35 +299,35 @@ namespace IngameScript
             //Always take the data from the docking remote control.
             double desiredSpeed = CalculateDesiredSpeed(distance);
             var currentVelocity = ship.GetDockingLinearVelocity();
-            var currentGravity = ship.GetDockingNaturalGravity();
-            double mass = ship.GetDockingPhysicalMass();
+            double mass = ship.GetMass();
+            var neededForce = Utils.CalculateThrustForce(ToDockWaypoint, desiredSpeed, currentVelocity, mass);
 
-            var neededForce = Utils.CalculateThrustForce(ToTargetWaypoint, desiredSpeed, currentVelocity, mass);
-
-            ship.ApplyThrust(neededForce, currentGravity, mass);
+            var gravity = ship.GetNaturalGravity();
+            ship.ApplyThrust(neededForce, gravity, mass);
         }
+        #endregion
 
+        #region Navigation
         void MonitorizeNavigate()
         {
-            if (Waypoints.Count == 0 || CurrentWp >= Waypoints.Count)
+            if (Waypoints.Count == 0 || CurrentWpIdx >= Waypoints.Count)
             {
                 return;
             }
 
             var position = ship.GetPosition();
-            var toTarget = TargetWaypoint - position;
+            var toTarget = CurrentWaypoint - position;
             DirectionToTarget = Vector3D.Normalize(toTarget);
             DistanceToTarget = GetRemainingDistance(position);
             Speed = Landing ? ship.GetLandingSpeed() : ship.GetPilotSpeed();
 
             if (toTarget.Length() <= 1000)
             {
-                CurrentWp++;
+                CurrentWpIdx++;
             }
 
             //Determine if the ship is in gravity.
-            var inGravity = ship.GetPilotNaturalGravity().Length() > 0.001;
-
+            var inGravity = ship.IsInGravity();
             if (inGravity)
             {
                 //If the ship is in gravity, do the trip in atmospheric mode.
@@ -388,7 +423,7 @@ namespace IngameScript
                 return;
             }
 
-            bool inGravity = ship.GetPilotNaturalGravity().Length() > 0.001;
+            bool inGravity = ship.IsInGravity();
             var shipVelocity = ship.GetPilotSpeed();
             if (!inGravity && shipVelocity >= Config.CrsNavigationMaxCruiseSpeed * Config.CrsNavigationMaxSpeedThr)
             {
@@ -424,7 +459,7 @@ namespace IngameScript
             //Maintain speed
             ship.WriteInfoLCDs(GetState());
 
-            bool inGravity = ship.GetPilotNaturalGravity().Length() > 0.001;
+            bool inGravity = ship.IsInGravity();
             if (inGravity || ship.AlignToDirection(false, DirectionToTarget, Config.CrsNavigationAlignThr))
             {
                 ship.WriteInfoLCDs("Not aligned");
@@ -552,6 +587,7 @@ namespace IngameScript
             ship.StopThrust();
             ship.ResetGyros();
         }
+        #endregion
 
         double GetTotalDistance()
         {
@@ -575,9 +611,9 @@ namespace IngameScript
             }
 
             double d = 0;
-            for (int i = CurrentWp; i < Waypoints.Count; i++)
+            for (int i = CurrentWpIdx; i < Waypoints.Count; i++)
             {
-                var p = i == CurrentWp ? position : Waypoints[i - 1];
+                var p = i == CurrentWpIdx ? position : Waypoints[i - 1];
                 d += Vector3D.Distance(p, Waypoints[i]);
             }
             return d;
@@ -614,12 +650,12 @@ namespace IngameScript
         {
             //Calculates desired speed based on distance, when we are moving towards the last waypoint.
             double approachSpeed;
-            if (CurrentWp == 0) approachSpeed = Config.DockingSpeedWaypointFirst; //Speed ​​to the first approach point.
-            else if (CurrentWp == Waypoints.Count - 1) approachSpeed = Config.DockingSpeedWaypointLast; //Speed ​​from the last approach point.
+            if (CurrentWpIdx == 0) approachSpeed = Config.DockingSpeedWaypointFirst; //Speed ​​to the first approach point.
+            else if (CurrentWpIdx == Waypoints.Count - 1) approachSpeed = Config.DockingSpeedWaypointLast; //Speed ​​from the last approach point.
             else approachSpeed = Config.DockingSpeedWaypoints; //Speed ​​between approach points.
 
             double desiredSpeed = approachSpeed;
-            if (distance < Config.DockingSlowdownDistance && (CurrentWp == 0 || CurrentWp == Waypoints.Count - 1))
+            if (distance < Config.DockingSlowdownDistance && (CurrentWpIdx == 0 || CurrentWpIdx == Waypoints.Count - 1))
             {
                 desiredSpeed = Math.Max(distance / Config.DockingSlowdownDistance * approachSpeed, 0.5);
             }
@@ -635,14 +671,17 @@ namespace IngameScript
                     $"Trip: {Utils.DistanceToStr(TotalDistance)}" + Environment.NewLine +
                     $"To target: {Utils.DistanceToStr(DistanceToTarget)}" + Environment.NewLine +
                     $"Speed: {Speed:F2}" + Environment.NewLine +
-                    $"ETC: {EstimatedArrival:dd\\:hh\\:mm\\:ss}" + Environment.NewLine +
+                    $"ETC: {NavigationETA:dd\\:hh\\:mm\\:ss}" + Environment.NewLine +
                     $"Progress {Progress:P1}" + Environment.NewLine;
             }
             else
             {
                 return
-                    $"To target: {Utils.DistanceToStr(DistanceToNextWaypoint)}" + Environment.NewLine +
-                    $"Progress: {CurrentWp + 1}/{Waypoints.Count}." + Environment.NewLine;
+                    $"Trip: {Utils.DistanceToStr(TotalDistance)}" + Environment.NewLine +
+                    $"To target: {Utils.DistanceToStr(DistanceToNextDockWaypoint)}" + Environment.NewLine +
+                    $"Speed: {DockSpeed:F2}" + Environment.NewLine +
+                    $"ETC: {DockingETA:dd\\:hh\\:mm\\:ss}" + Environment.NewLine +
+                    $"Progress: {CurrentWpIdx + 1}/{Waypoints.Count}." + Environment.NewLine;
             }
         }
         string PrintObstacle()
@@ -668,7 +707,7 @@ namespace IngameScript
             Up = Utils.ReadVector(parts, "Up");
             Waypoints.Clear();
             Waypoints.AddRange(Utils.ReadVectorList(parts, "Waypoints"));
-            CurrentWp = Utils.ReadInt(parts, "CurrentWp");
+            CurrentWpIdx = Utils.ReadInt(parts, "CurrentWp");
 
             Callback = Utils.ReadString(parts, "Callback");
             ExchangeTask = (ExchangeTasks)Utils.ReadInt(parts, "ExchangeTask");
@@ -684,6 +723,8 @@ namespace IngameScript
             thrusting = Utils.ReadInt(parts, "Thrusting") == 1;
             evadingPoints.Clear();
             evadingPoints.AddRange(Utils.ReadVectorList(parts, "EvadingPoints"));
+
+            TotalDistance = GetTotalDistance();
         }
         public string SaveToStorage()
         {
@@ -697,7 +738,7 @@ namespace IngameScript
                 $"Forward={Utils.VectorToStr(Forward)}",
                 $"Up={Utils.VectorToStr(Up)}",
                 $"Waypoints={Utils.VectorListToStr(Waypoints)}",
-                $"CurrentWp={CurrentWp}",
+                $"CurrentWp={CurrentWpIdx}",
 
                 $"Callback={Callback}",
                 $"ExchangeTask={(int)ExchangeTask}",

@@ -36,7 +36,7 @@ namespace IngameScript
         }
         public static string DistanceToStr(double distance)
         {
-            if(distance < 1000)
+            if (distance < 1000)
             {
                 return $"{distance:0.00}m";
             }

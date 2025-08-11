@@ -327,8 +327,6 @@ namespace IngameScript
                 ship.Status = ShipStatus.Docking;
                 exchange.DockRequest(ship.Name);
 
-                var wayPoints = exchange.CalculateRouteToConnector();
-
                 string command = null;
                 switch (request.Task)
                 {
@@ -346,12 +344,13 @@ namespace IngameScript
                     $"To={request.Ship}",
                     $"From={baseId}",
 
+                    $"Landing={(config.InGravity?1:0)}",
                     $"Parking={config.Parking}",
 
                     $"Exchange={exchange.Name}",
                     $"Forward={Utils.VectorToStr(exchange.Forward)}",
                     $"Up={Utils.VectorToStr(exchange.Up)}",
-                    $"WayPoints={Utils.VectorListToStr(wayPoints)}",
+                    $"Waypoints={Utils.VectorListToStr(exchange.CalculateRouteToConnector())}",
                 };
                 BroadcastMessage(parts);
 
@@ -376,8 +375,6 @@ namespace IngameScript
                     continue;
                 }
 
-                var wayPoints = exchange.CalculateRouteFromConnector();
-
                 string command = null;
                 switch (request.Task)
                 {
@@ -395,12 +392,13 @@ namespace IngameScript
                     $"To={request.Ship}",
                     $"From={baseId}",
 
+                    $"Landing={(config.InGravity?1:0)}",
                     $"Parking={config.Parking}",
 
                     $"Exchange={exchange.Name}",
                     $"Forward={Utils.VectorToStr(exchange.Forward)}",
                     $"Up={Utils.VectorToStr(exchange.Up)}",
-                    $"WayPoints={Utils.VectorListToStr(wayPoints)}",
+                    $"Waypoints={Utils.VectorListToStr(exchange.CalculateRouteFromConnector())}",
                 };
                 BroadcastMessage(parts);
 

@@ -20,7 +20,7 @@ namespace IngameScript
             Exchange = Utils.ReadString(lines, "Exchange");
             Forward = Utils.ReadVector(lines, "Forward");
             Up = Utils.ReadVector(lines, "Up");
-            ApproachingWaypoints = Utils.ReadVectorList(lines, "WayPoints");
+            ApproachingWaypoints = Utils.ReadVectorList(lines, "Waypoints");
             DepartingWaypoints = new List<Vector3D>(ApproachingWaypoints);
             DepartingWaypoints.Reverse();
         }
