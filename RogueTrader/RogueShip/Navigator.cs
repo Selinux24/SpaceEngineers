@@ -301,9 +301,7 @@ namespace IngameScript
             var currentVelocity = ship.GetDockingLinearVelocity();
             double mass = ship.GetMass();
             var neededForce = Utils.CalculateThrustForce(ToDockWaypoint, desiredSpeed, currentVelocity, mass);
-
-            var gravity = ship.GetNaturalGravity();
-            ship.ApplyThrust(neededForce, gravity, mass);
+            ship.ApplyThrust(neededForce);
         }
         #endregion
 

@@ -320,12 +320,10 @@ namespace IngameScript
                     continue;
                 }
 
-                var ship = pair.Ship;
                 var exchange = pair.Exchange;
 
-                request.Idle = false;
-                ship.Status = ShipStatus.Docking;
-                exchange.DockRequest(ship.Name);
+                request.Pending = false;
+                exchange.DockRequest(request.Ship);
 
                 string command = null;
                 switch (request.Task)
@@ -375,13 +373,15 @@ namespace IngameScript
                     continue;
                 }
 
+                request.Pending = false;
+
                 string command = null;
                 switch (request.Task)
                 {
-                    case ExchangeTasks.StartLoad:
+                    case ExchangeTasks.EndLoad:
                         command = "UNDOCK_TO_LOAD";
                         break;
-                    case ExchangeTasks.StartUnload:
+                    case ExchangeTasks.EndUnload:
                         command = "UNDOCK_TO_UNLOAD";
                         break;
                 }
@@ -417,17 +417,7 @@ namespace IngameScript
             foreach (var exchange in exchanges)
             {
                 if (exchange.Update(time)) continue;
-
-                //TODO: If there is a dock request and it does not match the connected ships, abort and return the ship to the parking position, and put it on hold.
             }
-
-            //Gets all docked ship names
-            var dockedShips = exchanges
-                .SelectMany(e => e.DockedShips())
-                .ToList();
-
-            //Removes all exchange requests for ships that are already docked
-            exchangeRequests.RemoveAll(e => dockedShips.Contains(e.Ship));
         }
         #endregion
 
@@ -552,17 +542,17 @@ namespace IngameScript
             exchangeRequests.Add(new ExchangeRequest
             {
                 Ship = ship,
-                Idle = true,
+                Pending = true,
                 Task = task,
             });
         }
         List<ExchangeRequest> GetPendingExchangeDockRequests()
         {
-            return exchangeRequests.Where(r => r.Idle && (r.Task == ExchangeTasks.StartLoad || r.Task == ExchangeTasks.StartUnload)).ToList();
+            return exchangeRequests.Where(r => r.Pending && (r.Task == ExchangeTasks.StartLoad || r.Task == ExchangeTasks.StartUnload)).ToList();
         }
         List<ExchangeRequest> GetPendingExchangeUndockRequests()
         {
-            return exchangeRequests.Where(r => r.Idle && (r.Task == ExchangeTasks.EndLoad || r.Task == ExchangeTasks.EndUnload)).ToList();
+            return exchangeRequests.Where(r => r.Pending && (r.Task == ExchangeTasks.EndLoad || r.Task == ExchangeTasks.EndUnload)).ToList();
         }
         List<ExchangeGroup> GetFreeExchanges()
         {
@@ -632,7 +622,7 @@ namespace IngameScript
 
             foreach (var req in exchangeRequests)
             {
-                string unloadStatus = req.Idle ? "Pending" : "On route";
+                string unloadStatus = req.Pending ? "Pending" : "On route";
                 sbData.AppendLine($"{req.Ship} {req.Task}. {unloadStatus}");
             }
         }

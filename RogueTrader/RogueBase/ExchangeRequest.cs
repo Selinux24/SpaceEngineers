@@ -5,7 +5,7 @@ namespace IngameScript
     class ExchangeRequest
     {
         public string Ship;
-        public bool Idle;
+        public bool Pending;
         public ExchangeTasks Task;
 
         public ExchangeRequest()
@@ -18,7 +18,7 @@ namespace IngameScript
             List<string> list = new List<string>();
             foreach (var r in requests)
             {
-                list.Add($"From={r.Ship}|Idle={(r.Idle ? 1 : 0)}|Task={(int)r.Task}");
+                list.Add($"From={r.Ship}|Pending={(r.Pending ? 1 : 0)}|Task={(int)r.Task}");
             }
 
             return new List<string>
@@ -40,7 +40,7 @@ namespace IngameScript
                 var exchange = new ExchangeRequest()
                 {
                     Ship = Utils.ReadString(parts, "From"),
-                    Idle = Utils.ReadInt(parts, "Idle") == 1,
+                    Pending = Utils.ReadInt(parts, "Pending") == 1,
                     Task = (ExchangeTasks)Utils.ReadInt(parts, "Task"),
                 };
 

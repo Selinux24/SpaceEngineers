@@ -776,7 +776,7 @@ namespace IngameScript
         }
         internal double GetMass()
         {
-            return remotePilot.CalculateShipMass().PhysicalMass;
+            return remotePilot.CalculateShipMass().TotalMass;
         }
 
         internal double GetPilotSpeed()
