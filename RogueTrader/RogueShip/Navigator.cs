@@ -340,6 +340,7 @@ namespace IngameScript
         {
             ship.ResetThrust();
             ship.ResetGyros();
+            ship.EnableSystems();
 
             var speed = ship.GetSpeed();
             if (speed <= 0.1)

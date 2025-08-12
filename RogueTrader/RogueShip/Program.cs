@@ -726,10 +726,18 @@ namespace IngameScript
 
         internal void EnableSystems()
         {
+            if (antenna.Enabled)
+            {
+                return;
+            }
             antenna.Enabled = true;
         }
         internal void DisableSystems()
         {
+            if (!antenna.Enabled)
+            {
+                return;
+            }
             antenna.Enabled = false;
         }
 
