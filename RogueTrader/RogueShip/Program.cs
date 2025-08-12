@@ -308,7 +308,6 @@ namespace IngameScript
         void ProcessDocking(string[] lines, ExchangeTasks task)
         {
             var landing = Utils.ReadInt(lines, "Landing") == 1;
-            var parking = Utils.ReadVector(lines, "Parking");
 
             string exchange = Utils.ReadString(lines, "Exchange");
             var fw = Utils.ReadVector(lines, "Forward");
@@ -317,12 +316,12 @@ namespace IngameScript
 
             if (task == ExchangeTasks.StartLoad || task == ExchangeTasks.StartUnload)
             {
-                navigator.ApproachToDock(landing, parking, exchange, fw, up, wpList, "ON_APPROACHING_COMPLETED", task);
+                navigator.ApproachToDock(landing, exchange, fw, up, wpList, "ON_APPROACHING_COMPLETED", task);
                 shipStatus = ShipStatus.Docking;
             }
             else if (task == ExchangeTasks.EndLoad || task == ExchangeTasks.EndUnload)
             {
-                navigator.SeparateFromDock(landing, parking, exchange, fw, up, wpList, "ON_SEPARATION_COMPLETED", task);
+                navigator.SeparateFromDock(landing, exchange, fw, up, wpList, "ON_SEPARATION_COMPLETED", task);
                 shipStatus = ShipStatus.Undocking;
             }
         }
@@ -354,7 +353,7 @@ namespace IngameScript
                 double capacity = CalculateCargoPercentage();
                 if (capacity >= Config.MaxLoad)
                 {
-                    SendWaitingUndockMessage(ExchangeTasks.EndLoad);
+                    SendWaitingMessage(ExchangeTasks.EndLoad);
                 }
 
                 return;
@@ -367,7 +366,7 @@ namespace IngameScript
                 double capacity = CalculateCargoPercentage();
                 if (capacity <= Config.MinLoad)
                 {
-                    SendWaitingUndockMessage(ExchangeTasks.EndUnload);
+                    SendWaitingMessage(ExchangeTasks.EndUnload);
                 }
 
                 return;
@@ -412,6 +411,8 @@ namespace IngameScript
         }
         void OnNavigationCompleted(ExchangeTasks task)
         {
+            EnableSystems();
+
             if (task == ExchangeTasks.EndLoad)
             {
                 SendWaitingMessage(ExchangeTasks.StartUnload);
@@ -554,15 +555,12 @@ namespace IngameScript
 
         internal void ThrustToTarget(bool landing, Vector3D toTarget, double maxSpeed)
         {
-            var remote = landing ? remoteLanding : remotePilot;
-
-            var currentVelocity = remote.GetShipVelocities().LinearVelocity;
-            double mass = remote.CalculateShipMass().PhysicalMass;
+            var currentVelocity = landing ? GetLandingLinearVelocity() : GetPilotLinearVelocity();
+            double mass = GetMass();
 
             var force = Utils.CalculateThrustForce(toTarget, maxSpeed, currentVelocity, mass);
             ApplyThrust(force);
         }
-
         internal void ApplyThrust(Vector3D force)
         {
             foreach (var t in thrusters)
@@ -574,7 +572,6 @@ namespace IngameScript
                 t.ThrustOverridePercentage = alignment > 0 ? (float)Math.Min(alignment / t.MaxEffectiveThrust, 1f) : 0f;
             }
         }
-
         internal void ResetThrust()
         {
             foreach (var t in thrusters)
@@ -682,13 +679,13 @@ namespace IngameScript
         {
             return remotePilot.GetShipSpeed();
         }
-        internal Vector3D GetNaturalGravity()
+        internal Vector3D GetGravity()
         {
             return remotePilot.GetNaturalGravity();
         }
         internal bool IsInGravity()
         {
-            return GetNaturalGravity().Length() > 0.001;
+            return GetGravity().Length() > 0.001;
         }
         internal double GetMass()
         {
@@ -698,6 +695,10 @@ namespace IngameScript
         internal Vector3D GetPilotLinearVelocity()
         {
             return remotePilot.GetShipVelocities().LinearVelocity;
+        }
+        internal Vector3D GetLandingLinearVelocity()
+        {
+            return remoteLanding.GetShipVelocities().LinearVelocity;
         }
 
         internal bool IsConnected()
@@ -753,8 +754,28 @@ namespace IngameScript
 
         void SendWaitingMessage(ExchangeTasks task)
         {
-            string message = task == ExchangeTasks.StartLoad ? "WAITING_LOAD" : "WAITING_UNLOAD";
-            string to = task == ExchangeTasks.StartLoad ? Config.Route.LoadBase : Config.Route.UnloadBase;
+            string message;
+            string to;
+
+            if (task == ExchangeTasks.StartLoad || task == ExchangeTasks.StartUnload)
+            {
+                message = task == ExchangeTasks.StartLoad ? "WAITING_LOAD" : "WAITING_UNLOAD";
+                to = task == ExchangeTasks.StartLoad ? Config.Route.LoadBase : Config.Route.UnloadBase;
+
+                shipStatus = ShipStatus.WaitingDock;
+            }
+            else if (task == ExchangeTasks.EndLoad || task == ExchangeTasks.EndUnload)
+            {
+                message = task == ExchangeTasks.EndLoad ? "WAITING_UNDOCK_LOAD" : "WAITING_UNDOCK_UNLOAD";
+                to = task == ExchangeTasks.EndLoad ? Config.Route.LoadBase : Config.Route.UnloadBase;
+
+                shipStatus = ShipStatus.WaitingUndock;
+            }
+            else
+            {
+                WriteLogLCDs($"Unknown task: {task}");
+                return;
+            }
 
             List<string> parts = new List<string>()
             {
@@ -765,26 +786,6 @@ namespace IngameScript
             BroadcastMessage(parts);
 
             Waiting();
-
-            shipStatus = ShipStatus.WaitingDock;
-        }
-        void SendWaitingUndockMessage(ExchangeTasks task)
-        {
-            //Send a message to the base to undock the ship from the exchange connector
-            string message = task == ExchangeTasks.EndLoad ? "WAITING_UNDOCK_LOAD" : "WAITING_UNDOCK_UNLOAD";
-            string to = task == ExchangeTasks.EndLoad ? Config.Route.LoadBase : Config.Route.UnloadBase;
-
-            List<string> parts = new List<string>()
-            {
-                $"Command={message}",
-                $"To={to}",
-                $"From={shipId}",
-            };
-            BroadcastMessage(parts);
-
-            Waiting();
-
-            shipStatus = ShipStatus.WaitingUndock;
         }
         #endregion
 

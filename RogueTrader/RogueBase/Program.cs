@@ -343,7 +343,6 @@ namespace IngameScript
                     $"From={baseId}",
 
                     $"Landing={(config.InGravity?1:0)}",
-                    $"Parking={config.Parking}",
 
                     $"Exchange={exchange.Name}",
                     $"Forward={Utils.VectorToStr(exchange.Forward)}",
@@ -393,7 +392,6 @@ namespace IngameScript
                     $"From={baseId}",
 
                     $"Landing={(config.InGravity?1:0)}",
-                    $"Parking={config.Parking}",
 
                     $"Exchange={exchange.Name}",
                     $"Forward={Utils.VectorToStr(exchange.Forward)}",

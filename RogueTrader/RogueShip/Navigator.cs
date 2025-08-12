@@ -16,7 +16,6 @@ namespace IngameScript
         readonly List<Vector3D> evadingPoints = new List<Vector3D>();
 
         public bool Landing = false;
-        public Vector3D Parking;
         public string Exchange = null;
         public Vector3D Forward = new Vector3D(1, 0, 0);
         public Vector3D Up = new Vector3D(0, 1, 0);
@@ -52,12 +51,11 @@ namespace IngameScript
             this.ship = ship;
         }
 
-        public void ApproachToDock(bool landing, Vector3D parking, string exchange, Vector3D fw, Vector3D up, List<Vector3D> wpList, string onAproximationCompleted = null, ExchangeTasks exchangeTask = ExchangeTasks.None)
+        public void ApproachToDock(bool landing, string exchange, Vector3D fw, Vector3D up, List<Vector3D> wpList, string onAproximationCompleted = null, ExchangeTasks exchangeTask = ExchangeTasks.None)
         {
             ship.WriteLogLCDs($"Approaching to dock {exchange} with {wpList.Count} waypoints.");
 
             Landing = landing;
-            Parking = parking;
 
             Exchange = exchange;
             Forward = -Vector3D.Normalize(fw);
@@ -72,10 +70,9 @@ namespace IngameScript
             AtmStatus = NavigatorAtmStatus.None;
             CrsStatus = NavigatorCrsStatus.None;
         }
-        public void SeparateFromDock(bool landing, Vector3D parking, string exchange, Vector3D fw, Vector3D up, List<Vector3D> wpList, string onSeparationCompleted = null, ExchangeTasks exchangeTask = ExchangeTasks.None)
+        public void SeparateFromDock(bool landing, string exchange, Vector3D fw, Vector3D up, List<Vector3D> wpList, string onSeparationCompleted = null, ExchangeTasks exchangeTask = ExchangeTasks.None)
         {
             Landing = landing;
-            Parking = parking;
 
             Exchange = exchange;
             Forward = -Vector3D.Normalize(fw);
@@ -96,7 +93,6 @@ namespace IngameScript
         public void NavigateTo(bool landing, List<Vector3D> wpList, string onNavigationCompleted = null, ExchangeTasks exchangeTask = ExchangeTasks.None)
         {
             Landing = landing;
-            Parking = Vector3D.Zero;
 
             Exchange = null;
             Forward = Vector3D.Zero;
@@ -117,7 +113,6 @@ namespace IngameScript
         public void Clear()
         {
             Landing = false;
-            Parking = Vector3D.Zero;
 
             Exchange = null;
             Forward = Vector3D.Zero;
@@ -691,8 +686,6 @@ namespace IngameScript
 
             Landing = Utils.ReadInt(parts, "Landing") == 1;
 
-            Parking = Utils.ReadVector(parts, "Parking");
-
             Exchange = Utils.ReadString(parts, "Exchange");
             Forward = Utils.ReadVector(parts, "Forward");
             Up = Utils.ReadVector(parts, "Up");
@@ -716,8 +709,6 @@ namespace IngameScript
             List<string> parts = new List<string>()
             {
                 $"Landing={(Landing ? 1 : 0)}",
-
-                $"Parking={Utils.VectorToStr(Parking)}",
 
                 $"Exchange={Exchange}",
                 $"Forward={Utils.VectorToStr(Forward)}",
