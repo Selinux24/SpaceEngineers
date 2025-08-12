@@ -32,19 +32,20 @@ namespace IngameScript
         public Config Config => ship.Config;
 
         public double Speed => ship.GetSpeed();
-        public Vector3D ToTarget => CurrentWaypoint - ship.GetPosition();
-        public Vector3D DirectionToTarget => Vector3D.Normalize(ToTarget);
-        public double DistanceToTarget => GetRemainingDistance();
-        public double TotalDistance => GetTotalDistance();
         public Vector3D CurrentWaypoint => Waypoints[CurrentWpIdx];
+        public Vector3D ToWaypoint => CurrentWaypoint - ship.GetPosition();
+        public double DistanceToNextWaypoint => ToWaypoint.Length();
+        public Vector3D DirectionToWaypoint => Vector3D.Normalize(ToWaypoint);
+        public double DistanceToDestination => GetRemainingDistance();
+        public double TotalDistance => GetTotalDistance();
 
         public TimeSpan DockingETA => Speed > 0.01 ? TimeSpan.FromSeconds(DistanceToNextDockWaypoint / Speed) : TimeSpan.Zero;
         public Vector3D ConnectorPosition => ship.GetDockingPosition();
         public Vector3D ToDockWaypoint => CurrentWaypoint - ConnectorPosition;
         public double DistanceToNextDockWaypoint => ToDockWaypoint.Length();
 
-        public TimeSpan NavigationETA => Speed > 0.01 ? TimeSpan.FromSeconds(DistanceToTarget / Speed) : TimeSpan.Zero;
-        public double Progress => DistanceToTarget > 0 ? 1 - (DistanceToTarget / TotalDistance) : 1;
+        public TimeSpan NavigationETA => Speed > 0.01 ? TimeSpan.FromSeconds(DistanceToDestination / Speed) : TimeSpan.Zero;
+        public double Progress => DistanceToDestination > 0 ? 1 - (DistanceToDestination / TotalDistance) : 1;
 
         public Navigator(Program ship)
         {
@@ -249,22 +250,18 @@ namespace IngameScript
         #region Navigation
         void MonitorizeNavigate()
         {
-            if (Waypoints.Count == 0 || CurrentWpIdx >= Waypoints.Count)
+            if (Waypoints.Count == 0)
             {
-                ship.WriteLogLCDs($"No waypoints to navigate {CurrentWpIdx + 1}/{Waypoints.Count}.");
+                ship.WriteLogLCDs("No waypoints to navigate");
                 return;
-            }
-
-            if (ToTarget.Length() <= 1000)
-            {
-                ship.WriteLogLCDs($"Next Waypoint: {CurrentWpIdx + 1}/{Waypoints.Count}");
-                CurrentWpIdx++;
             }
 
             //Determine if the ship is in gravity.
             var inGravity = ship.IsInGravity();
             if (inGravity)
             {
+                var preStatus = AtmStatus;
+
                 //If the ship is in gravity, do the trip in atmospheric mode.
                 switch (AtmStatus)
                 {
@@ -277,10 +274,17 @@ namespace IngameScript
                     case NavigatorAtmStatus.Decelerating:
                         AtmNavigationDecelerate();
                         break;
+                    case NavigatorAtmStatus.Ending:
+                        AtmNavigationEnding();
+                        break;
                 }
+
+                if (preStatus != AtmStatus) ship.WriteLogLCDs($"Transition from {preStatus} to {AtmStatus}");
             }
             else
             {
+                var preStatus = CrsStatus;
+
                 //If the ship is not in gravity, do the trip in cruise mode.
                 switch (CrsStatus)
                 {
@@ -299,21 +303,35 @@ namespace IngameScript
                     case NavigatorCrsStatus.Decelerating:
                         CrsNavigationDecelerate();
                         break;
-
                     case NavigatorCrsStatus.Avoiding:
                         CrsNavigationAvoid();
                         break;
+                    case NavigatorCrsStatus.Ending:
+                        CrsNavigationEnding();
+                        break;
                 }
+
+                if (preStatus != CrsStatus) ship.WriteLogLCDs($"Transition from {preStatus} to {CrsStatus}");
             }
         }
 
         void AtmNavigationAccelerate()
         {
-            ship.AlignToDirection(Landing, DirectionToTarget, Config.AtmNavigationAlignThr);
+            ship.AlignToDirection(Landing, DirectionToWaypoint, Config.AtmNavigationAlignThr);
 
-            if (DistanceToTarget < Config.AtmNavigationDistanceThr)
+            if (DistanceToDestination < Config.AtmNavigationDestinationThr)
             {
+                //Destination reached.
                 AtmStatus = NavigatorAtmStatus.Decelerating;
+
+                return;
+            }
+
+            if (DistanceToNextWaypoint < Config.AtmNavigationWaypointThr)
+            {
+                //Waypoint reached.
+                ship.WriteLogLCDs($"Next Waypoint: {CurrentWpIdx + 1}/{Waypoints.Count}");
+                CurrentWpIdx++;
 
                 return;
             }
@@ -321,7 +339,7 @@ namespace IngameScript
             //Accelerate
             ship.WriteInfoLCDs(GetState());
 
-            ship.ThrustToTarget(Landing, DirectionToTarget, Config.AtmNavigationMaxSpeed);
+            ship.ThrustToTarget(Landing, DirectionToWaypoint, Config.AtmNavigationMaxSpeed);
         }
         void AtmNavigationDecelerate()
         {
@@ -331,15 +349,21 @@ namespace IngameScript
             var speed = ship.GetSpeed();
             if (speed <= 0.1)
             {
-                //Reached the waypoint.
-                ship.ExecuteCallback(Callback, ExchangeTask);
-                Clear();
+                AtmStatus = NavigatorAtmStatus.Ending;
             }
+        }
+        void AtmNavigationEnding()
+        {
+            //Reached the waypoint.
+            ship.ExecuteCallback(Callback, ExchangeTask);
+            Clear();
+
+            AtmStatus = NavigatorAtmStatus.None;
         }
 
         void CrsNavigationLocate()
         {
-            if (!ship.AlignToDirection(false, DirectionToTarget, Config.CrsNavigationAlignThr))
+            if (!ship.AlignToDirection(false, DirectionToWaypoint, Config.CrsNavigationAlignThr))
             {
                 CrsStatus = NavigatorCrsStatus.Accelerating;
 
@@ -357,9 +381,19 @@ namespace IngameScript
                 return;
             }
 
-            if (DistanceToTarget < Config.CrsNavigationWaypointDistanceThr)
+            if (DistanceToDestination < Config.CrsNavigationWaypointThr)
             {
+                //Destination reached.
                 CrsStatus = NavigatorCrsStatus.Decelerating;
+
+                return;
+            }
+
+            if (DistanceToNextWaypoint < Config.CrsNavigationWaypointThr)
+            {
+                //Waypoint reached.
+                ship.WriteLogLCDs($"Next Waypoint: {CurrentWpIdx + 1}/{Waypoints.Count}");
+                CurrentWpIdx++;
 
                 return;
             }
@@ -375,11 +409,11 @@ namespace IngameScript
 
             //Accelerate
             var maxSpeed = Config.CrsNavigationMaxCruiseSpeed;
-            if (DistanceToTarget <= Config.CrsNavigationDestinationDistanceThr)
+            if (DistanceToDestination <= Config.CrsNavigationDestinationThr)
             {
                 maxSpeed = Config.CrsNavigationMaxAccelerationSpeed;
             }
-            ship.ThrustToTarget(false, DirectionToTarget, maxSpeed);
+            ship.ThrustToTarget(false, DirectionToWaypoint, maxSpeed);
         }
         void CrsNavigationCruise()
         {
@@ -390,9 +424,19 @@ namespace IngameScript
                 return;
             }
 
-            if (DistanceToTarget < Config.CrsNavigationWaypointDistanceThr)
+            if (DistanceToDestination < Config.CrsNavigationWaypointThr)
             {
+                //Destination reached.
                 CrsStatus = NavigatorCrsStatus.Decelerating;
+
+                return;
+            }
+
+            if (DistanceToNextWaypoint < Config.CrsNavigationWaypointThr)
+            {
+                //Waypoint reached.
+                ship.WriteLogLCDs($"Next Waypoint: {CurrentWpIdx + 1}/{Waypoints.Count}");
+                CurrentWpIdx++;
 
                 return;
             }
@@ -401,12 +445,12 @@ namespace IngameScript
             ship.WriteInfoLCDs(GetState());
 
             bool inGravity = ship.IsInGravity();
-            if (inGravity || ship.AlignToDirection(false, DirectionToTarget, Config.CrsNavigationAlignThr))
+            if (inGravity || ship.AlignToDirection(false, DirectionToWaypoint, Config.CrsNavigationAlignThr))
             {
                 ship.WriteInfoLCDs("Not aligned");
 
                 //Thrust until the velocity vector is aligned again with the vector to the target
-                ship.ThrustToTarget(false, DirectionToTarget, Config.CrsNavigationMaxCruiseSpeed);
+                ship.ThrustToTarget(false, DirectionToWaypoint, Config.CrsNavigationMaxCruiseSpeed);
                 alignThrustStart = DateTime.Now;
                 thrusting = true;
 
@@ -445,7 +489,7 @@ namespace IngameScript
                 ship.WriteInfoLCDs("Below the desired speed");
 
                 //Below the desired speed. Accelerate until reaching it.
-                ship.ThrustToTarget(false, DirectionToTarget, Config.CrsNavigationMaxCruiseSpeed);
+                ship.ThrustToTarget(false, DirectionToWaypoint, Config.CrsNavigationMaxCruiseSpeed);
 
                 return;
             }
@@ -461,15 +505,14 @@ namespace IngameScript
             var speed = ship.GetSpeed();
             if (speed <= 0.1)
             {
-                ship.ExecuteCallback(Callback, ExchangeTask);
-                Clear();
+                CrsStatus = NavigatorCrsStatus.Ending;
             }
         }
         void CrsNavigationAvoid()
         {
             ship.WriteInfoLCDs(PrintObstacle());
 
-            if (DistanceToTarget < Config.CrsNavigationWaypointDistanceThr)
+            if (DistanceToDestination < Config.CrsNavigationWaypointThr)
             {
                 CrsStatus = NavigatorCrsStatus.Decelerating;
 
@@ -508,7 +551,7 @@ namespace IngameScript
         {
             var toTarget = wayPoint - ship.GetPosition();
             var d = toTarget.Length();
-            if (d <= Config.CrsNavigationEvadingWaypointDistance)
+            if (d <= Config.CrsNavigationEvadingWaypointThr)
             {
                 //Waypoint reached
                 evadingPoints.RemoveAt(0);
@@ -520,6 +563,12 @@ namespace IngameScript
             ship.WriteInfoLCDs($"Distance to waypoint {Utils.DistanceToStr(d)}");
 
             ship.ThrustToTarget(false, Vector3D.Normalize(toTarget), maxSpeed);
+        }
+        void CrsNavigationEnding()
+        {
+            ship.ExecuteCallback(Callback, ExchangeTask);
+            Clear();
+            CrsStatus = NavigatorCrsStatus.None;
         }
         void CrsNavigationEnterCruise()
         {
@@ -611,7 +660,7 @@ namespace IngameScript
             {
                 return
                     $"Trip: {Utils.DistanceToStr(TotalDistance)}" + Environment.NewLine +
-                    $"To target: {Utils.DistanceToStr(DistanceToTarget)}" + Environment.NewLine +
+                    $"To target: {Utils.DistanceToStr(DistanceToDestination)}" + Environment.NewLine +
                     $"Speed: {Speed:F2}" + Environment.NewLine +
                     $"ETC: {NavigationETA:dd\\:hh\\:mm\\:ss}" + Environment.NewLine +
                     $"Progress {Progress:P1}" + Environment.NewLine;

@@ -10,5 +10,6 @@ namespace IngameScript
         Decelerating,
         Cruising,
         Avoiding,
+        Ending,
     }
 }

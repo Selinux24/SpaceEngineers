@@ -7,5 +7,6 @@ namespace IngameScript
         Starting,
         Accelerating,
         Decelerating,
+        Ending,
     }
 }

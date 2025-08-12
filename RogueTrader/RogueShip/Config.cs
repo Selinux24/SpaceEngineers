@@ -49,7 +49,8 @@ namespace IngameScript
 
         public readonly double AtmNavigationAlignThr;
         public readonly double AtmNavigationMaxSpeed;
-        public readonly double AtmNavigationDistanceThr;
+        public readonly double AtmNavigationWaypointThr;
+        public readonly double AtmNavigationDestinationThr;
 
         public readonly double CrsNavigationAlignThr;
         public readonly double CrsNavigationAlignSeconds;
@@ -59,11 +60,11 @@ namespace IngameScript
         public readonly double CrsNavigationMaxCruiseSpeed;
         public readonly double CrsNavigationMaxEvadingSpeed;
 
-        public readonly double CrsNavigationWaypointDistanceThr;
-        public readonly double CrsNavigationDestinationDistanceThr;
+        public readonly double CrsNavigationWaypointThr;
+        public readonly double CrsNavigationDestinationThr;
 
         public readonly double CrsNavigationCollisionDetectRange;
-        public readonly double CrsNavigationEvadingWaypointDistance;
+        public readonly double CrsNavigationEvadingWaypointThr;
 
         public readonly double GyrosThr;
         public readonly double GyrosSpeed;
@@ -117,7 +118,8 @@ namespace IngameScript
 
             AtmNavigationAlignThr = ReadConfigDouble(customData, "AtmNavigationAlignThr");
             AtmNavigationMaxSpeed = ReadConfigDouble(customData, "AtmNavigationMaxSpeed");
-            AtmNavigationDistanceThr = ReadConfigDouble(customData, "AtmNavigationDistanceThr");
+            AtmNavigationWaypointThr = ReadConfigDouble(customData, "AtmNavigationWaypointThr");
+            AtmNavigationDestinationThr = ReadConfigDouble(customData, "AtmNavigationDestinationThr");
 
             CrsNavigationAlignThr = ReadConfigDouble(customData, "CrsNavigationAlignThr");
             CrsNavigationAlignSeconds = ReadConfigDouble(customData, "CrsNavigationAlignSeconds");
@@ -125,10 +127,10 @@ namespace IngameScript
             CrsNavigationMaxAccelerationSpeed = ReadConfigDouble(customData, "CrsNavigationMaxAccelerationSpeed");
             CrsNavigationMaxCruiseSpeed = ReadConfigDouble(customData, "CrsNavigationMaxCruiseSpeed");
             CrsNavigationMaxEvadingSpeed = ReadConfigDouble(customData, "CrsNavigationMaxEvadingSpeed");
-            CrsNavigationWaypointDistanceThr = ReadConfigDouble(customData, "CrsNavigationWaypointDistanceThr");
-            CrsNavigationDestinationDistanceThr = ReadConfigDouble(customData, "CrsNavigationDestinationDistanceThr");
+            CrsNavigationWaypointThr = ReadConfigDouble(customData, "CrsNavigationWaypointThr");
+            CrsNavigationDestinationThr = ReadConfigDouble(customData, "CrsNavigationDestinationThr");
             CrsNavigationCollisionDetectRange = ReadConfigDouble(customData, "CrsNavigationCollisionDetectRange");
-            CrsNavigationEvadingWaypointDistance = ReadConfigDouble(customData, "CrsNavigationEvadingWaypointDistance");
+            CrsNavigationEvadingWaypointThr = ReadConfigDouble(customData, "CrsNavigationEvadingWaypointThr");
 
             GyrosThr = ReadConfigDouble(customData, "GyrosThr");
             GyrosSpeed = ReadConfigDouble(customData, "GyrosSpeed");
@@ -274,7 +276,8 @@ namespace IngameScript
                 "\n" +
                 "AtmNavigationAlignThr=0.01\n" +
                 "AtmNavigationMaxSpeed=100.0\n" +
-                "AtmNavigationDistanceThr=1000.0\n" +
+                "AtmNavigationWaypointThr=500.0\n" +
+                "AtmNavigationDestinationThr=1000.0\n" +
                 "\n" +
                 "CrsNavigationAlignThr=0.01\n" +
                 "CrsNavigationAlignSeconds=5.0\n" +
@@ -282,10 +285,10 @@ namespace IngameScript
                 "CrsNavigationMaxAccelerationSpeed=19.5\n" +
                 "CrsNavigationMaxCruiseSpeed=100.0\n" +
                 "CrsNavigationMaxEvadingSpeed=19.5\n" +
-                "CrsNavigationWaypointDistanceThr=3000.0\n" +
-                "CrsNavigationDestinationDistanceThr=2000.0\n" +
+                "CrsNavigationWaypointThr=1000.0\n" +
+                "CrsNavigationDestinationThr=2500.0\n" +
                 "CrsNavigationCollisionDetectRange=10000.0\n" +
-                "CrsNavigationEvadingWaypointDistance=100.0\n" +
+                "CrsNavigationEvadingWaypointThr=100.0\n" +
                 "\n" +
                 "GyrosThr=0.001\n" +
                 "GyrosSpeed=2.0\n";
