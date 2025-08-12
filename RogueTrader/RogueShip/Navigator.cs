@@ -234,7 +234,7 @@ namespace IngameScript
             }
 
             //Always take the data from the docking remote control.
-            double desiredSpeed = CalculateDesiredSpeed(distance);
+            double desiredSpeed = CalculateDesiredSpeed(Task == NavigatorTasks.Approach, distance);
             var currentVelocity = ship.GetDockingLinearVelocity();
             double mass = ship.GetMass();
             var neededForce = Utils.CalculateThrustForce(ToDockWaypoint, desiredSpeed, currentVelocity, mass);
@@ -632,21 +632,24 @@ namespace IngameScript
 
             return true;
         }
-        double CalculateDesiredSpeed(double distance)
+        double CalculateDesiredSpeed(bool approaching, double distance)
         {
-            //Calculates desired speed based on distance, when we are moving towards the last waypoint.
-            double approachSpeed;
-            if (CurrentWpIdx == 0) approachSpeed = Config.DockingSpeedWaypointFirst; //Speed ​​to the first approach point.
-            else if (CurrentWpIdx == Waypoints.Count - 1) approachSpeed = Config.DockingSpeedWaypointLast; //Speed ​​from the last approach point.
-            else approachSpeed = Config.DockingSpeedWaypoints; //Speed ​​between approach points.
+            double[] speeds = approaching ? 
+                new double[] { Config.DockingSpeedWaypointFirst, Config.DockingSpeedWaypoints, Config.DockingSpeedWaypointLast } :
+                new double[] { Config.DockingSpeedWaypointLast, Config.DockingSpeedWaypoints, Config.DockingSpeedWaypointFirst };
 
-            double desiredSpeed = approachSpeed;
+            //Calculates desired speed based on distance, when we are moving towards the last waypoint.
+            double speed;
+            if (CurrentWpIdx == 0) speed = speeds[0]; //Speed ​​to the first approach point.
+            else if (CurrentWpIdx == Waypoints.Count - 1) speed = speeds[2]; //Speed ​​from the last approach point.
+            else speed = speeds[1]; //Speed ​​between approach points.
+
             if (distance < Config.DockingSlowdownDistance && (CurrentWpIdx == 0 || CurrentWpIdx == Waypoints.Count - 1))
             {
-                desiredSpeed = Math.Max(distance / Config.DockingSlowdownDistance * approachSpeed, 0.5);
+                speed = Math.Max(distance / Config.DockingSlowdownDistance * speed, 1.0);
             }
 
-            return desiredSpeed;
+            return speed;
         }
 
         string GetState()

@@ -595,7 +595,7 @@ namespace IngameScript
             var direction = remote.WorldMatrix.Forward;
 
             double angle = Utils.AngleBetweenVectors(direction, toTarget);
-            WriteInfoLCDs($"Target angle: {angle:F4}");
+            WriteInfoLCDs($"TGT angle: {angle:F4}");
 
             if (angle <= thr)
             {
