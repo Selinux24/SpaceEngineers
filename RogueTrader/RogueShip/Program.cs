@@ -188,7 +188,7 @@ namespace IngameScript
 
         public void Main(string argument)
         {
-            WriteInfoLCDs($"{shipId} in channel {Config.Channel}");
+            WriteInfoLCDs($"{shipId} in channel {Config.Channel}", false);
             WriteInfoLCDs($"{CalculateCargoPercentage():P1} cargo.");
             WriteInfoLCDs($"{shipStatus}");
 
