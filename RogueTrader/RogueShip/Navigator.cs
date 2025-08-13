@@ -69,6 +69,8 @@ namespace IngameScript
             Task = NavigatorTasks.Approach;
             AtmStatus = NavigatorAtmStatus.None;
             CrsStatus = NavigatorCrsStatus.None;
+
+            ship.Pilot();
         }
         public void SeparateFromDock(bool landing, string exchange, Vector3D fw, Vector3D up, List<Vector3D> wpList, string onSeparationCompleted = null, ExchangeTasks exchangeTask = ExchangeTasks.None)
         {
@@ -88,6 +90,7 @@ namespace IngameScript
             CrsStatus = NavigatorCrsStatus.None;
 
             //Start the undocking process.
+            ship.Pilot();
             ship.Undock();
         }
         public void NavigateTo(bool landing, List<Vector3D> wpList, string onNavigationCompleted = null, ExchangeTasks exchangeTask = ExchangeTasks.None)
@@ -108,6 +111,7 @@ namespace IngameScript
             AtmStatus = NavigatorAtmStatus.Starting;
             CrsStatus = NavigatorCrsStatus.Starting;
 
+            ship.Pilot();
             ship.WriteLogLCDs($"Navigating to {wpList.Count} waypoints. Landing: {landing}. {exchangeTask}");
         }
         public void Clear()
@@ -359,6 +363,15 @@ namespace IngameScript
 
         void CrsNavigationLocate()
         {
+            if (DistanceToNextWaypoint < Config.CrsNavigationWaypointThr)
+            {
+                //Waypoint reached.
+                ship.WriteLogLCDs($"Next Waypoint: {CurrentWpIdx + 1}/{Waypoints.Count}");
+                CurrentWpIdx++;
+
+                return;
+            }
+
             if (!ship.AlignToDirection(false, DirectionToWaypoint, Config.CrsNavigationAlignThr))
             {
                 CrsStatus = NavigatorCrsStatus.Accelerating;
@@ -645,7 +658,7 @@ namespace IngameScript
         }
         double CalculateDesiredSpeed(bool approaching, double distance)
         {
-            double[] speeds = approaching ? 
+            double[] speeds = approaching ?
                 new double[] { Config.DockingSpeedWaypointFirst, Config.DockingSpeedWaypoints, Config.DockingSpeedWaypointLast } :
                 new double[] { Config.DockingSpeedWaypointLast, Config.DockingSpeedWaypoints, Config.DockingSpeedWaypointFirst };
 
