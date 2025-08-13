@@ -377,7 +377,7 @@ namespace IngameScript
                 return;
             }
 
-            if (DistanceToDestination < Config.CrsNavigationWaypointThr)
+            if (DistanceToDestination < Config.CrsNavigationDestinationThr)
             {
                 //Destination reached.
                 CrsStatus = NavigatorCrsStatus.Decelerating;
@@ -420,7 +420,7 @@ namespace IngameScript
                 return;
             }
 
-            if (DistanceToDestination < Config.CrsNavigationWaypointThr)
+            if (DistanceToDestination < Config.CrsNavigationDestinationThr)
             {
                 //Destination reached.
                 CrsStatus = NavigatorCrsStatus.Decelerating;
@@ -446,7 +446,7 @@ namespace IngameScript
                 ship.WriteInfoLCDs("Not aligned");
 
                 //Thrust until the velocity vector is aligned again with the vector to the target
-                ship.ThrustToTarget(false, DirectionToWaypoint, Config.CrsNavigationMaxCruiseSpeed);
+                ship.ResetThrust();
                 alignThrustStart = DateTime.Now;
                 thrusting = true;
 
@@ -508,7 +508,7 @@ namespace IngameScript
         {
             ship.WriteInfoLCDs(PrintObstacle());
 
-            if (DistanceToDestination < Config.CrsNavigationWaypointThr)
+            if (DistanceToDestination < Config.CrsNavigationDestinationThr)
             {
                 //Destination reached.
                 CrsStatus = NavigatorCrsStatus.Decelerating;
@@ -672,7 +672,7 @@ namespace IngameScript
                     $"To target: {Utils.DistanceToStr(DistanceToDestination)}" + Environment.NewLine +
                     $"Speed: {Speed:F2}" + Environment.NewLine +
                     $"ETC: {NavigationETA:dd\\:hh\\:mm\\:ss}" + Environment.NewLine +
-                    $"Progress {Progress:P1}" + Environment.NewLine;
+                    $"Progress {Progress:P1}.  {CurrentWpIdx + 1}/{Waypoints.Count}" + Environment.NewLine;
             }
             else
             {

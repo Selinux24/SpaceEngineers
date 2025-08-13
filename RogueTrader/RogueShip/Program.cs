@@ -387,7 +387,7 @@ namespace IngameScript
             if (shipStatus == ShipStatus.Unloading)
             {
                 double capacity = CalculateCargoPercentage();
-                WriteInfoLCDs($"Progress {capacity / Config.MaxLoad:P1}...");
+                WriteInfoLCDs($"Progress {1.0 - (capacity / Config.MaxLoad):P1}...");
                 if (capacity <= Config.MinLoad)
                 {
                     if (monitorizePropulsion && IsPropulsionFilled())
