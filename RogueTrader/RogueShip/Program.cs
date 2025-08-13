@@ -13,6 +13,8 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
+        const string Version = "1.0";
+
         #region Blocks
         readonly IMyBroadcastListener bl;
 
@@ -198,7 +200,8 @@ namespace IngameScript
 
         public void Main(string argument)
         {
-            WriteInfoLCDs($"{shipId} in channel {Config.Channel}", false);
+            WriteInfoLCDs($"RogueShip v{Version}", false);
+            WriteInfoLCDs($"{shipId} in channel {Config.Channel}");
             WriteInfoLCDs($"{CalculateCargoPercentage():P1} cargo.");
             if (minStoredPower > 0) WriteInfoLCDs($"Battery {CalculateBatteryPercentage():P1}.");
             if (minStoredHydrogen > 0) WriteInfoLCDs($"Hydrogen {CalculateHydrogenPercentage():P1}.");

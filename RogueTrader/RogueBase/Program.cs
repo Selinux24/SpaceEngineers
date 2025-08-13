@@ -11,6 +11,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
+        const string Version = "1.0";
         const string Separate = "-";
 
         #region Blocks
@@ -92,6 +93,7 @@ namespace IngameScript
             UpdateBaseState();
 
             sbData.Clear();
+            sbData.AppendLine($"RogueBase v{Version}");
             sbData.AppendLine($"{baseId} in channel {config.Channel}");
             PrintExchanges();
             PrintShipStatus();
@@ -598,7 +600,7 @@ namespace IngameScript
             foreach (var ship in ships)
             {
                 sbData.AppendLine($"+{ship.Name} - {ship.Status}. Cargo at {ship.Cargo:P1}. Last update: {(DateTime.Now - ship.UpdateTime).TotalSeconds:F0}secs");
-                sbData.AppendLine(ship.StatusMessage);
+                if (string.IsNullOrWhiteSpace(ship.StatusMessage)) sbData.AppendLine(ship.StatusMessage);
                 sbData.AppendLine(Separate);
             }
 
