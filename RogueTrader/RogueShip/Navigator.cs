@@ -510,7 +510,17 @@ namespace IngameScript
 
             if (DistanceToDestination < Config.CrsNavigationWaypointThr)
             {
+                //Destination reached.
                 CrsStatus = NavigatorCrsStatus.Decelerating;
+
+                return;
+            }
+
+            if (DistanceToNextWaypoint < Config.CrsNavigationWaypointThr)
+            {
+                //Waypoint reached.
+                ship.WriteLogLCDs($"Next Waypoint: {CurrentWpIdx + 1}/{Waypoints.Count}");
+                CurrentWpIdx++;
 
                 return;
             }

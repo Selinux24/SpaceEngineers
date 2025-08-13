@@ -24,6 +24,7 @@ namespace IngameScript
 
         readonly IMyTimerBlock timerLoad;
         readonly IMyTimerBlock timerUnload;
+        readonly IMyTimerBlock timerFinalize;
 
         readonly IMyRemoteControl remotePilot;
         readonly IMyRemoteControl remoteDocking;
@@ -105,6 +106,12 @@ namespace IngameScript
             if (timerUnload == null)
             {
                 Echo($"Timer '{Config.TimerUnload}' not found.");
+                return;
+            }
+            timerFinalize = GetBlockWithName<IMyTimerBlock>(Config.TimerFinalizeCargo);
+            if (timerFinalize == null)
+            {
+                Echo($"Timer '{Config.TimerFinalizeCargo}' not found.");
                 return;
             }
 
@@ -348,11 +355,12 @@ namespace IngameScript
         {
             if (shipStatus == ShipStatus.Loading)
             {
-                WriteInfoLCDs("Loading cargo...");
-
                 double capacity = CalculateCargoPercentage();
+                WriteInfoLCDs($"Progress {capacity / Config.MaxLoad:P1}...");
                 if (capacity >= Config.MaxLoad)
                 {
+                    timerFinalize?.StartCountdown();
+
                     SendWaitingMessage(ExchangeTasks.EndLoad);
                 }
 
@@ -361,11 +369,12 @@ namespace IngameScript
 
             if (shipStatus == ShipStatus.Unloading)
             {
-                WriteInfoLCDs("Unloading cargo...");
-
                 double capacity = CalculateCargoPercentage();
+                WriteInfoLCDs($"Progress {capacity / Config.MaxLoad:P1}...");
                 if (capacity <= Config.MinLoad)
                 {
+                    timerFinalize?.StartCountdown();
+
                     SendWaitingMessage(ExchangeTasks.EndUnload);
                 }
 

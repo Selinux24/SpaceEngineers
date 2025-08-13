@@ -24,6 +24,7 @@ namespace IngameScript
         public readonly string TimerUndock;
         public readonly string TimerLoad;
         public readonly string TimerUnload;
+        public readonly string TimerFinalizeCargo;
 
         public readonly string RemoteControlPilot;
         public readonly string RemoteControlDocking;
@@ -87,6 +88,7 @@ namespace IngameScript
 
             TimerLoad = ReadConfig(customData, "TimerLoad", "");
             TimerUnload = ReadConfig(customData, "TimerUnload", "");
+            TimerFinalizeCargo = ReadConfig(customData, "TimerFinalizeCargo", "");
 
             RemoteControlPilot = ReadConfig(customData, "RemoteControlPilot");
             RemoteControlDocking = ReadConfig(customData, "RemoteControlDocking");
@@ -246,6 +248,7 @@ namespace IngameScript
                 "\n" +
                 "TimerLoad=Timer Block Load\n" +
                 "TimerUnload=Timer Block Unload\n" +
+                "TimerFinalizeCargo=Timer Block Finalize\n" +
                 "\n" +
                 "RemoteControlPilot=Remote Control Pilot\n" +
                 "RemoteControlDocking=Remote Control Docking\n" +
