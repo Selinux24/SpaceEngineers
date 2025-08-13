@@ -36,6 +36,8 @@ namespace IngameScript
 
         public readonly double MaxLoad;
         public readonly double MinLoad;
+        public readonly double MinPower;
+        public readonly double MinHydrogen;
 
         public readonly Route Route;
 
@@ -100,6 +102,8 @@ namespace IngameScript
 
             MaxLoad = ReadConfigDouble(customData, "MaxLoad", 1);
             MinLoad = ReadConfigDouble(customData, "MinLoad", 0);
+            MinPower = ReadConfigDouble(customData, "MinPower", 0);
+            MinHydrogen = ReadConfigDouble(customData, "MinHydrogen", 0);
 
             Route = new Route(
                 ReadConfig(customData, "RouteLoadBase"),
@@ -260,6 +264,8 @@ namespace IngameScript
                 "\n" +
                 "MaxLoad=1\n" +
                 "MinLoad=0\n" +
+                "MinPower=0.9\n" +
+                "MinHydrogen=0.9\n" +
                 "\n" +
                 "RouteLoadBase=base1\n" +
                 "RouteLoadBaseOnPlanet=false\n" +

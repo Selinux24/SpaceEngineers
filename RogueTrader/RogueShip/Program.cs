@@ -39,12 +39,17 @@ namespace IngameScript
         readonly List<IMyTextPanel> infoLCDs = new List<IMyTextPanel>();
         readonly List<IMyTextPanel> logLCDs = new List<IMyTextPanel>();
         readonly List<IMyCargoContainer> shipCargos = new List<IMyCargoContainer>();
+        readonly List<IMyBatteryBlock> shipBatteries = new List<IMyBatteryBlock>();
+        readonly List<IMyGasTank> shipTanks = new List<IMyGasTank>();
         #endregion
 
         readonly string shipId;
         readonly StringBuilder sbLog = new StringBuilder();
 
         bool paused = false;
+        bool monitorizePropulsion = false;
+        readonly double minStoredPower = 0;
+        readonly double minStoredHydrogen = 0;
         ShipStatus shipStatus = ShipStatus.Idle;
         readonly Navigator navigator;
 
@@ -67,6 +72,9 @@ namespace IngameScript
                 Echo(Config.GetErrors());
                 return;
             }
+
+            minStoredPower = Config.MinPower;
+            minStoredHydrogen = Config.MinHydrogen;
 
             navigator = new Navigator(this);
 
@@ -168,6 +176,8 @@ namespace IngameScript
             logLCDs = GetBlocksOfType<IMyTextPanel>(Config.WildcardLogLCDs);
             infoLCDs = GetBlocksOfType<IMyTextPanel>(Config.WildcardShipInfo);
             shipCargos = GetBlocksOfType<IMyCargoContainer>();
+            shipBatteries = GetBlocksOfType<IMyBatteryBlock>();
+            shipTanks = GetBlocksOfType<IMyGasTank>();
 
             WriteLCDs(Config.WildcardShipId, shipId);
 
@@ -190,6 +200,8 @@ namespace IngameScript
         {
             WriteInfoLCDs($"{shipId} in channel {Config.Channel}", false);
             WriteInfoLCDs($"{CalculateCargoPercentage():P1} cargo.");
+            if (minStoredPower > 0) WriteInfoLCDs($"Battery {CalculateBatteryPercentage():P1}.");
+            if (minStoredHydrogen > 0) WriteInfoLCDs($"Hydrogen {CalculateHydrogenPercentage():P1}.");
             WriteInfoLCDs($"{shipStatus}");
 
             if (!string.IsNullOrEmpty(argument))
@@ -350,7 +362,7 @@ namespace IngameScript
         }
         #endregion
 
-        #region LOAD/UNLOAD Monitors
+        #region MONITORS
         void MonitorizeLoad()
         {
             if (shipStatus == ShipStatus.Loading)
@@ -359,9 +371,14 @@ namespace IngameScript
                 WriteInfoLCDs($"Progress {capacity / Config.MaxLoad:P1}...");
                 if (capacity >= Config.MaxLoad)
                 {
-                    timerFinalize?.StartCountdown();
+                    if (monitorizePropulsion && IsPropulsionFilled())
+                    {
+                        SendWaitingMessage(ExchangeTasks.EndLoad);
+                        monitorizePropulsion = false;
+                    }
 
-                    SendWaitingMessage(ExchangeTasks.EndLoad);
+                    timerFinalize?.StartCountdown();
+                    monitorizePropulsion = true;
                 }
 
                 return;
@@ -373,9 +390,14 @@ namespace IngameScript
                 WriteInfoLCDs($"Progress {capacity / Config.MaxLoad:P1}...");
                 if (capacity <= Config.MinLoad)
                 {
-                    timerFinalize?.StartCountdown();
+                    if (monitorizePropulsion && IsPropulsionFilled())
+                    {
+                        SendWaitingMessage(ExchangeTasks.EndUnload);
+                        monitorizePropulsion = false;
+                    }
 
-                    SendWaitingMessage(ExchangeTasks.EndUnload);
+                    timerFinalize?.StartCountdown();
+                    monitorizePropulsion = true;
                 }
 
                 return;
@@ -547,8 +569,8 @@ namespace IngameScript
         {
             cameraPilot.EnableRaycast = true;
 
-            MatrixD cameraMatrixInv = MatrixD.Invert(cameraPilot.WorldMatrix);
-            Vector3D localDirection = Vector3D.TransformNormal(Vector3D.Normalize(velocity), cameraMatrixInv);
+            var cameraMatrixInv = MatrixD.Invert(cameraPilot.WorldMatrix);
+            var localDirection = Vector3D.TransformNormal(Vector3D.Normalize(velocity), cameraMatrixInv);
             if (cameraPilot.CanScan(collisionDetectRange, localDirection))
             {
                 hit = cameraPilot.Raycast(collisionDetectRange, localDirection);
@@ -564,10 +586,10 @@ namespace IngameScript
 
         internal void ThrustToTarget(bool landing, Vector3D toTarget, double maxSpeed)
         {
-            var currentVelocity = landing ? GetLandingLinearVelocity() : GetPilotLinearVelocity();
+            var velocity = landing ? GetLandingLinearVelocity() : GetPilotLinearVelocity();
             double mass = GetMass();
 
-            var force = Utils.CalculateThrustForce(toTarget, maxSpeed, currentVelocity, mass);
+            var force = Utils.CalculateThrustForce(toTarget, maxSpeed, velocity, mass);
             ApplyThrust(force);
         }
         internal void ApplyThrust(Vector3D force)
@@ -604,7 +626,7 @@ namespace IngameScript
             var direction = remote.WorldMatrix.Forward;
 
             double angle = Utils.AngleBetweenVectors(direction, toTarget);
-            WriteInfoLCDs($"TGT angle: {angle:F4}");
+            WriteInfoLCDs($"TGT angle: {angle:F3}");
 
             if (angle <= thr)
             {
@@ -628,7 +650,7 @@ namespace IngameScript
 
             double angleFW = Utils.AngleBetweenVectors(shipForward, targetForward);
             double angleUP = Utils.AngleBetweenVectors(shipUp, targetUp);
-            WriteInfoLCDs($"Target angles: {angleFW:F2} | {angleUP:F2}");
+            WriteInfoLCDs($"TGT angles: {angleFW:F3} | {angleUP:F3}");
 
             if (angleFW <= thr && angleUP <= thr)
             {
@@ -657,26 +679,27 @@ namespace IngameScript
 
             return corrected;
         }
+
         internal void ApplyGyroOverride(Vector3D axis)
         {
-            foreach (var gyro in gyros)
+            foreach (var g in gyros)
             {
-                var localAxis = Vector3D.TransformNormal(axis, MatrixD.Transpose(gyro.WorldMatrix));
+                var localAxis = Vector3D.TransformNormal(axis, MatrixD.Transpose(g.WorldMatrix));
                 var gyroRot = localAxis * -Config.GyrosSpeed;
-                gyro.GyroOverride = true;
-                gyro.Pitch = (float)gyroRot.X;
-                gyro.Yaw = (float)gyroRot.Y;
-                gyro.Roll = (float)gyroRot.Z;
+                g.GyroOverride = true;
+                g.Pitch = (float)gyroRot.X;
+                g.Yaw = (float)gyroRot.Y;
+                g.Roll = (float)gyroRot.Z;
             }
         }
         internal void ResetGyros()
         {
-            foreach (var gyro in gyros)
+            foreach (var g in gyros)
             {
-                gyro.GyroOverride = false;
-                gyro.Pitch = 0;
-                gyro.Yaw = 0;
-                gyro.Roll = 0;
+                g.GyroOverride = false;
+                g.Pitch = 0;
+                g.Yaw = 0;
+                g.Roll = 0;
             }
         }
 
@@ -750,6 +773,39 @@ namespace IngameScript
             antenna.Enabled = false;
         }
 
+        bool IsPropulsionFilled()
+        {
+            if (!IsBatteryFilled())
+            {
+                WriteInfoLCDs($"Battery {CalculateBatteryPercentage():P1}.");
+                return false;
+            }
+            if (!IsHydrogenFilled())
+            {
+                WriteInfoLCDs($"Hydrogen {CalculateHydrogenPercentage():P1}.");
+                return false;
+            }
+            return true;
+        }
+        bool IsBatteryFilled()
+        {
+            if (minStoredPower <= 0)
+            {
+                return true;
+            }
+
+            double battery = CalculateBatteryPercentage();
+            return battery >= minStoredPower;
+        }
+        bool IsHydrogenFilled()
+        {
+            if (minStoredHydrogen <= 0)
+            {
+                return true;
+            }
+            double hydrogen = CalculateHydrogenPercentage();
+            return hydrogen >= minStoredHydrogen;
+        }
         double CalculateCargoPercentage()
         {
             if (shipCargos.Count == 0)
@@ -764,6 +820,45 @@ namespace IngameScript
                 var inv = cargo.GetInventory();
                 max += (double)inv.MaxVolume;
                 curr += (double)inv.CurrentVolume;
+            }
+
+            return curr / max;
+        }
+        double CalculateBatteryPercentage()
+        {
+            if (shipBatteries.Count == 0)
+            {
+                return 0;
+            }
+
+            double max = 0;
+            double curr = 0;
+            foreach (var battery in shipBatteries)
+            {
+                max += (double)battery.MaxStoredPower;
+                curr += (double)battery.CurrentStoredPower;
+            }
+
+            return curr / max;
+        }
+        double CalculateHydrogenPercentage()
+        {
+            if (shipTanks.Count == 0)
+            {
+                return 0;
+            }
+
+            double max = 0;
+            double curr = 0;
+            foreach (var tank in shipTanks)
+            {
+                if (!tank.BlockDefinition.SubtypeId.Contains("Hydrogen"))
+                {
+                    continue;
+                }
+
+                max += tank.Capacity;
+                curr += tank.Capacity * tank.FilledRatio;
             }
 
             return curr / max;
@@ -815,6 +910,7 @@ namespace IngameScript
             }
 
             paused = Utils.ReadInt(storageLines, "Paused", 0) == 1;
+            monitorizePropulsion = Utils.ReadInt(storageLines, "MonitorizePropulsion", 0) == 1;
             shipStatus = (ShipStatus)Utils.ReadInt(storageLines, "ShipStatus", (int)ShipStatus.Idle);
             navigator.LoadFromStorage(Utils.ReadString(storageLines, "Navigator"));
         }
@@ -823,6 +919,7 @@ namespace IngameScript
             List<string> parts = new List<string>
             {
                 $"Paused={(paused ? 1 : 0)}",
+                $"MonitorizePropulsion={(monitorizePropulsion ? 1 : 0)}",
                 $"ShipStatus={(int)shipStatus}",
                 $"Navigator={navigator.SaveToStorage()}",
             };

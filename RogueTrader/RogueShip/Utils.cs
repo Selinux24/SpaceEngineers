@@ -98,16 +98,6 @@ namespace IngameScript
 
             return int.Parse(value);
         }
-        public static double ReadDouble(string[] lines, string name, double defaultValue = 0)
-        {
-            string value = ReadString(lines, name);
-            if (string.IsNullOrEmpty(value))
-            {
-                return defaultValue;
-            }
-
-            return double.Parse(value);
-        }
         public static Vector3D ReadVector(string[] lines, string name)
         {
             string value = ReadString(lines, name);
@@ -145,11 +135,6 @@ namespace IngameScript
             var velocityError = desiredVelocity - currentVelocity;
 
             return velocityError * mass * 10;
-        }
-
-        public static bool IsZero(Vector3D v, double thr)
-        {
-            return Math.Abs(v.X) < thr && Math.Abs(v.Y) < thr && Math.Abs(v.Z) < thr;
         }
     }
 }
