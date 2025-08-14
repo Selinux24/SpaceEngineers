@@ -678,13 +678,17 @@ namespace IngameScript
 
         string GetState()
         {
-            if (Task == NavigatorTasks.Navigate)
+            if (Task == NavigatorTasks.None)
+            {
+                return null;
+            }
+            else if (Task == NavigatorTasks.Navigate)
             {
                 return
                     $"Trip: {Utils.DistanceToStr(TotalDistance)}" + Environment.NewLine +
                     $"To target: {Utils.DistanceToStr(DistanceToDestination)}" + Environment.NewLine +
                     $"Speed: {Speed:F2}" + Environment.NewLine +
-                    $"ETC: {NavigationETA:dd\\:hh\\:mm\\:ss}" + Environment.NewLine +
+                    $"ETA: {NavigationETA:dd\\:hh\\:mm\\:ss}" + Environment.NewLine +
                     $"Progress {Progress:P1}.  {CurrentWpIdx + 1}/{Waypoints.Count}" + Environment.NewLine;
             }
             else
@@ -693,8 +697,23 @@ namespace IngameScript
                     $"Trip: {Utils.DistanceToStr(TotalDistance)}" + Environment.NewLine +
                     $"To target: {Utils.DistanceToStr(DistanceToNextDockWaypoint)}" + Environment.NewLine +
                     $"Speed: {Speed:F2}" + Environment.NewLine +
-                    $"ETC: {DockingETA:dd\\:hh\\:mm\\:ss}" + Environment.NewLine +
+                    $"ETA: {DockingETA:dd\\:hh\\:mm\\:ss}" + Environment.NewLine +
                     $"Progress: {CurrentWpIdx + 1}/{Waypoints.Count}." + Environment.NewLine;
+            }
+        }
+        public string GetShortState()
+        {
+            if (Task == NavigatorTasks.None)
+            {
+                return null;
+            }
+            else if (Task == NavigatorTasks.Navigate)
+            {
+                return $"{Task} - ETA: {NavigationETA:dd\\:hh\\:mm\\:ss}";
+            }
+            else
+            {
+                return $"{Task} - ETA: {DockingETA:dd\\:hh\\:mm\\:ss}";
             }
         }
         string PrintObstacle()

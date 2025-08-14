@@ -38,11 +38,12 @@ namespace IngameScript
 
         readonly List<IMyThrust> thrusters = new List<IMyThrust>();
         readonly List<IMyGyro> gyros = new List<IMyGyro>();
-        readonly List<IMyTextPanel> infoLCDs = new List<IMyTextPanel>();
-        readonly List<IMyTextPanel> logLCDs = new List<IMyTextPanel>();
         readonly List<IMyCargoContainer> shipCargos = new List<IMyCargoContainer>();
         readonly List<IMyBatteryBlock> shipBatteries = new List<IMyBatteryBlock>();
         readonly List<IMyGasTank> shipTanks = new List<IMyGasTank>();
+
+        readonly List<IMyTextSurface> infoLCDs = new List<IMyTextSurface>();
+        readonly List<TextPanelDesc> logLCDs = new List<TextPanelDesc>();
         #endregion
 
         readonly string shipId;
@@ -175,22 +176,27 @@ namespace IngameScript
                 return;
             }
 
-            logLCDs = GetBlocksOfType<IMyTextPanel>(Config.WildcardLogLCDs);
-            infoLCDs = GetBlocksOfType<IMyTextPanel>(Config.WildcardShipInfo);
             shipCargos = GetBlocksOfType<IMyCargoContainer>();
             shipBatteries = GetBlocksOfType<IMyBatteryBlock>();
             shipTanks = GetBlocksOfType<IMyGasTank>();
 
+            var info = GetBlocksOfType<IMyTextPanel>(Config.WildcardShipInfo);
+            var infoCps = GetBlocksOfType<IMyCockpit>(Config.WildcardShipInfo).Where(c => Config.WildcardShipInfo.Match(c.CustomName).Groups[1].Success);
+            infoLCDs.AddRange(info);
+            infoLCDs.AddRange(infoCps.Select(c => c.GetSurface(int.Parse(Config.WildcardShipInfo.Match(c.CustomName).Groups[1].Value))));
+
+            var log = GetBlocksOfType<IMyTextPanel>(Config.WildcardLogLCDs);
+            var logCps = GetBlocksOfType<IMyCockpit>(Config.WildcardLogLCDs).Where(c => Config.WildcardLogLCDs.Match(c.CustomName).Groups[1].Success);
+            logLCDs.AddRange(log.Select(l => new TextPanelDesc(l, l)));
+            logLCDs.AddRange(logCps.Select(c => new TextPanelDesc(c, c.GetSurface(int.Parse(Config.WildcardLogLCDs.Match(c.CustomName).Groups[1].Value)))));
+
             WriteLCDs(Config.WildcardShipId, shipId);
 
             bl = IGC.RegisterBroadcastListener(Config.Channel);
-            Echo($"Listening in channel {Config.Channel}");
 
             LoadFromStorage();
 
             Runtime.UpdateFrequency = UpdateFrequency.Update1;
-
-            Echo("Working!");
         }
 
         public void Save()
@@ -318,6 +324,7 @@ namespace IngameScript
                 $"To={from}",
                 $"From={shipId}",
                 $"Status={(int)shipStatus}",
+                $"StatusMessage={GetShipState()}",
                 $"Cargo={CalculateCargoPercentage()}",
                 $"Position={Utils.VectorToStr(remotePilot.GetPosition())}",
             };
@@ -471,10 +478,10 @@ namespace IngameScript
             GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid);
             return blocks;
         }
-        List<T> GetBlocksOfType<T>(string name) where T : class, IMyTerminalBlock
+        List<T> GetBlocksOfType<T>(System.Text.RegularExpressions.Regex regEx) where T : class, IMyTerminalBlock
         {
             var blocks = new List<T>();
-            GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && b.CustomName.Contains(name));
+            GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && regEx.IsMatch(b.CustomName));
             return blocks;
         }
 
@@ -513,23 +520,11 @@ namespace IngameScript
             sbLog.Insert(0, text + Environment.NewLine);
 
             var log = sbLog.ToString();
-            string[] logLines = log.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+            var logLines = log.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
 
             foreach (var lcd in logLCDs)
             {
-                lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-
-                string customData = lcd.CustomData;
-                var blackList = customData.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
-                if (blackList.Length > 0)
-                {
-                    string[] lines = logLines.Where(l => !blackList.Any(b => l.Contains(b))).ToArray();
-                    lcd.WriteText(string.Join(Environment.NewLine, lines));
-                }
-                else
-                {
-                    lcd.WriteText(log, false);
-                }
+                lcd.Write(log, logLines);
             }
         }
         internal void BroadcastMessage(List<string> parts)
@@ -753,6 +748,10 @@ namespace IngameScript
         {
             return remoteDocking.GetShipVelocities().LinearVelocity;
         }
+        internal string GetDockedGridName()
+        {
+            return connectorA.OtherConnector?.CubeGrid?.CustomName;
+        }
 
         internal IMyCameraBlock GetCameraPilot()
         {
@@ -901,6 +900,29 @@ namespace IngameScript
             BroadcastMessage(parts);
 
             Waiting();
+        }
+
+        string GetShipState()
+        {
+            if (shipStatus == ShipStatus.Idle)
+            {
+                string dockedGrid = GetDockedGridName();
+                return string.IsNullOrWhiteSpace(dockedGrid) ? "" : dockedGrid;
+            }
+            else if (shipStatus == ShipStatus.Loading)
+            {
+                double capacity = CalculateCargoPercentage();
+                return $"Loading from {GetDockedGridName()} {capacity / Config.MaxLoad:P1}...";
+            }
+            else if (shipStatus == ShipStatus.Unloading)
+            {
+                double capacity = CalculateCargoPercentage();
+                return $"Unloading to {GetDockedGridName()} {1.0 - (capacity / Config.MaxLoad):P1}...";
+            }
+            else
+            {
+                return navigator.GetShortState();
+            }
         }
         #endregion
 

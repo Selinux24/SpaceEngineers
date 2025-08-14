@@ -15,8 +15,8 @@ namespace IngameScript
         public bool EnableLogs = true;
 
         public readonly string WildcardShipId;
-        public readonly string WildcardShipInfo;
-        public readonly string WildcardLogLCDs;
+        public readonly System.Text.RegularExpressions.Regex WildcardShipInfo;
+        public readonly System.Text.RegularExpressions.Regex WildcardLogLCDs;
 
         public readonly string TimerPilot;
         public readonly string TimerWaiting;
@@ -79,8 +79,8 @@ namespace IngameScript
             EnableLogs = ReadConfigBool(customData, "EnableLogs");
 
             WildcardShipId = ReadConfig(customData, "WildcardShipId");
-            WildcardShipInfo = ReadConfig(customData, "WildcardShipInfo");
-            WildcardLogLCDs = ReadConfig(customData, "WildcardLogLCDs");
+            WildcardShipInfo = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "WildcardShipInfo")}(?:\.(\d+))?\]");
+            WildcardLogLCDs = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "WildcardLogLCDs")}(?:\.(\d+))?\]");
 
             TimerPilot = ReadConfig(customData, "TimerPilot", "");
             TimerWaiting = ReadConfig(customData, "TimerWaiting");
@@ -241,8 +241,8 @@ namespace IngameScript
                 "EnableLogs=false\n" +
                 "\n" +
                 "WildcardShipId=[shipId]\n" +
-                "WildcardShipInfo=[DELIVERY_INFO]\n" +
-                "WildcardLogLCDs=[DELIVERY_LOG]\n" +
+                "WildcardShipInfo=DELIVERY_INFO\n" +
+                "WildcardLogLCDs=DELIVERY_LOG\n" +
                 "\n" +
                 "TimerPilot=Timer Block Pilot\n" +
                 "TimerWaiting=Timer Block Waiting\n" +

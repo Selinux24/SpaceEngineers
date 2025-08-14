@@ -16,8 +16,8 @@ namespace IngameScript
         public bool ShowExchangeRequests = true;
         public bool EnableLogs = false;
 
-        public readonly string DataLCDs;
-        public readonly string LogLCDs;
+        public readonly System.Text.RegularExpressions.Regex DataLCDs;
+        public readonly System.Text.RegularExpressions.Regex LogLCDs;
 
         public readonly int ExchangeNumWaypoints;
         public readonly double ExchangePathDistance; //Meters, distance from the dock to the first waypoint
@@ -39,8 +39,8 @@ namespace IngameScript
             ShowExchangeRequests = ReadConfigBool(customData, "ShowExchangeRequests", true);
             EnableLogs = ReadConfigBool(customData, "EnableLogs", false);
 
-            DataLCDs = ReadConfig(customData, "DataLCDs");
-            LogLCDs = ReadConfig(customData, "LogLCDs");
+            DataLCDs = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "DataLCDs")}(?:\.(\d+))?\]");
+            LogLCDs = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "LogLCDs")}(?:\.(\d+))?\]");
 
             ExchangeNumWaypoints = ReadConfigInt(customData, "ExchangeNumWaypoints");
             ExchangePathDistance = ReadConfigDouble(customData, "ExchangePathDistance");
@@ -140,8 +140,8 @@ namespace IngameScript
                 "ShowExchangeRequests=true\n" +
                 "EnableLogs=false\n" +
                 "\n" +
-                "DataLCDs=[DELIVERY_DATA]\n" +
-                "LogLCDs=[DELIVERY_LOG]\n" +
+                "DataLCDs=DELIVERY_DATA\n" +
+                "LogLCDs=DELIVERY_LOG\n" +
                 "\n" +
                 "ExchangeNumWaypoints=5\n" +
                 "ExchangePathDistance=150\n" +

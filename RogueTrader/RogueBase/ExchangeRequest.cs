@@ -1,16 +1,27 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
 namespace IngameScript
 {
     class ExchangeRequest
     {
+        private DateTime doneTime;
+
         public string Ship;
-        public bool Pending;
         public ExchangeTasks Task;
+
+        public bool Pending { get; private set; } = true;
+        public bool Expired => !Pending && (DateTime.Now - doneTime).TotalSeconds > 120;
 
         public ExchangeRequest()
         {
 
+        }
+
+        public void SetDone()
+        {
+            Pending = false;
+            doneTime = DateTime.Now;
         }
 
         public static List<string> SaveListToStorage(List<ExchangeRequest> requests)
