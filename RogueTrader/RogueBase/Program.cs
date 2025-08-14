@@ -36,6 +36,9 @@ namespace IngameScript
         bool requestExchange = true;
         DateTime lastExchangeRequest = DateTime.MinValue;
 
+        readonly TimeSpan refreshLCDsInterval = TimeSpan.FromSeconds(5);
+        DateTime lastRefreshLCDs = DateTime.MinValue;
+
         public Program()
         {
             if (string.IsNullOrWhiteSpace(Me.CustomData))
@@ -54,15 +57,7 @@ namespace IngameScript
                 return;
             }
 
-            var data = GetBlocksOfType<IMyTextPanel>(config.DataLCDs);
-            var dataCps = GetBlocksOfType<IMyCockpit>(config.DataLCDs).Where(c => config.DataLCDs.Match(c.CustomName).Groups[1].Success);
-            dataLCDs.AddRange(data);
-            dataLCDs.AddRange(dataCps.Select(c => c.GetSurface(int.Parse(config.DataLCDs.Match(c.CustomName).Groups[1].Value))));
-
-            var log = GetBlocksOfType<IMyTextPanel>(config.LogLCDs);
-            var logCps = GetBlocksOfType<IMyCockpit>(config.LogLCDs).Where(c => config.LogLCDs.Match(c.CustomName).Groups[1].Success);
-            logLCDs.AddRange(log.Select(l => new TextPanelDesc(l, l)));
-            logLCDs.AddRange(logCps.Select(c => new TextPanelDesc(c, c.GetSurface(int.Parse(config.LogLCDs.Match(c.CustomName).Groups[1].Value)))));
+            RefreshLCDs();
 
             InitializeExchangeGroups();
 
@@ -426,6 +421,28 @@ namespace IngameScript
             }
 
             exchangeRequests.RemoveAll(r => r.Expired);
+
+            //Refresh LCDs every 60 seconds
+            if (DateTime.Now - lastRefreshLCDs > refreshLCDsInterval)
+            {
+                RefreshLCDs();
+            }
+        }
+        void RefreshLCDs()
+        {
+            dataLCDs.Clear();
+            var data = GetBlocksOfType<IMyTextPanel>(config.DataLCDs);
+            var dataCps = GetBlocksOfType<IMyCockpit>(config.DataLCDs).Where(c => config.DataLCDs.Match(c.CustomName).Groups[1].Success);
+            dataLCDs.AddRange(data);
+            dataLCDs.AddRange(dataCps.Select(c => c.GetSurface(int.Parse(config.DataLCDs.Match(c.CustomName).Groups[1].Value))));
+
+            logLCDs.Clear();
+            var log = GetBlocksOfType<IMyTextPanel>(config.LogLCDs);
+            var logCps = GetBlocksOfType<IMyCockpit>(config.LogLCDs).Where(c => config.LogLCDs.Match(c.CustomName).Groups[1].Success);
+            logLCDs.AddRange(log.Select(l => new TextPanelDesc(l, l)));
+            logLCDs.AddRange(logCps.Select(c => new TextPanelDesc(c, c.GetSurface(int.Parse(config.LogLCDs.Match(c.CustomName).Groups[1].Value)))));
+
+            lastRefreshLCDs = DateTime.Now;
         }
         #endregion
 

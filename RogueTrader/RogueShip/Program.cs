@@ -58,6 +58,9 @@ namespace IngameScript
 
         internal readonly Config Config;
 
+        readonly TimeSpan refreshLCDsInterval = TimeSpan.FromSeconds(5);
+        DateTime lastRefreshLCDs = DateTime.MinValue;
+
         public Program()
         {
             if (string.IsNullOrWhiteSpace(Me.CustomData))
@@ -180,15 +183,7 @@ namespace IngameScript
             shipBatteries = GetBlocksOfType<IMyBatteryBlock>();
             shipTanks = GetBlocksOfType<IMyGasTank>();
 
-            var info = GetBlocksOfType<IMyTextPanel>(Config.WildcardShipInfo);
-            var infoCps = GetBlocksOfType<IMyCockpit>(Config.WildcardShipInfo).Where(c => Config.WildcardShipInfo.Match(c.CustomName).Groups[1].Success);
-            infoLCDs.AddRange(info);
-            infoLCDs.AddRange(infoCps.Select(c => c.GetSurface(int.Parse(Config.WildcardShipInfo.Match(c.CustomName).Groups[1].Value))));
-
-            var log = GetBlocksOfType<IMyTextPanel>(Config.WildcardLogLCDs);
-            var logCps = GetBlocksOfType<IMyCockpit>(Config.WildcardLogLCDs).Where(c => Config.WildcardLogLCDs.Match(c.CustomName).Groups[1].Success);
-            logLCDs.AddRange(log.Select(l => new TextPanelDesc(l, l)));
-            logLCDs.AddRange(logCps.Select(c => new TextPanelDesc(c, c.GetSurface(int.Parse(Config.WildcardLogLCDs.Match(c.CustomName).Groups[1].Value)))));
+            RefreshLCDs();
 
             WriteLCDs(Config.WildcardShipId, shipId);
 
@@ -229,7 +224,7 @@ namespace IngameScript
 
             MonitorizeLoad();
 
-            navigator.Update();
+            UpdateShipStatus();
         }
 
         #region TERMINAL COMMANDS
@@ -412,6 +407,35 @@ namespace IngameScript
 
                 return;
             }
+        }
+        #endregion
+
+        #region UPDATE SHIP STATUS
+        void UpdateShipStatus()
+        {
+            navigator.Update();
+
+            //Refresh LCDs every 60 seconds
+            if (DateTime.Now - lastRefreshLCDs > refreshLCDsInterval)
+            {
+                RefreshLCDs();
+            }
+        }
+        void RefreshLCDs()
+        {
+            infoLCDs.Clear();
+            var info = GetBlocksOfType<IMyTextPanel>(Config.WildcardShipInfo);
+            var infoCps = GetBlocksOfType<IMyCockpit>(Config.WildcardShipInfo).Where(c => Config.WildcardShipInfo.Match(c.CustomName).Groups[1].Success);
+            infoLCDs.AddRange(info);
+            infoLCDs.AddRange(infoCps.Select(c => c.GetSurface(int.Parse(Config.WildcardShipInfo.Match(c.CustomName).Groups[1].Value))));
+
+            logLCDs.Clear();
+            var log = GetBlocksOfType<IMyTextPanel>(Config.WildcardLogLCDs);
+            var logCps = GetBlocksOfType<IMyCockpit>(Config.WildcardLogLCDs).Where(c => Config.WildcardLogLCDs.Match(c.CustomName).Groups[1].Success);
+            logLCDs.AddRange(log.Select(l => new TextPanelDesc(l, l)));
+            logLCDs.AddRange(logCps.Select(c => new TextPanelDesc(c, c.GetSurface(int.Parse(Config.WildcardLogLCDs.Match(c.CustomName).Groups[1].Value)))));
+
+            lastRefreshLCDs = DateTime.Now;
         }
         #endregion
 
