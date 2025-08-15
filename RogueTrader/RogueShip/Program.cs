@@ -238,6 +238,8 @@ namespace IngameScript
             else if (argument == "ENABLE_LOGS") EnableLogs();
 
             else if (argument == "START_ROUTE") SendWaitingMessage(ExchangeTasks.StartLoad);
+            else if (argument == "START_LOAD") SendWaitingMessage(ExchangeTasks.StartLoad);
+            else if (argument == "START_UNLOAD") SendWaitingMessage(ExchangeTasks.StartUnload);
         }
 
         /// <summary>

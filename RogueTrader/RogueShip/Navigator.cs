@@ -686,7 +686,8 @@ namespace IngameScript
             {
                 return
                     $"Trip: {Utils.DistanceToStr(TotalDistance)}" + Environment.NewLine +
-                    $"To target: {Utils.DistanceToStr(DistanceToDestination)}" + Environment.NewLine +
+                    $"To DST: {Utils.DistanceToStr(DistanceToDestination)}" + Environment.NewLine +
+                    $"To TGT: {Utils.DistanceToStr(DistanceToNextWaypoint)}" + Environment.NewLine +
                     $"Speed: {Speed:F2}" + Environment.NewLine +
                     $"ETA: {NavigationETA:dd\\:hh\\:mm\\:ss}" + Environment.NewLine +
                     $"Progress {Progress:P1}.  {CurrentWpIdx + 1}/{Waypoints.Count}" + Environment.NewLine;
@@ -695,7 +696,7 @@ namespace IngameScript
             {
                 return
                     $"Trip: {Utils.DistanceToStr(TotalDistance)}" + Environment.NewLine +
-                    $"To target: {Utils.DistanceToStr(DistanceToNextDockWaypoint)}" + Environment.NewLine +
+                    $"To TGT: {Utils.DistanceToStr(DistanceToNextDockWaypoint)}" + Environment.NewLine +
                     $"Speed: {Speed:F2}" + Environment.NewLine +
                     $"ETA: {DockingETA:dd\\:hh\\:mm\\:ss}" + Environment.NewLine +
                     $"Progress: {CurrentWpIdx + 1}/{Waypoints.Count}." + Environment.NewLine;
