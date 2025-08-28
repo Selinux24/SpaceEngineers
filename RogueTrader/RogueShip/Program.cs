@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "1.0";
+        const string Version = "1.1";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
@@ -240,6 +240,8 @@ namespace IngameScript
             else if (argument == "START_ROUTE") SendWaitingMessage(ExchangeTasks.StartLoad);
             else if (argument == "START_LOAD") SendWaitingMessage(ExchangeTasks.StartLoad);
             else if (argument == "START_UNLOAD") SendWaitingMessage(ExchangeTasks.StartUnload);
+
+            else if (argument == "UNDOCK") StopAndUndocK();
         }
 
         /// <summary>
@@ -376,38 +378,47 @@ namespace IngameScript
             {
                 double capacity = CalculateCargoPercentage();
                 WriteInfoLCDs($"Progress {capacity / Config.MaxLoad:P1}...");
-                if (capacity >= Config.MaxLoad)
-                {
-                    if (monitorizePropulsion && IsPropulsionFilled())
-                    {
-                        SendWaitingMessage(ExchangeTasks.EndLoad);
-                        monitorizePropulsion = false;
-                    }
 
-                    timerFinalize?.StartCountdown();
-                    monitorizePropulsion = true;
+                if (capacity < Config.MaxLoad)
+                {
+                    return;
                 }
 
-                return;
-            }
+                if (!monitorizePropulsion)
+                {
+                    timerFinalize?.StartCountdown();
+                    monitorizePropulsion = true;
+                    return;
+                }
 
-            if (shipStatus == ShipStatus.Unloading)
+                if (IsPropulsionFilled())
+                {
+                    SendWaitingMessage(ExchangeTasks.EndLoad);
+                    monitorizePropulsion = false;
+                }
+            }
+            else if (shipStatus == ShipStatus.Unloading)
             {
                 double capacity = CalculateCargoPercentage();
                 WriteInfoLCDs($"Progress {1.0 - (capacity / Config.MaxLoad):P1}...");
-                if (capacity <= Config.MinLoad)
-                {
-                    if (monitorizePropulsion && IsPropulsionFilled())
-                    {
-                        SendWaitingMessage(ExchangeTasks.EndUnload);
-                        monitorizePropulsion = false;
-                    }
 
-                    timerFinalize?.StartCountdown();
-                    monitorizePropulsion = true;
+                if (capacity > Config.MinLoad)
+                {
+                    return;
                 }
 
-                return;
+                if (!monitorizePropulsion)
+                {
+                    timerFinalize?.StartCountdown();
+                    monitorizePropulsion = true;
+                    return;
+                }
+
+                if (IsPropulsionFilled())
+                {
+                    SendWaitingMessage(ExchangeTasks.EndUnload);
+                    monitorizePropulsion = false;
+                }
             }
         }
         #endregion
@@ -926,6 +937,26 @@ namespace IngameScript
             BroadcastMessage(parts);
 
             Waiting();
+        }
+
+        void StopAndUndocK()
+        {
+            if (shipStatus == ShipStatus.Loading)
+            {
+                timerFinalize?.StartCountdown();
+                SendWaitingMessage(ExchangeTasks.EndLoad);
+                monitorizePropulsion = false;
+            }
+            else if (shipStatus == ShipStatus.Unloading)
+            {
+                timerFinalize?.StartCountdown();
+                SendWaitingMessage(ExchangeTasks.EndUnload);
+                monitorizePropulsion = false;
+            }
+            else
+            {
+                WriteLogLCDs($"Ship is not docked: {shipStatus}");
+            }
         }
 
         string GetShipState()

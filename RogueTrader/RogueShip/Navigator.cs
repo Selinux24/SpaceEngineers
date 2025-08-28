@@ -31,7 +31,7 @@ namespace IngameScript
         public Config Config => ship.Config;
 
         public double Speed => ship.GetSpeed();
-        public Vector3D CurrentWaypoint => Waypoints[CurrentWpIdx];
+        public Vector3D CurrentWaypoint => GetCurrentWaypoint();
         public Vector3D ToWaypoint => CurrentWaypoint - ship.GetPosition();
         public double DistanceToNextWaypoint => ToWaypoint.Length();
         public Vector3D DirectionToWaypoint => Vector3D.Normalize(ToWaypoint);
@@ -598,6 +598,15 @@ namespace IngameScript
         }
         #endregion
 
+        Vector3D GetCurrentWaypoint()
+        {
+            if (Waypoints.Count == 0)
+            {
+                return ship.GetPosition();
+            }
+
+            return Waypoints[Math.Min(CurrentWpIdx, Waypoints.Count - 1)];
+        }
         double GetTotalDistance()
         {
             if (Waypoints.Count < 2)
