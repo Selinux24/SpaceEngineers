@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "1.1";
+        const string Version = "1.2";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
@@ -51,8 +51,10 @@ namespace IngameScript
 
         bool paused = false;
         bool monitorizePropulsion = false;
-        readonly double minStoredPower = 0;
-        readonly double minStoredHydrogen = 0;
+        readonly double minStoredPowerOnLoad = 0;
+        readonly double minStoredPowerOnUnload = 0;
+        readonly double minStoredHydrogenOnLoad = 0;
+        readonly double minStoredHydrogenOnUnload = 0;
         ShipStatus shipStatus = ShipStatus.Idle;
         readonly Navigator navigator;
 
@@ -79,8 +81,10 @@ namespace IngameScript
                 return;
             }
 
-            minStoredPower = Config.MinPower;
-            minStoredHydrogen = Config.MinHydrogen;
+            minStoredPowerOnLoad = Config.MinPowerOnLoad;
+            minStoredPowerOnUnload = Config.MinPowerOnUnload;
+            minStoredHydrogenOnLoad = Config.MinHydrogenOnLoad;
+            minStoredHydrogenOnUnload = Config.MinHydrogenOnUnload;
 
             navigator = new Navigator(this);
 
@@ -204,8 +208,8 @@ namespace IngameScript
             WriteInfoLCDs($"RogueShip v{Version}", false);
             WriteInfoLCDs($"{shipId} in channel {Config.Channel}");
             WriteInfoLCDs($"{CalculateCargoPercentage():P1} cargo.");
-            if (minStoredPower > 0) WriteInfoLCDs($"Battery {CalculateBatteryPercentage():P1}.");
-            if (minStoredHydrogen > 0) WriteInfoLCDs($"Hydrogen {CalculateHydrogenPercentage():P1}.");
+            if (minStoredPowerOnLoad > 0 || minStoredPowerOnUnload > 0) WriteInfoLCDs($"Battery {CalculateBatteryPercentage():P1}.");
+            if (minStoredHydrogenOnLoad > 0 || minStoredHydrogenOnUnload > 0) WriteInfoLCDs($"Hydrogen {CalculateHydrogenPercentage():P1}.");
             WriteInfoLCDs($"{shipStatus}");
 
             if (!string.IsNullOrEmpty(argument))
@@ -391,7 +395,7 @@ namespace IngameScript
                     return;
                 }
 
-                if (IsPropulsionFilled())
+                if (IsPropulsionFilled(shipStatus))
                 {
                     SendWaitingMessage(ExchangeTasks.EndLoad);
                     monitorizePropulsion = false;
@@ -414,7 +418,7 @@ namespace IngameScript
                     return;
                 }
 
-                if (IsPropulsionFilled())
+                if (IsPropulsionFilled(shipStatus))
                 {
                     SendWaitingMessage(ExchangeTasks.EndUnload);
                     monitorizePropulsion = false;
@@ -812,22 +816,23 @@ namespace IngameScript
             antenna.Enabled = false;
         }
 
-        bool IsPropulsionFilled()
+        bool IsPropulsionFilled(ShipStatus shipStatus)
         {
-            if (!IsBatteryFilled())
+            if (!IsBatteryFilled(shipStatus))
             {
                 WriteInfoLCDs($"Battery {CalculateBatteryPercentage():P1}.");
                 return false;
             }
-            if (!IsHydrogenFilled())
+            if (!IsHydrogenFilled(shipStatus))
             {
                 WriteInfoLCDs($"Hydrogen {CalculateHydrogenPercentage():P1}.");
                 return false;
             }
             return true;
         }
-        bool IsBatteryFilled()
+        bool IsBatteryFilled(ShipStatus shipStatus)
         {
+            var minStoredPower = shipStatus == ShipStatus.Loading ? minStoredPowerOnLoad : minStoredPowerOnUnload;
             if (minStoredPower <= 0)
             {
                 return true;
@@ -836,8 +841,9 @@ namespace IngameScript
             double battery = CalculateBatteryPercentage();
             return battery >= minStoredPower;
         }
-        bool IsHydrogenFilled()
+        bool IsHydrogenFilled(ShipStatus shipStatus)
         {
+            var minStoredHydrogen = shipStatus == ShipStatus.Loading ? minStoredHydrogenOnLoad : minStoredHydrogenOnUnload;
             if (minStoredHydrogen <= 0)
             {
                 return true;
