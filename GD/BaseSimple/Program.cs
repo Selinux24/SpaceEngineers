@@ -467,14 +467,15 @@ namespace IngameScript
                     }
                 }
 
-                if (exchangeGroup.IsValid())
+                string errMsg;
+                if (exchangeGroup.IsValid(out errMsg))
                 {
                     WriteLogLCDs($"ExchangeGroup {exchangeGroup.Name} initialized.");
                     exchanges.Add(exchangeGroup);
                 }
                 else
                 {
-                    WriteLogLCDs($"ExchangeGroup {exchangeGroup.Name} is invalid.");
+                    WriteLogLCDs($"ExchangeGroup {exchangeGroup.Name} is invalid. {errMsg}");
                 }
             }
         }

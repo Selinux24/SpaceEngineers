@@ -12,7 +12,6 @@ namespace IngameScript
 
         public bool EnableLogs = true;
 
-        public readonly string WildcardShipId;
         public readonly System.Text.RegularExpressions.Regex WildcardShipInfo;
         public readonly System.Text.RegularExpressions.Regex WildcardLogLCDs;
 
@@ -38,7 +37,6 @@ namespace IngameScript
 
             EnableLogs = ReadConfig(customData, "EnableLogs", "false") == "true";
 
-            WildcardShipId = ReadConfig(customData, "WildcardShipId");
             WildcardShipInfo = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "WildcardShipInfo")}(?:\.(\d+))?\]");
             WildcardLogLCDs = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "WildcardLogLCDs")}(?:\.(\d+))?\]");
 
@@ -127,7 +125,6 @@ namespace IngameScript
                 "\n" +
                 "EnableLogs=false\n" +
                 "\n" +
-                "WildcardShipId=[shipId]\n" +
                 "WildcardShipInfo=[DOCK_INFO]\n" +
                 "WildcardLogLCDs=[DOCK_LOG]\n" +
                 "\n" +

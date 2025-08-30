@@ -9,8 +9,6 @@ namespace IngameScript
         readonly StringBuilder errors = new StringBuilder();
 
         public readonly string Channel;
-        public readonly string BaseParking;
-        public readonly bool IsRocketBase;
 
         public bool ShowExchanges = true;
         public bool ShowShips = true;
@@ -33,8 +31,6 @@ namespace IngameScript
         public Config(string customData)
         {
             Channel = ReadConfig(customData, "Channel");
-            BaseParking = ReadConfig(customData, "Parking");
-            IsRocketBase = ReadConfig(customData, "IsRocketBase").ToLower() == "true";
 
             ShowShips = ReadConfigBool(customData, "ShowShips", true);
             ShowExchanges = ReadConfigBool(customData, "ShowExchanges", true);
@@ -135,7 +131,6 @@ namespace IngameScript
         {
             return
                 "Channel=name\n" +
-                "InGravity=false\n" +
                 "\n" +
                 "ShowShips=true\n" +
                 "ShowExchanges=true\n" +

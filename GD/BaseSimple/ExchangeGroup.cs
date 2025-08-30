@@ -1,10 +1,6 @@
 ﻿using Sandbox.ModAPI.Ingame;
-using SpaceEngineers.Game.ModAPI.Ingame;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using VRage;
-using VRage.Game.ModAPI.Ingame;
 using VRageMath;
 
 namespace IngameScript
@@ -28,9 +24,21 @@ namespace IngameScript
             this.config = config;
         }
 
-        public bool IsValid()
+        public bool IsValid(out string errorMessage)
         {
-            return MainConnector != null && Camera != null;
+            if (MainConnector == null)
+            {
+                errorMessage = "No main connector";
+                return false;
+            }
+            if (Camera == null)
+            {
+                errorMessage = "No camera";
+                return false;
+            }
+
+            errorMessage = "";
+            return true;
         }
         public bool IsFree()
         {
