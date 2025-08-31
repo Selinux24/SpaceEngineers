@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "1.2";
+        const string Version = "1.3";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
@@ -378,6 +378,8 @@ namespace IngameScript
         #region MONITORS
         void MonitorizeLoad()
         {
+            string msg = null;
+
             if (shipStatus == ShipStatus.Loading)
             {
                 double capacity = CalculateCargoPercentage();
@@ -395,7 +397,7 @@ namespace IngameScript
                     return;
                 }
 
-                if (IsPropulsionFilled(shipStatus))
+                if (IsPropulsionFilled(shipStatus, out msg))
                 {
                     SendWaitingMessage(ExchangeTasks.EndLoad);
                     monitorizePropulsion = false;
@@ -418,12 +420,14 @@ namespace IngameScript
                     return;
                 }
 
-                if (IsPropulsionFilled(shipStatus))
+                if (IsPropulsionFilled(shipStatus, out msg))
                 {
                     SendWaitingMessage(ExchangeTasks.EndUnload);
                     monitorizePropulsion = false;
                 }
             }
+
+            if (!string.IsNullOrWhiteSpace(msg)) WriteInfoLCDs(msg);
         }
         #endregion
 
@@ -816,40 +820,56 @@ namespace IngameScript
             antenna.Enabled = false;
         }
 
-        bool IsPropulsionFilled(ShipStatus shipStatus)
+        bool IsPropulsionFilled(ShipStatus shipStatus, out string msg)
         {
-            if (!IsBatteryFilled(shipStatus))
+            if (!IsBatteryFilled(shipStatus, out msg))
             {
-                WriteInfoLCDs($"Battery {CalculateBatteryPercentage():P1}.");
                 return false;
             }
-            if (!IsHydrogenFilled(shipStatus))
+            if (!IsHydrogenFilled(shipStatus, out msg))
             {
-                WriteInfoLCDs($"Hydrogen {CalculateHydrogenPercentage():P1}.");
                 return false;
             }
+            msg = null;
             return true;
         }
-        bool IsBatteryFilled(ShipStatus shipStatus)
+        bool IsBatteryFilled(ShipStatus shipStatus, out string msg)
         {
             var minStoredPower = shipStatus == ShipStatus.Loading ? minStoredPowerOnLoad : minStoredPowerOnUnload;
             if (minStoredPower <= 0)
             {
+                msg = null;
                 return true;
             }
 
             double battery = CalculateBatteryPercentage();
-            return battery >= minStoredPower;
+            if (battery >= minStoredPower)
+            {
+                msg = null;
+                return true;
+            }
+
+            msg = $"Batteries at {battery:P1}, minimum required {minStoredPower:P1}.";
+            return false;
         }
-        bool IsHydrogenFilled(ShipStatus shipStatus)
+        bool IsHydrogenFilled(ShipStatus shipStatus, out string msg)
         {
             var minStoredHydrogen = shipStatus == ShipStatus.Loading ? minStoredHydrogenOnLoad : minStoredHydrogenOnUnload;
             if (minStoredHydrogen <= 0)
             {
+                msg = null;
                 return true;
             }
+
             double hydrogen = CalculateHydrogenPercentage();
-            return hydrogen >= minStoredHydrogen;
+            if (hydrogen >= minStoredHydrogen)
+            {
+                msg = null;
+                return true;
+            }
+
+            msg = $"Hydrogen at {hydrogen:P1}, minimum required {minStoredHydrogen:P1}.";
+            return false;
         }
         double CalculateCargoPercentage()
         {
@@ -975,12 +995,18 @@ namespace IngameScript
             else if (shipStatus == ShipStatus.Loading)
             {
                 double capacity = CalculateCargoPercentage();
-                return $"Loading from {GetDockedGridName()} {capacity / Config.MaxLoad:P1}...";
+                double pct = capacity / Config.MaxLoad;
+                string msg = null;
+                if (pct > 1.0) IsPropulsionFilled(shipStatus, out msg);
+                return $"Loading from {GetDockedGridName()} {pct:P1}. {msg}";
             }
             else if (shipStatus == ShipStatus.Unloading)
             {
                 double capacity = CalculateCargoPercentage();
-                return $"Unloading to {GetDockedGridName()} {1.0 - (capacity / Config.MaxLoad):P1}...";
+                double pct = 1.0 - (capacity / Config.MaxLoad);
+                string msg = null;
+                if (pct > 1.0) IsPropulsionFilled(shipStatus, out msg);
+                return $"Unloading to {GetDockedGridName()} {pct:P1}. {msg}";
             }
             else
             {

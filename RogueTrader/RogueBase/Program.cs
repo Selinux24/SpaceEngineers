@@ -11,8 +11,8 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "1.0";
-        const string Separate = "-";
+        const string Version = "1.1";
+        const string Separate = "------";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
@@ -36,7 +36,7 @@ namespace IngameScript
         bool requestExchange = true;
         DateTime lastExchangeRequest = DateTime.MinValue;
 
-        readonly TimeSpan refreshLCDsInterval = TimeSpan.FromSeconds(5);
+        bool refreshLCDs = false;
         DateTime lastRefreshLCDs = DateTime.MinValue;
 
         public Program()
@@ -115,6 +115,7 @@ namespace IngameScript
             else if (argument == "ENABLE_LOGS") EnableLogs();
             else if (argument == "ENABLE_STATUS_REQUEST") EnableStatusRequest();
             else if (argument == "ENABLE_EXCHANGE_REQUEST") EnableExchangeRequest();
+            else if (argument == "ENABLE_REFRESH_LCDS") EnableRefreshLCDs();
         }
 
         /// <summary>
@@ -174,6 +175,13 @@ namespace IngameScript
         void EnableExchangeRequest()
         {
             requestExchange = !requestExchange;
+        }
+        /// <summary>
+        /// Changes the state of the variable that controls the refresh of LCDs
+        /// </summary>
+        void EnableRefreshLCDs()
+        {
+            refreshLCDs = !refreshLCDs;
         }
         #endregion
 
@@ -248,7 +256,7 @@ namespace IngameScript
                 return;
             }
 
-            if (DateTime.Now - lastRequestStatus < TimeSpan.FromSeconds(config.RequestStatusInterval))
+            if (DateTime.Now - lastRequestStatus < config.RequestStatusInterval)
             {
                 return;
             }
@@ -277,7 +285,7 @@ namespace IngameScript
                 return;
             }
 
-            if (DateTime.Now - lastExchangeRequest < TimeSpan.FromSeconds(config.RequestReceptionInterval))
+            if (DateTime.Now - lastExchangeRequest < config.RequestReceptionInterval)
             {
                 return;
             }
@@ -292,6 +300,10 @@ namespace IngameScript
         }
         bool DoExchangeDockRequest()
         {
+            if (IsCurrentExchangeDockRequests())
+            {
+                return false;
+            }
             var exRequest = GetPendingExchangeDockRequests();
             if (exRequest.Count == 0)
             {
@@ -422,8 +434,16 @@ namespace IngameScript
 
             exchangeRequests.RemoveAll(r => r.Expired);
 
-            //Refresh LCDs every 60 seconds
-            if (DateTime.Now - lastRefreshLCDs > refreshLCDsInterval)
+            DoRefreshLCDs();
+        }
+        void DoRefreshLCDs()
+        {
+            if (!refreshLCDs)
+            {
+                return;
+            }
+
+            if (DateTime.Now - lastRefreshLCDs > config.RefreshLCDsInterval)
             {
                 RefreshLCDs();
             }
@@ -568,11 +588,15 @@ namespace IngameScript
         {
             exchangeRequests.RemoveAll(r => r.Ship == ship);
 
-            exchangeRequests.Add(new ExchangeRequest
+            exchangeRequests.Add(new ExchangeRequest(config)
             {
                 Ship = ship,
                 Task = task,
             });
+        }
+        bool IsCurrentExchangeDockRequests()
+        {
+            return exchangeRequests.Any(r => r.Doing && (r.Task == ExchangeTasks.StartLoad || r.Task == ExchangeTasks.StartUnload));
         }
         List<ExchangeRequest> GetPendingExchangeDockRequests()
         {
@@ -625,11 +649,12 @@ namespace IngameScript
                 return;
             }
 
+            var last = ships[ships.Count - 1];
             foreach (var ship in ships)
             {
                 WriteDataLCDs($"+{ship.Name} - {ship.Status}. Cargo at {ship.Cargo:P1}. Last update: {(DateTime.Now - ship.UpdateTime).TotalSeconds:F0}secs");
                 if (!string.IsNullOrWhiteSpace(ship.StatusMessage)) WriteDataLCDs(ship.StatusMessage);
-                WriteDataLCDs(Separate);
+                if (ship != last) WriteDataLCDs(Separate);
             }
 
             //Remove ships that have not been updated in a while
@@ -663,7 +688,7 @@ namespace IngameScript
             string[] storageLines = Storage.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
             if (storageLines.Length == 0) return;
 
-            ExchangeRequest.LoadListFromStorage(storageLines, exchangeRequests);
+            ExchangeRequest.LoadListFromStorage(config, storageLines, exchangeRequests);
             ExchangeGroup.LoadListFromStorage(storageLines, exchanges);
             requestStatus = Utils.ReadInt(storageLines, "RequestStatus", 1) == 1;
             requestExchange = Utils.ReadInt(storageLines, "RequestReception", 1) == 1;
