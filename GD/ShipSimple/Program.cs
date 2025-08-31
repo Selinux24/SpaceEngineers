@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "1.0";
+        const string Version = "1.1";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
@@ -34,10 +34,11 @@ namespace IngameScript
 
         readonly StringBuilder sbLog = new StringBuilder();
 
+        bool paused = false;
+        ShipStatus shipStatus = ShipStatus.Idle;
         readonly AlignData alignData;
 
-        ShipStatus shipStatus = ShipStatus.Idle;
-        bool paused = false;
+        DateTime lastDockRequest = DateTime.MinValue;
 
         readonly TimeSpan refreshLCDsInterval = TimeSpan.FromSeconds(5);
         DateTime lastRefreshLCDs = DateTime.MinValue;
@@ -97,7 +98,6 @@ namespace IngameScript
             RefreshLCDs();
 
             bl = IGC.RegisterBroadcastListener(config.Channel);
-            Echo($"Listening in channel {config.Channel}");
 
             LoadFromStorage();
 
@@ -114,6 +114,11 @@ namespace IngameScript
             WriteInfoLCDs($"SimpleShip v{Version}", false);
             WriteInfoLCDs($"{shipId} in channel {config.Channel}");
             WriteInfoLCDs($"{shipStatus}");
+            if (shipStatus == ShipStatus.WaitingDock)
+            {
+                var waitTime = DateTime.Now - lastDockRequest;
+                WriteInfoLCDs($"Waiting dock response... {waitTime.TotalSeconds:F0}s up to {config.DockRequestTimeout.TotalSeconds}s");
+            }
 
             if (!string.IsNullOrEmpty(argument))
             {
@@ -133,6 +138,12 @@ namespace IngameScript
             {
                 RefreshLCDs();
             }
+
+            if (shipStatus == ShipStatus.WaitingDock && (DateTime.Now - lastDockRequest) > config.DockRequestTimeout)
+            {
+                shipStatus = ShipStatus.Idle;
+                lastDockRequest = DateTime.MinValue;
+            }
         }
 
         #region TERMINAL COMMANDS
@@ -144,8 +155,7 @@ namespace IngameScript
             else if (argument == "PAUSE") Pause();
             else if (argument == "RESUME") Resume();
             else if (argument == "ENABLE_LOGS") EnableLogs();
-
-            else if (argument.StartsWith("REQUEST_DOCK")) RequestDock(argument);
+            else if (argument == "REQUEST_DOCK") RequestDock();
         }
 
         /// <summary>
@@ -190,20 +200,18 @@ namespace IngameScript
         /// <summary>
         /// Requests docking at a base defined in the argument.
         /// </summary>
-        void RequestDock(string argument)
+        void RequestDock()
         {
-            string[] lines = argument.Split('|');
-            var bse = Utils.ReadString(lines, "Base");
-
             List<string> parts = new List<string>()
             {
                 $"Command=REQUEST_DOCK",
-                $"To={bse}",
                 $"From={shipId}",
+                $"Position={Utils.VectorToStr(remoteDock.GetPosition())}",
             };
             BroadcastMessage(parts);
 
             shipStatus = ShipStatus.WaitingDock;
+            lastDockRequest = DateTime.Now;
         }
         #endregion
 
@@ -235,6 +243,7 @@ namespace IngameScript
                 $"To={from}",
                 $"From={shipId}",
                 $"Status={(int)shipStatus}",
+                $"Position={Utils.VectorToStr(remoteDock.GetPosition())}",
                 $"StatusMessage={PrintShipStatus()}"
             };
             BroadcastMessage(parts);
@@ -528,17 +537,17 @@ namespace IngameScript
                 return;
             }
 
-            alignData.LoadFromStorage(Utils.ReadString(storageLines, "AlignData"));
-            shipStatus = (ShipStatus)Utils.ReadInt(storageLines, "ShipStatus", (int)ShipStatus.Idle);
             paused = Utils.ReadInt(storageLines, "Paused", 0) == 1;
+            shipStatus = (ShipStatus)Utils.ReadInt(storageLines, "ShipStatus", (int)ShipStatus.Idle);
+            alignData.LoadFromStorage(Utils.ReadString(storageLines, "AlignData"));
         }
         void SaveToStorage()
         {
             List<string> parts = new List<string>
             {
-                $"AlignData={alignData.SaveToStorage()}",
-                $"ShipStatus={(int)shipStatus}",
                 $"Paused={(paused ? 1 : 0)}",
+                $"ShipStatus={(int)shipStatus}",
+                $"AlignData={alignData.SaveToStorage()}",
             };
 
             Storage = string.Join(Environment.NewLine, parts);

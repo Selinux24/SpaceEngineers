@@ -12,8 +12,8 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "1.0";
-        const string Separate = "-";
+        const string Version = "1.1";
+        const string Separate = "------";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
@@ -68,6 +68,10 @@ namespace IngameScript
 
             LoadFromStorage();
 
+            lastRequestStatus = DateTime.MinValue + TimeSpan.FromTicks(Me.GetId());
+            lastExchangeRequest = DateTime.MinValue + TimeSpan.FromTicks(Me.GetId());
+            lastRefreshLCDs = DateTime.MinValue + TimeSpan.FromTicks(Me.GetId());
+
             Runtime.UpdateFrequency = UpdateFrequency.Update100; // Ejecuta cada ~1.6s
         }
 
@@ -95,8 +99,11 @@ namespace IngameScript
             UpdateBaseState();
 
             sbData.Clear();
-            WriteDataLCDs($"SimpleBase v{Version}", true);
+            WriteDataLCDs($"SimpleBase v{Version}. {DateTime.Now:HH:mm:ss}", true);
             WriteDataLCDs($"{baseId} in channel {config.Channel}", true);
+            WriteDataLCDs($"Accepting requests up to {Utils.DistanceToStr(config.DockRequestMaxDistance)}", true);
+            WriteDataLCDs($"Next Status Request {GetNextStatusRequest():hh\\:mm\\:ss}");
+            WriteDataLCDs($"Next Exchange Request {GetNextExchangeRequest():hh\\:mm\\:ss}");
             PrintExchanges();
             PrintShipStatus();
             PrintExchangeRequests();
@@ -127,6 +134,10 @@ namespace IngameScript
                 $"From={baseId}",
             };
             BroadcastMessage(parts);
+        }
+        TimeSpan GetNextStatusRequest()
+        {
+            return lastRequestStatus + TimeSpan.FromSeconds(config.RequestStatusInterval) - DateTime.Now;
         }
         #endregion
 
@@ -199,6 +210,10 @@ namespace IngameScript
 
                 break;
             }
+        }
+        TimeSpan GetNextExchangeRequest()
+        {
+            return lastExchangeRequest + TimeSpan.FromSeconds(config.RequestReceptionInterval) - DateTime.Now;
         }
         #endregion
 
@@ -286,12 +301,13 @@ namespace IngameScript
             string[] lines = signal.Split('|');
             string command = Utils.ReadArgument(lines, "Command");
 
+            if (command == "REQUEST_DOCK") CmdRequestDock(lines);
+
             if (!IsForMe(lines)) return;
 
             if (command == "RESPONSE_STATUS") CmdResponseStatus(lines);
-
-            else if (command == "REQUEST_DOCK") CmdRequestDock(lines);
         }
+
         /// <summary>
         /// Updates the ship's status
         /// </summary>
@@ -321,6 +337,14 @@ namespace IngameScript
         void CmdRequestDock(string[] lines)
         {
             string from = Utils.ReadString(lines, "From");
+            var position = Utils.ReadVector(lines, "Position");
+
+            var dist = Vector3D.Distance(position, GetBasePosition());
+            if (dist > config.DockRequestMaxDistance)
+            {
+                WriteLogLCDs($"Dock request from {from} rejected. Distance {dist} exceeds max {Utils.DistanceToStr(config.DockRequestMaxDistance)}.");
+                return;
+            }
 
             exchangeRequests.RemoveAll(r => r.Ship == from);
 
@@ -529,6 +553,11 @@ namespace IngameScript
             return shipExchangePairs.OrderBy(pair => pair.Distance).ToList();
         }
 
+        Vector3D GetBasePosition()
+        {
+            return Me.CubeGrid.GetPosition();
+        }
+
         void PrintExchanges()
         {
             if (!config.ShowExchanges) return;
@@ -563,11 +592,12 @@ namespace IngameScript
                 return;
             }
 
+            var last = ships[ships.Count - 1];
             foreach (var ship in ships)
             {
-                WriteDataLCDs($"+{ship.Name} - {ship.Status}. Last update: {(DateTime.Now - ship.UpdateTime).TotalSeconds:F0}secs");
+                WriteDataLCDs($"+{ship.Name} - {ship.Status} at {Utils.DistanceToStr(Vector3D.Distance(ship.Position, GetBasePosition()))}. Last UDT: {(DateTime.Now - ship.UpdateTime).TotalSeconds:F0}secs");
                 if (!string.IsNullOrWhiteSpace(ship.StatusMessage)) WriteDataLCDs(ship.StatusMessage);
-                WriteDataLCDs(Separate);
+                if (ship != last) WriteDataLCDs(Separate);
             }
 
             //Remove ships that have not been updated in a while

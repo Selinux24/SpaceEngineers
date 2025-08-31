@@ -27,6 +27,8 @@ namespace IngameScript
 
         public readonly int RequestStatusInterval; // seconds, how often to request status from ships
         public readonly int RequestReceptionInterval; // seconds, how often to request receptions
+        
+        public readonly double DockRequestMaxDistance; // meters, max distance from the dock to request docking
 
         public Config(string customData)
         {
@@ -49,6 +51,8 @@ namespace IngameScript
 
             RequestStatusInterval = ReadConfigInt(customData, "RequestStatusInterval");
             RequestReceptionInterval = ReadConfigInt(customData, "RequestReceptionInterval");
+
+            DockRequestMaxDistance = ReadConfigDouble(customData, "DockRequestMaxDistance", 2000);
         }
         string ReadConfig(string customData, string name, string defaultValue = null)
         {
@@ -148,7 +152,9 @@ namespace IngameScript
                 "ExchangeOtherConnector=Output\n" +
                 "\n" +
                 "RequestStatusInterval=30\n" +
-                "RequestReceptionInterval=60\n";
+                "RequestReceptionInterval=60\n" +
+                "\n" +
+                "DockRequestMaxDistance=2000.0\n";
         }
     }
 }

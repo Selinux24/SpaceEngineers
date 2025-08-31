@@ -3,7 +3,7 @@ namespace IngameScript
 {
     enum ShipStatus
     {
-        Unknown,
+        Unknown = 0,
         Idle,
         WaitingDock,
         Docking,

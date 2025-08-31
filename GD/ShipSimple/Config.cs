@@ -31,6 +31,8 @@ namespace IngameScript
         public readonly double AlignSpeedWaypointLast = 1.0; //Maximum speed at the last waypoint
         public readonly double AlignDistanceThrWaypoints; //Approximation accuracy between waypoints
 
+        public readonly TimeSpan DockRequestTimeout = TimeSpan.FromSeconds(300); //Seconds to wait for a docking request to be accepted
+
         public Config(string customData)
         {
             Channel = Utils.ReadConfig(customData, "Channel");
@@ -55,6 +57,8 @@ namespace IngameScript
             AlignSpeedWaypoints = ReadConfigDouble(customData, "AlignSpeedWaypoints");
             AlignSpeedWaypointLast = ReadConfigDouble(customData, "AlignSpeedWaypointLast");
             AlignDistanceThrWaypoints = ReadConfigDouble(customData, "AlignDistanceThrWaypoints");
+
+            DockRequestTimeout = TimeSpan.FromSeconds(ReadConfigInt(customData, "DockRequestTimeout", 300));
         }
         string ReadConfig(string customData, string name, string defaultValue = null)
         {
@@ -142,7 +146,9 @@ namespace IngameScript
                 "AlignSpeedWaypointFirst=10.0\n" +
                 "AlignSpeedWaypoints=5.0\n" +
                 "AlignSpeedWaypointLast=1.0\n" +
-                "AlignDistanceThrWaypoints=0.5\n";
+                "AlignDistanceThrWaypoints=0.5\n" +
+                "\n" +
+                "DockRequestTimeout=300";
         }
     }
 }
