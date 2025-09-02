@@ -30,7 +30,7 @@ namespace IngameScript
             List<string> list = new List<string>();
             foreach (var r in requests)
             {
-                list.Add($"From={r.Ship}|Pending={(r.Pending ? 1 : 0)}");
+                list.Add($"From={r.Ship}|Pending={(r.Pending ? 1 : 0)}|doneTime={r.doneTime.Ticks}");
             }
 
             return new List<string>
@@ -53,6 +53,7 @@ namespace IngameScript
                 {
                     Ship = Utils.ReadString(parts, "From"),
                     Pending = Utils.ReadInt(parts, "Pending") == 1,
+                    doneTime = new DateTime(Utils.ReadLong(parts, "doneTime")),
                 };
 
                 requests.Add(exchange);

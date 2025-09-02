@@ -13,6 +13,7 @@ namespace IngameScript
         public readonly string Channel;
 
         public bool EnableLogs = true;
+        public bool EnableRefreshLCDs = false;
 
         public readonly System.Text.RegularExpressions.Regex WildcardShipInfo;
         public readonly System.Text.RegularExpressions.Regex WildcardLogLCDs;
@@ -80,6 +81,7 @@ namespace IngameScript
             Channel = Utils.ReadConfig(customData, "Channel");
 
             EnableLogs = ReadConfigBool(customData, "EnableLogs");
+            EnableRefreshLCDs = ReadConfigBool(customData, "EnableRefreshLCDs");
 
             WildcardShipInfo = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "WildcardShipInfo")}(?:\.(\d+))?\]");
             WildcardLogLCDs = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "WildcardLogLCDs")}(?:\.(\d+))?\]");
@@ -245,6 +247,7 @@ namespace IngameScript
                 "Channel=name\n" +
                 "\n" +
                 "EnableLogs=false\n" +
+                "EnableRefreshLCDs=false\n" +
                 "\n" +
                 "WildcardShipInfo=DELIVERY_INFO\n" +
                 "WildcardLogLCDs=DELIVERY_LOG\n" +

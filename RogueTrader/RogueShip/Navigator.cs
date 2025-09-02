@@ -133,15 +133,9 @@ namespace IngameScript
 
         public void Update()
         {
-            if (Task == NavigatorTasks.None)
-            {
-                return;
-            }
+            if (Task == NavigatorTasks.None) return;
 
-            if (!Tick())
-            {
-                return;
-            }
+            if (!Tick()) return;
 
             if (Task == NavigatorTasks.Approach) { MonitorizeApproach(); }
             else if (Task == NavigatorTasks.Separate) { MonitorizeSeparate(); }
@@ -149,10 +143,8 @@ namespace IngameScript
         }
         bool Tick()
         {
-            if (++tickCount < Config.NavigationTicks)
-            {
-                return false;
-            }
+            if (++tickCount < Config.NavigationTicks) return false;
+
             tickCount = 0;
             return true;
         }
@@ -182,7 +174,7 @@ namespace IngameScript
                 return;
             }
 
-            bool corrected = ship.AlignToVectors(Forward, Up, Config.GyrosThr);
+            bool corrected = AlignToVectors(Forward, Up, Config.GyrosThr);
             if (corrected)
             {
                 //Wait until aligned
@@ -213,7 +205,7 @@ namespace IngameScript
                 return;
             }
 
-            bool corrected = ship.AlignToVectors(Forward, Up, Config.GyrosThr);
+            bool corrected = AlignToVectors(Forward, Up, Config.GyrosThr);
             if (corrected)
             {
                 //Wait until aligned
@@ -316,7 +308,7 @@ namespace IngameScript
 
         void AtmNavigationAccelerate()
         {
-            ship.AlignToDirection(Landing, DirectionToWaypoint, Config.AtmNavigationAlignThr);
+            AlignToDirection(Landing, DirectionToWaypoint, Config.AtmNavigationAlignThr);
 
             if (DistanceToDestination < Config.AtmNavigationDestinationThr)
             {
@@ -338,7 +330,7 @@ namespace IngameScript
             //Accelerate
             ship.WriteInfoLCDs(GetState());
 
-            ship.ThrustToTarget(Landing, DirectionToWaypoint, Config.AtmNavigationMaxSpeed);
+            ThrustToTarget(Landing, DirectionToWaypoint, Config.AtmNavigationMaxSpeed);
         }
         void AtmNavigationDecelerate()
         {
@@ -372,7 +364,7 @@ namespace IngameScript
                 return;
             }
 
-            if (!ship.AlignToDirection(false, DirectionToWaypoint, Config.CrsNavigationAlignThr))
+            if (!AlignToDirection(false, DirectionToWaypoint, Config.CrsNavigationAlignThr))
             {
                 CrsStatus = NavigatorCrsStatus.Accelerating;
 
@@ -422,7 +414,7 @@ namespace IngameScript
             {
                 maxSpeed = Config.CrsNavigationMaxAccelerationSpeed;
             }
-            ship.ThrustToTarget(false, DirectionToWaypoint, maxSpeed);
+            ThrustToTarget(false, DirectionToWaypoint, maxSpeed);
         }
         void CrsNavigationCruise()
         {
@@ -454,7 +446,7 @@ namespace IngameScript
             ship.WriteInfoLCDs(GetState());
 
             bool inGravity = ship.IsInGravity();
-            if (inGravity || ship.AlignToDirection(false, DirectionToWaypoint, Config.CrsNavigationAlignThr))
+            if (inGravity || AlignToDirection(false, DirectionToWaypoint, Config.CrsNavigationAlignThr))
             {
                 ship.WriteInfoLCDs("Not aligned");
 
@@ -498,7 +490,7 @@ namespace IngameScript
                 ship.WriteInfoLCDs("Below the desired speed");
 
                 //Below the desired speed. Accelerate until reaching it.
-                ship.ThrustToTarget(false, DirectionToWaypoint, Config.CrsNavigationMaxCruiseSpeed);
+                ThrustToTarget(false, DirectionToWaypoint, Config.CrsNavigationMaxCruiseSpeed);
 
                 return;
             }
@@ -581,7 +573,7 @@ namespace IngameScript
             ship.WriteInfoLCDs($"Following evading route...");
             ship.WriteInfoLCDs($"Distance to waypoint {Utils.DistanceToStr(d)}");
 
-            ship.ThrustToTarget(false, Vector3D.Normalize(toTarget), maxSpeed);
+            ThrustToTarget(false, Vector3D.Normalize(toTarget), maxSpeed);
         }
         void CrsNavigationEnding()
         {
@@ -597,6 +589,73 @@ namespace IngameScript
             ship.ResetGyros();
         }
         #endregion
+
+        void ThrustToTarget(bool landing, Vector3D toTarget, double maxSpeed)
+        {
+            var velocity = landing ? ship.GetLandingLinearVelocity() : ship.GetPilotLinearVelocity();
+            double mass = ship.GetMass();
+
+            var force = Utils.CalculateThrustForce(toTarget, maxSpeed, velocity, mass);
+            ship.ApplyThrust(force);
+        }
+
+        bool AlignToDirection(bool landing, Vector3D toTarget, double thr)
+        {
+            var direction = landing ? ship.GetLandingForwardDirection() : ship.GetPilotForwardDirection();
+
+            double angle = Utils.AngleBetweenVectors(direction, toTarget);
+            ship.WriteInfoLCDs($"TGT angle: {angle:F3}");
+
+            if (angle <= thr)
+            {
+                ship.ResetGyros();
+                ship.WriteInfoLCDs("Aligned.");
+                return false;
+            }
+            ship.WriteInfoLCDs("Aligning...");
+
+            var rotationAxis = Vector3D.Cross(direction, toTarget);
+            if (rotationAxis.Length() <= 0.001) rotationAxis = new Vector3D(1, 0, 0);
+            ship.ApplyGyroOverride(rotationAxis);
+
+            return true;
+        }
+        bool AlignToVectors(Vector3D targetForward, Vector3D targetUp, double thr)
+        {
+            var shipForward = ship.GetDockingForwardDirection();
+            var shipUp = ship.GetDockingUpDirection();
+
+            double angleFW = Utils.AngleBetweenVectors(shipForward, targetForward);
+            double angleUP = Utils.AngleBetweenVectors(shipUp, targetUp);
+            ship.WriteInfoLCDs($"TGT angles: {angleFW:F3} | {angleUP:F3}");
+
+            if (angleFW <= thr && angleUP <= thr)
+            {
+                ship.ResetGyros();
+                ship.WriteInfoLCDs("Aligned.");
+                return false;
+            }
+            ship.WriteInfoLCDs("Aligning...");
+
+            bool corrected = false;
+            if (angleFW > thr)
+            {
+                var rotationAxisFW = Vector3D.Cross(shipForward, targetForward);
+                if (rotationAxisFW.Length() <= 0.001) rotationAxisFW = new Vector3D(0, 1, 0);
+                ship.ApplyGyroOverride(rotationAxisFW);
+                corrected = true;
+            }
+
+            if (angleUP > thr)
+            {
+                var rotationAxisUP = Vector3D.Cross(shipUp, targetUp);
+                if (rotationAxisUP.Length() <= 0.001) rotationAxisUP = new Vector3D(1, 0, 0);
+                ship.ApplyGyroOverride(rotationAxisUP);
+                corrected = true;
+            }
+
+            return corrected;
+        }
 
         Vector3D GetCurrentWaypoint()
         {

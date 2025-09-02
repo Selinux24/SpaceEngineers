@@ -48,7 +48,7 @@ namespace IngameScript
 
         readonly string shipId;
         internal readonly Config Config;
-       
+
         readonly StringBuilder sbLog = new StringBuilder();
 
         bool paused = false;
@@ -60,7 +60,6 @@ namespace IngameScript
         ShipStatus shipStatus = ShipStatus.Idle;
         readonly Navigator navigator;
 
-        bool refreshLCDs = false;
         DateTime lastRefreshLCDs = DateTime.MinValue;
 
         public Program()
@@ -205,12 +204,13 @@ namespace IngameScript
 
         public void Main(string argument)
         {
-            WriteInfoLCDs($"RogueShip v{Version}", false);
+            WriteInfoLCDs($"RogueShip v{Version}. {DateTime.Now:HH:mm:ss}", false);
             WriteInfoLCDs($"{shipId} in channel {Config.Channel}");
             WriteInfoLCDs($"{CalculateCargoPercentage():P1} cargo.");
             if (minStoredPowerOnLoad > 0 || minStoredPowerOnUnload > 0) WriteInfoLCDs($"Battery {CalculateBatteryPercentage():P1}.");
             if (minStoredHydrogenOnLoad > 0 || minStoredHydrogenOnUnload > 0) WriteInfoLCDs($"Hydrogen {CalculateHydrogenPercentage():P1}.");
             WriteInfoLCDs($"{shipStatus}");
+            if (Config.EnableRefreshLCDs) WriteInfoLCDs($"Next LCDs Refresh {GetNextLCDsRefresh():hh\\:mm\\:ss}");
 
             if (!string.IsNullOrEmpty(argument))
             {
@@ -297,7 +297,7 @@ namespace IngameScript
         /// </summary>
         void EnableRefreshLCDs()
         {
-            refreshLCDs = !refreshLCDs;
+            Config.EnableRefreshLCDs = !Config.EnableRefreshLCDs;
         }
         #endregion
 
@@ -449,7 +449,7 @@ namespace IngameScript
         }
         void DoRefreshLCDs()
         {
-            if (!refreshLCDs)
+            if (!Config.EnableRefreshLCDs)
             {
                 return;
             }
@@ -588,6 +588,11 @@ namespace IngameScript
             IGC.SendBroadcastMessage(Config.Channel, message);
         }
 
+        TimeSpan GetNextLCDsRefresh()
+        {
+            return lastRefreshLCDs + Config.RefreshLCDsInterval - DateTime.Now;
+        }
+
         internal void Pilot()
         {
             timerPilot?.StartCountdown();
@@ -634,14 +639,6 @@ namespace IngameScript
             return false;
         }
 
-        internal void ThrustToTarget(bool landing, Vector3D toTarget, double maxSpeed)
-        {
-            var velocity = landing ? GetLandingLinearVelocity() : GetPilotLinearVelocity();
-            double mass = GetMass();
-
-            var force = Utils.CalculateThrustForce(toTarget, maxSpeed, velocity, mass);
-            ApplyThrust(force);
-        }
         internal void ApplyThrust(Vector3D force)
         {
             foreach (var t in thrusters)
@@ -668,66 +665,6 @@ namespace IngameScript
                 t.Enabled = false;
                 t.ThrustOverridePercentage = 0;
             }
-        }
-
-        internal bool AlignToDirection(bool landing, Vector3D toTarget, double thr)
-        {
-            var remote = landing ? remoteLanding : remotePilot;
-            var direction = remote.WorldMatrix.Forward;
-
-            double angle = Utils.AngleBetweenVectors(direction, toTarget);
-            WriteInfoLCDs($"TGT angle: {angle:F3}");
-
-            if (angle <= thr)
-            {
-                ResetGyros();
-                WriteInfoLCDs("Aligned.");
-                return false;
-            }
-            WriteInfoLCDs("Aligning...");
-
-            var rotationAxis = Vector3D.Cross(direction, toTarget);
-            if (rotationAxis.Length() <= 0.001) rotationAxis = new Vector3D(1, 0, 0);
-            ApplyGyroOverride(rotationAxis);
-
-            return true;
-        }
-        internal bool AlignToVectors(Vector3D targetForward, Vector3D targetUp, double thr)
-        {
-            var shipMatrix = remoteDocking.WorldMatrix;
-            var shipForward = shipMatrix.Forward;
-            var shipUp = shipMatrix.Up;
-
-            double angleFW = Utils.AngleBetweenVectors(shipForward, targetForward);
-            double angleUP = Utils.AngleBetweenVectors(shipUp, targetUp);
-            WriteInfoLCDs($"TGT angles: {angleFW:F3} | {angleUP:F3}");
-
-            if (angleFW <= thr && angleUP <= thr)
-            {
-                ResetGyros();
-                WriteInfoLCDs("Aligned.");
-                return false;
-            }
-            WriteInfoLCDs("Aligning...");
-
-            bool corrected = false;
-            if (angleFW > thr)
-            {
-                var rotationAxisFW = Vector3D.Cross(shipForward, targetForward);
-                if (rotationAxisFW.Length() <= 0.001) rotationAxisFW = new Vector3D(0, 1, 0);
-                ApplyGyroOverride(rotationAxisFW);
-                corrected = true;
-            }
-
-            if (angleUP > thr)
-            {
-                var rotationAxisUP = Vector3D.Cross(shipUp, targetUp);
-                if (rotationAxisUP.Length() <= 0.001) rotationAxisUP = new Vector3D(1, 0, 0);
-                ApplyGyroOverride(rotationAxisUP);
-                corrected = true;
-            }
-
-            return corrected;
         }
 
         internal void ApplyGyroOverride(Vector3D axis)
@@ -778,9 +715,18 @@ namespace IngameScript
         {
             return remotePilot.GetShipVelocities().LinearVelocity;
         }
+        internal Vector3D GetPilotForwardDirection()
+        {
+            return remotePilot.WorldMatrix.Forward;
+        }
+
         internal Vector3D GetLandingLinearVelocity()
         {
             return remoteLanding.GetShipVelocities().LinearVelocity;
+        }
+        internal Vector3D GetLandingForwardDirection()
+        {
+            return remoteLanding.WorldMatrix.Forward;
         }
 
         internal bool IsConnected()
@@ -795,6 +741,14 @@ namespace IngameScript
         internal Vector3D GetDockingPosition()
         {
             return connectorA.GetPosition();
+        }
+        internal Vector3D GetDockingForwardDirection()
+        {
+            return remoteDocking.WorldMatrix.Forward;
+        }
+        internal Vector3D GetDockingUpDirection()
+        {
+            return remoteDocking.WorldMatrix.Up;
         }
         internal Vector3D GetDockingLinearVelocity()
         {

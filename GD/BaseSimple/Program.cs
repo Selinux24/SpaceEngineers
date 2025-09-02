@@ -31,13 +31,8 @@ namespace IngameScript
         readonly List<Ship> ships = new List<Ship>();
         readonly List<ExchangeRequest> exchangeRequests = new List<ExchangeRequest>();
 
-        bool requestStatus = true;
         DateTime lastRequestStatus = DateTime.MinValue;
-
-        bool requestExchange = true;
         DateTime lastExchangeRequest = DateTime.MinValue;
-
-        bool refreshLCDs = false;
         DateTime lastRefreshLCDs = DateTime.MinValue;
 
         public Program()
@@ -70,7 +65,7 @@ namespace IngameScript
             lastExchangeRequest = DateTime.MinValue + TimeSpan.FromTicks(Me.EntityId);
             lastRefreshLCDs = DateTime.MinValue + TimeSpan.FromTicks(Me.EntityId);
 
-            Runtime.UpdateFrequency = UpdateFrequency.Update100; // Ejecuta cada ~1.6s
+            Runtime.UpdateFrequency = UpdateFrequency.Update100;
         }
 
         public void Save()
@@ -100,8 +95,10 @@ namespace IngameScript
             WriteDataLCDs($"SimpleBase v{Version}. {DateTime.Now:HH:mm:ss}", true);
             WriteDataLCDs($"{baseId} in channel {config.Channel}", true);
             WriteDataLCDs($"Accepting requests up to {Utils.DistanceToStr(config.DockRequestMaxDistance)}", true);
-            WriteDataLCDs($"Next Status Request {GetNextStatusRequest():hh\\:mm\\:ss}");
-            WriteDataLCDs($"Next Exchange Request {GetNextExchangeRequest():hh\\:mm\\:ss}");
+            if (config.EnableRequestStatus) WriteDataLCDs($"Next Status Request {GetNextStatusRequest():hh\\:mm\\:ss}", true);
+            if (config.EnableRequestExchange) WriteDataLCDs($"Next Exchange Request {GetNextExchangeRequest():hh\\:mm\\:ss}", true);
+            if (config.EnableRefreshLCDs) WriteDataLCDs($"Next LCDs Refresh {GetNextLCDsRefresh():hh\\:mm\\:ss}", true);
+
             PrintExchanges();
             PrintShipStatus();
             PrintExchangeRequests();
@@ -175,21 +172,21 @@ namespace IngameScript
         /// </summary>
         void EnableStatusRequest()
         {
-            requestStatus = !requestStatus;
+            config.EnableRequestStatus = !config.EnableRequestStatus;
         }
         /// <summary>
         /// Changes the state of the variable that controls the exchange requests
         /// </summary>
         void EnableExchangeRequest()
         {
-            requestExchange = !requestExchange;
+            config.EnableRequestExchange = !config.EnableRequestExchange;
         }
         /// <summary>
         /// Changes the state of the variable that controls the refresh of LCDs
         /// </summary>
         void EnableRefreshLCDs()
         {
-            refreshLCDs = !refreshLCDs;
+            config.EnableRefreshLCDs = !config.EnableRefreshLCDs;
         }
         #endregion
 
@@ -248,7 +245,7 @@ namespace IngameScript
         /// </summary>
         void DoRequestStatus()
         {
-            if (!requestStatus)
+            if (!config.EnableRequestStatus)
             {
                 return;
             }
@@ -274,7 +271,7 @@ namespace IngameScript
         /// </summary>
         void DoRequestExchange()
         {
-            if (!requestExchange) return;
+            if (!config.EnableRequestExchange) return;
 
             if (DateTime.Now - lastExchangeRequest < config.RequestReceptionInterval) return;
             lastExchangeRequest = DateTime.Now;
@@ -345,7 +342,7 @@ namespace IngameScript
         }
         void DoRefreshLCDs()
         {
-            if (!refreshLCDs)
+            if (!config.EnableRefreshLCDs)
             {
                 return;
             }
@@ -559,6 +556,11 @@ namespace IngameScript
             return shipExchangePairs.OrderBy(pair => pair.Distance).ToList();
         }
 
+        TimeSpan GetNextLCDsRefresh()
+        {
+            return lastRefreshLCDs + config.RefreshLCDsInterval - DateTime.Now;
+        }
+
         void PrintExchanges()
         {
             if (!config.ShowExchanges) return;
@@ -634,16 +636,12 @@ namespace IngameScript
 
             ExchangeRequest.LoadListFromStorage(config, storageLines, exchangeRequests);
             ExchangeGroup.LoadListFromStorage(storageLines, exchanges);
-            requestStatus = Utils.ReadInt(storageLines, "RequestStatus", 1) == 1;
-            requestExchange = Utils.ReadInt(storageLines, "RequestReception", 1) == 1;
         }
         void SaveToStorage()
         {
             List<string> parts = new List<string>();
             parts.AddRange(ExchangeRequest.SaveListToStorage(exchangeRequests));
             parts.AddRange(ExchangeGroup.SaveListToStorage(exchanges));
-            parts.Add($"RequestStatus={(requestStatus ? 1 : 0)}");
-            parts.Add($"RequestReception={(requestExchange ? 1 : 0)}");
 
             Storage = string.Join(Environment.NewLine, parts);
         }

@@ -24,26 +24,5 @@ namespace IngameScript
             ToUnloadBaseWaypoints = new List<Vector3D>();
             if (toUnloadBaseWaypoints != null) ToUnloadBaseWaypoints.AddRange(toUnloadBaseWaypoints);
         }
-
-        public List<Vector3D> GetLoadWaypoints(Vector3D position)
-        {
-            List<Vector3D> waypoints = new List<Vector3D>
-            {
-                position
-            };
-            waypoints.AddRange(ToLoadBaseWaypoints);
-
-            return waypoints;
-        }
-        public List<Vector3D> GetUnLoadWaypoints(Vector3D position)
-        {
-            List<Vector3D> waypoints = new List<Vector3D>
-            {
-                position
-            };
-            waypoints.AddRange(ToUnloadBaseWaypoints);
-
-            return waypoints;
-        }
     }
 }

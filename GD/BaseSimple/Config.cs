@@ -13,7 +13,11 @@ namespace IngameScript
         public bool ShowExchanges = true;
         public bool ShowShips = true;
         public bool ShowExchangeRequests = true;
+
         public bool EnableLogs = false;
+        public bool EnableRequestStatus = true;
+        public bool EnableRequestExchange = true;
+        public bool EnableRefreshLCDs = false;
 
         public readonly System.Text.RegularExpressions.Regex DataLCDs;
         public readonly System.Text.RegularExpressions.Regex LogLCDs;
@@ -39,7 +43,11 @@ namespace IngameScript
             ShowShips = ReadConfigBool(customData, "ShowShips", true);
             ShowExchanges = ReadConfigBool(customData, "ShowExchanges", true);
             ShowExchangeRequests = ReadConfigBool(customData, "ShowExchangeRequests", true);
+
             EnableLogs = ReadConfigBool(customData, "EnableLogs", false);
+            EnableRequestStatus = ReadConfigBool(customData, "EnableRequestStatus", true);
+            EnableRequestExchange = ReadConfigBool(customData, "EnableRequestExchange", true);
+            EnableRefreshLCDs = ReadConfigBool(customData, "EnableRefreshLCDs", false);
 
             DataLCDs = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "DataLCDs")}(?:\.(\d+))?\]");
             LogLCDs = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "LogLCDs")}(?:\.(\d+))?\]");
@@ -143,7 +151,11 @@ namespace IngameScript
                 "ShowShips=true\n" +
                 "ShowExchanges=true\n" +
                 "ShowExchangeRequests=true\n" +
+                "\n" +
                 "EnableLogs=false\n" +
+                "EnableRequestStatus=true\n" +
+                "EnableRequestExchange=true\n" +
+                "EnableRefreshLCDs=false\n" +
                 "\n" +
                 "DataLCDs=DOCK_DATA\n" +
                 "LogLCDs=DOCK_LOG\n" +

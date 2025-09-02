@@ -1,4 +1,5 @@
-﻿using Sandbox.ModAPI.Ingame;
+﻿using Sandbox.Engine.Utils;
+using Sandbox.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
 using System;
 using System.Collections.Generic;
@@ -30,7 +31,7 @@ namespace IngameScript
         #endregion
 
         readonly string shipId;
-        readonly Config config;
+        internal readonly Config Config;
 
         readonly StringBuilder sbLog = new StringBuilder();
 
@@ -39,8 +40,6 @@ namespace IngameScript
         readonly AlignData alignData;
 
         DateTime lastDockRequest = DateTime.MinValue;
-
-        bool refreshLCDs = false;
         DateTime lastRefreshLCDs = DateTime.MinValue;
 
         public Program()
@@ -54,31 +53,31 @@ namespace IngameScript
             }
 
             shipId = Me.CubeGrid.CustomName;
-            config = new Config(Me.CustomData);
-            if (!config.IsValid())
+            Config = new Config(Me.CustomData);
+            if (!Config.IsValid())
             {
-                Echo(config.GetErrors());
+                Echo(Config.GetErrors());
                 return;
             }
 
-            alignData = new AlignData(config);
+            alignData = new AlignData(this);
 
-            remoteDock = GetBlockWithName<IMyRemoteControl>(config.ShipRemoteControlDock);
+            remoteDock = GetBlockWithName<IMyRemoteControl>(Config.ShipRemoteControlDock);
             if (remoteDock == null)
             {
-                Echo($"Remote Control '{config.ShipRemoteControlDock}' not found.");
+                Echo($"Remote Control '{Config.ShipRemoteControlDock}' not found.");
                 return;
             }
-            connectorDock = GetBlockWithName<IMyShipConnector>(config.ShipConnectorDock);
+            connectorDock = GetBlockWithName<IMyShipConnector>(Config.ShipConnectorDock);
             if (connectorDock == null)
             {
-                Echo($"Connector '{config.ShipConnectorDock}' not found.");
+                Echo($"Connector '{Config.ShipConnectorDock}' not found.");
                 return;
             }
-            timerDock = GetBlockWithName<IMyTimerBlock>(config.ShipTimerDock);
+            timerDock = GetBlockWithName<IMyTimerBlock>(Config.ShipTimerDock);
             if (timerDock == null)
             {
-                Echo($"Timer '{config.ShipTimerDock}' not found.");
+                Echo($"Timer '{Config.ShipTimerDock}' not found.");
                 return;
             }
 
@@ -97,7 +96,7 @@ namespace IngameScript
 
             RefreshLCDs();
 
-            bl = IGC.RegisterBroadcastListener(config.Channel);
+            bl = IGC.RegisterBroadcastListener(Config.Channel);
 
             LoadFromStorage();
 
@@ -111,14 +110,15 @@ namespace IngameScript
 
         public void Main(string argument)
         {
-            WriteInfoLCDs($"SimpleShip v{Version}", false);
-            WriteInfoLCDs($"{shipId} in channel {config.Channel}");
+            WriteInfoLCDs($"SimpleShip v{Version}. {DateTime.Now:HH:mm:ss}", false);
+            WriteInfoLCDs($"{shipId} in channel {Config.Channel}");
             WriteInfoLCDs($"{shipStatus}");
             if (shipStatus == ShipStatus.WaitingDock)
             {
                 var waitTime = DateTime.Now - lastDockRequest;
-                WriteInfoLCDs($"Waiting dock response... {waitTime.TotalSeconds:F0}s up to {config.DockRequestTimeout.TotalSeconds}s");
+                WriteInfoLCDs($"Waiting dock response... {waitTime.TotalSeconds:F0}s up to {Config.DockRequestTimeout.TotalSeconds}s");
             }
+            if (Config.EnableRefreshLCDs) WriteInfoLCDs($"Next LCDs Refresh {GetNextLCDsRefresh():hh\\:mm\\:ss}");
 
             if (!string.IsNullOrEmpty(argument))
             {
@@ -132,7 +132,7 @@ namespace IngameScript
                 ParseMessage(message.Data.ToString());
             }
 
-            DoAlign();
+            if (DoPause()) return;
 
             UpdateShipStatus();
         }
@@ -148,7 +148,7 @@ namespace IngameScript
 
             else if (argument == "ENABLE_LOGS") EnableLogs();
             else if (argument == "ENABLE_REFRESH_LCDS") EnableRefreshLCDs();
-         
+
             else if (argument == "REQUEST_DOCK") RequestDock();
         }
 
@@ -188,14 +188,14 @@ namespace IngameScript
         /// </summary>
         void EnableLogs()
         {
-            config.EnableLogs = !config.EnableLogs;
+            Config.EnableLogs = !Config.EnableLogs;
         }
         /// <summary>
         /// Changes the state of the variable that controls the refresh of LCDs
         /// </summary>
         void EnableRefreshLCDs()
         {
-            refreshLCDs = !refreshLCDs;
+            Config.EnableRefreshLCDs = !Config.EnableRefreshLCDs;
         }
         /// <summary>
         /// Requests docking at a base defined in the argument.
@@ -260,78 +260,12 @@ namespace IngameScript
         }
         #endregion
 
-        #region ALIGN
-        void DoAlign()
-        {
-            if (!alignData.HasTarget)
-            {
-                return;
-            }
-
-            if (!alignData.Tick())
-            {
-                return;
-            }
-
-            MonitorizeAlign();
-        }
-        void MonitorizeAlign()
-        {
-            if (alignData.CurrentTarget >= alignData.Waypoints.Count)
-            {
-                alignData.Clear();
-                ResetGyros();
-                ResetThrust();
-                timerDock.StartCountdown();
-                shipStatus = ShipStatus.Idle;
-                return;
-            }
-
-            if (connectorDock.Status == MyShipConnectorStatus.Connected)
-            {
-                return;
-            }
-
-            if (DoPause()) return;
-
-            bool corrected = AlignToVectors(alignData.TargetForward, alignData.TargetUp, config.GyrosThr);
-            if (corrected)
-            {
-                //Wait until aligned
-                ResetThrust();
-                return;
-            }
-
-            alignData.UpdatePosition(connectorDock.GetPosition());
-
-            var currentVelocity = remoteDock.GetShipVelocities().LinearVelocity;
-            double mass = remoteDock.CalculateShipMass().TotalMass;
-
-            NavigateWaypoints(currentVelocity, mass);
-        }
-        void NavigateWaypoints(Vector3D currentVelocity, double mass)
-        {
-            WriteInfoLCDs(alignData.GetAlignState());
-
-            var distance = alignData.Distance;
-            if (distance < config.AlignDistanceThrWaypoints)
-            {
-                alignData.Next();
-                ResetThrust();
-                return;
-            }
-
-            double desiredSpeed = alignData.CalculateDesiredSpeed(distance);
-            var neededForce = Utils.CalculateThrustForce(alignData.ToTarget, desiredSpeed, currentVelocity, mass);
-
-            ApplyThrust(neededForce);
-        }
-        #endregion
-
         #region UPDATE SHIP STATUS
         void UpdateShipStatus()
         {
-            if (shipStatus == ShipStatus.WaitingDock && (DateTime.Now - lastDockRequest) > config.DockRequestTimeout)
+            alignData.Update();
+
+            if (shipStatus == ShipStatus.WaitingDock && (DateTime.Now - lastDockRequest) > Config.DockRequestTimeout)
             {
                 shipStatus = ShipStatus.Idle;
                 lastDockRequest = DateTime.MinValue;
@@ -341,12 +275,12 @@ namespace IngameScript
         }
         void DoRefreshLCDs()
         {
-            if (!refreshLCDs)
+            if (!Config.EnableRefreshLCDs)
             {
                 return;
             }
 
-            if (DateTime.Now - lastRefreshLCDs > config.RefreshLCDsInterval)
+            if (DateTime.Now - lastRefreshLCDs > Config.RefreshLCDsInterval)
             {
                 RefreshLCDs();
             }
@@ -354,16 +288,16 @@ namespace IngameScript
         void RefreshLCDs()
         {
             infoLCDs.Clear();
-            var info = GetBlocksOfType<IMyTextPanel>(config.WildcardShipInfo);
-            var infoCps = GetBlocksOfType<IMyCockpit>(config.WildcardShipInfo).Where(c => config.WildcardShipInfo.Match(c.CustomName).Groups[1].Success);
+            var info = GetBlocksOfType<IMyTextPanel>(Config.WildcardShipInfo);
+            var infoCps = GetBlocksOfType<IMyCockpit>(Config.WildcardShipInfo).Where(c => Config.WildcardShipInfo.Match(c.CustomName).Groups[1].Success);
             infoLCDs.AddRange(info);
-            infoLCDs.AddRange(infoCps.Select(c => c.GetSurface(int.Parse(config.WildcardShipInfo.Match(c.CustomName).Groups[1].Value))));
+            infoLCDs.AddRange(infoCps.Select(c => c.GetSurface(int.Parse(Config.WildcardShipInfo.Match(c.CustomName).Groups[1].Value))));
 
             logLCDs.Clear();
-            var log = GetBlocksOfType<IMyTextPanel>(config.WildcardLogLCDs);
-            var logCps = GetBlocksOfType<IMyCockpit>(config.WildcardLogLCDs).Where(c => config.WildcardLogLCDs.Match(c.CustomName).Groups[1].Success);
+            var log = GetBlocksOfType<IMyTextPanel>(Config.WildcardLogLCDs);
+            var logCps = GetBlocksOfType<IMyCockpit>(Config.WildcardLogLCDs).Where(c => Config.WildcardLogLCDs.Match(c.CustomName).Groups[1].Success);
             logLCDs.AddRange(log.Select(l => new TextPanelDesc(l, l)));
-            logLCDs.AddRange(logCps.Select(c => new TextPanelDesc(c, c.GetSurface(int.Parse(config.WildcardLogLCDs.Match(c.CustomName).Groups[1].Value)))));
+            logLCDs.AddRange(logCps.Select(c => new TextPanelDesc(c, c.GetSurface(int.Parse(Config.WildcardLogLCDs.Match(c.CustomName).Groups[1].Value)))));
 
             lastRefreshLCDs = DateTime.Now;
         }
@@ -408,7 +342,7 @@ namespace IngameScript
             return true;
         }
 
-        void ApplyThrust(Vector3D force)
+        internal void ApplyThrust(Vector3D force)
         {
             foreach (var t in thrusters)
             {
@@ -419,7 +353,7 @@ namespace IngameScript
                 t.ThrustOverridePercentage = alignment > 0 ? (float)Math.Min(alignment / t.MaxEffectiveThrust, 1f) : 0f;
             }
         }
-        void ResetThrust()
+        internal void ResetThrust()
         {
             foreach (var t in thrusters)
             {
@@ -428,56 +362,19 @@ namespace IngameScript
             }
         }
 
-        bool AlignToVectors(Vector3D targetForward, Vector3D targetUp, double thr)
-        {
-            var shipMatrix = remoteDock.WorldMatrix;
-            var shipForward = shipMatrix.Forward;
-            var shipUp = shipMatrix.Up;
-
-            double angleFW = Utils.AngleBetweenVectors(shipForward, targetForward);
-            double angleUP = Utils.AngleBetweenVectors(shipUp, targetUp);
-            WriteInfoLCDs($"Target angles: {angleFW:F2} | {angleUP:F2}");
-
-            if (angleFW <= thr && angleUP <= thr)
-            {
-                ResetGyros();
-                WriteInfoLCDs("Aligned.");
-                return false;
-            }
-            WriteInfoLCDs("Aligning...");
-
-            bool corrected = false;
-            if (angleFW > thr)
-            {
-                var rotationAxisFW = Vector3D.Cross(shipForward, targetForward);
-                if (rotationAxisFW.Length() <= 0.001) rotationAxisFW = new Vector3D(0, 1, 0);
-                ApplyGyroOverride(rotationAxisFW);
-                corrected = true;
-            }
-
-            if (angleUP > thr)
-            {
-                var rotationAxisUP = Vector3D.Cross(shipUp, targetUp);
-                if (rotationAxisUP.Length() <= 0.001) rotationAxisUP = new Vector3D(1, 0, 0);
-                ApplyGyroOverride(rotationAxisUP);
-                corrected = true;
-            }
-
-            return corrected;
-        }
-        void ApplyGyroOverride(Vector3D axis)
+        internal void ApplyGyroOverride(Vector3D axis)
         {
             foreach (var gyro in gyros)
             {
                 var localAxis = Vector3D.TransformNormal(axis, MatrixD.Transpose(gyro.WorldMatrix));
-                var gyroRot = localAxis * -config.GyrosSpeed;
+                var gyroRot = localAxis * -Config.GyrosSpeed;
                 gyro.GyroOverride = true;
                 gyro.Pitch = (float)gyroRot.X;
                 gyro.Yaw = (float)gyroRot.Y;
                 gyro.Roll = (float)gyroRot.Z;
             }
         }
-        void ResetGyros()
+        internal void ResetGyros()
         {
             foreach (var gyro in gyros)
             {
@@ -486,6 +383,41 @@ namespace IngameScript
                 gyro.Yaw = 0;
                 gyro.Roll = 0;
             }
+        }
+
+        internal Vector3D GetVelocity()
+        {
+            return remoteDock.GetShipVelocities().LinearVelocity;
+        }
+        internal double GetMass()
+        {
+            return remoteDock.CalculateShipMass().TotalMass;
+        }
+        internal Vector3D GetDockPosition()
+        {
+            return connectorDock.GetPosition();
+        }
+        internal Vector3D GetDockingForwardDirection()
+        {
+            return remoteDock.WorldMatrix.Forward;
+        }
+        internal Vector3D GetDockingUpDirection()
+        {
+            return remoteDock.WorldMatrix.Up;
+        }
+        internal bool IsDocked()
+        {
+            return connectorDock.Status == MyShipConnectorStatus.Connected;
+        }
+        internal void Dock()
+        {
+            timerDock.StartCountdown();
+            shipStatus = ShipStatus.Idle;
+        }
+
+        TimeSpan GetNextLCDsRefresh()
+        {
+            return lastRefreshLCDs + Config.RefreshLCDsInterval - DateTime.Now;
         }
 
         string PrintShipStatus()
@@ -506,7 +438,7 @@ namespace IngameScript
             sb.AppendLine(alignData.GetAlignState());
         }
 
-        void WriteInfoLCDs(string text, bool append = true)
+        internal void WriteInfoLCDs(string text, bool append = true)
         {
             Echo(text);
 
@@ -516,9 +448,9 @@ namespace IngameScript
                 lcd.WriteText(text + Environment.NewLine, append);
             }
         }
-        void WriteLogLCDs(string text)
+        internal void WriteLogLCDs(string text)
         {
-            if (!config.EnableLogs)
+            if (!Config.EnableLogs)
             {
                 return;
             }
@@ -539,7 +471,7 @@ namespace IngameScript
 
             WriteLogLCDs($"BroadcastMessage: {message}");
 
-            IGC.SendBroadcastMessage(config.Channel, message);
+            IGC.SendBroadcastMessage(Config.Channel, message);
         }
         #endregion
 
