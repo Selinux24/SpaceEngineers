@@ -24,10 +24,12 @@ namespace IngameScript
         public readonly System.Text.RegularExpressions.Regex ExchangesRegex;
         public readonly string ExchangeMainConnector;
         public readonly string ExchangeOtherConnector;
+        public readonly TimeSpan ExchangeRequestTimeOut;
 
-        public readonly int RequestStatusInterval; // seconds, how often to request status from ships
-        public readonly int RequestReceptionInterval; // seconds, how often to request receptions
-        
+        public readonly TimeSpan RequestStatusInterval; // seconds, how often to request status from ships
+        public readonly TimeSpan RequestReceptionInterval; // seconds, how often to request receptions
+        public readonly TimeSpan RefreshLCDsInterval; // seconds, how often to refresh LCDs
+
         public readonly double DockRequestMaxDistance; // meters, max distance from the dock to request docking
 
         public Config(string customData)
@@ -48,9 +50,11 @@ namespace IngameScript
             ExchangesRegex = new System.Text.RegularExpressions.Regex(ReadConfig(customData, "ExchangeGroupName"));
             ExchangeMainConnector = ReadConfig(customData, "ExchangeMainConnector");
             ExchangeOtherConnector = ReadConfig(customData, "ExchangeOtherConnector");
+            ExchangeRequestTimeOut = TimeSpan.FromSeconds(ReadConfigInt(customData, "ExchangeRequestTimeOut"));
 
-            RequestStatusInterval = ReadConfigInt(customData, "RequestStatusInterval");
-            RequestReceptionInterval = ReadConfigInt(customData, "RequestReceptionInterval");
+            RequestStatusInterval = TimeSpan.FromSeconds(ReadConfigInt(customData, "RequestStatusInterval"));
+            RequestReceptionInterval = TimeSpan.FromSeconds(ReadConfigInt(customData, "RequestReceptionInterval"));
+            RefreshLCDsInterval = TimeSpan.FromSeconds(ReadConfigInt(customData, "RefreshLCDsInterval", 10));
 
             DockRequestMaxDistance = ReadConfigDouble(customData, "DockRequestMaxDistance", 2000);
         }
@@ -150,9 +154,11 @@ namespace IngameScript
                 $"ExchangeGroupName={@"GR_\w+"}\n" +
                 "ExchangeMainConnector=Input\n" +
                 "ExchangeOtherConnector=Output\n" +
+                "ExchangeRequestTimeOut=300\n" +
                 "\n" +
                 "RequestStatusInterval=30\n" +
                 "RequestReceptionInterval=60\n" +
+                "RefreshLCDsInterval=10\n" +
                 "\n" +
                 "DockRequestMaxDistance=2000.0\n";
         }

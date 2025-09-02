@@ -12,7 +12,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "1.1";
+        const string Version = "1.2";
         const string Separate = "------";
 
         #region Blocks
@@ -37,7 +37,7 @@ namespace IngameScript
         bool requestExchange = true;
         DateTime lastExchangeRequest = DateTime.MinValue;
 
-        readonly TimeSpan refreshLCDsInterval = TimeSpan.FromSeconds(5);
+        bool refreshLCDs = false;
         DateTime lastRefreshLCDs = DateTime.MinValue;
 
         public Program()
@@ -62,15 +62,13 @@ namespace IngameScript
 
             InitializeExchangeGroups();
 
-            WriteLCDs("[baseId]", baseId);
-
             bl = IGC.RegisterBroadcastListener(config.Channel);
 
             LoadFromStorage();
 
-            lastRequestStatus = DateTime.MinValue + TimeSpan.FromTicks(Me.GetId());
-            lastExchangeRequest = DateTime.MinValue + TimeSpan.FromTicks(Me.GetId());
-            lastRefreshLCDs = DateTime.MinValue + TimeSpan.FromTicks(Me.GetId());
+            lastRequestStatus = DateTime.MinValue + TimeSpan.FromTicks(Me.EntityId);
+            lastExchangeRequest = DateTime.MinValue + TimeSpan.FromTicks(Me.EntityId);
+            lastRefreshLCDs = DateTime.MinValue + TimeSpan.FromTicks(Me.EntityId);
 
             Runtime.UpdateFrequency = UpdateFrequency.Update100; // Ejecuta cada ~1.6s
         }
@@ -111,112 +109,6 @@ namespace IngameScript
             FlushLogLCDs();
         }
 
-        #region STATUS
-        /// <summary>
-        /// Requests status from all ships
-        /// </summary>
-        void DoRequestStatus()
-        {
-            if (!requestStatus)
-            {
-                return;
-            }
-
-            if (DateTime.Now - lastRequestStatus < TimeSpan.FromSeconds(config.RequestStatusInterval))
-            {
-                return;
-            }
-            lastRequestStatus = DateTime.Now;
-
-            List<string> parts = new List<string>()
-            {
-                $"Command=REQUEST_STATUS",
-                $"From={baseId}",
-            };
-            BroadcastMessage(parts);
-        }
-        TimeSpan GetNextStatusRequest()
-        {
-            return lastRequestStatus + TimeSpan.FromSeconds(config.RequestStatusInterval) - DateTime.Now;
-        }
-        #endregion
-
-        #region EXCHANGE REQUEST
-        /// <summary>
-        /// Base reviews exchange requests. It searches for free connectors and gives a ship the exchange command on the specified connector.
-        /// </summary>
-        void DoRequestExchange()
-        {
-            if (!requestExchange)
-            {
-                return;
-            }
-
-            if (DateTime.Now - lastExchangeRequest < TimeSpan.FromSeconds(config.RequestReceptionInterval))
-            {
-                return;
-            }
-            lastExchangeRequest = DateTime.Now;
-
-            var exRequest = GetPendingExchangeRequests();
-            if (exRequest.Count == 0)
-            {
-                return;
-            }
-            var freeExchanges = GetFreeExchanges();
-            if (freeExchanges.Count == 0)
-            {
-                return;
-            }
-            var waitingShips = GetWaitingShips();
-            if (waitingShips.Count == 0)
-            {
-                DoRequestStatus();
-                return;
-            }
-            WriteLogLCDs($"Exchange requests: {exRequest.Count}; Free exchanges: {freeExchanges.Count}; Free ships: {waitingShips.Count}");
-
-            var shipExchangePairs = GetNearestShipsFromExchanges(waitingShips, freeExchanges);
-            if (shipExchangePairs.Count == 0)
-            {
-                return;
-            }
-
-            foreach (var request in exRequest)
-            {
-                var pair = shipExchangePairs.FirstOrDefault(s => s.Ship.Name == request.Ship);
-                if (pair == null)
-                {
-                    continue;
-                }
-
-                var exchange = pair.Exchange;
-
-                request.SetDone();
-                exchange.DockRequest(request.Ship);
-
-                List<string> parts = new List<string>()
-                {
-                    $"Command=DOCK",
-                    $"To={request.Ship}",
-                    $"From={baseId}",
-
-                    $"Exchange={exchange.Name}",
-                    $"Forward={Utils.VectorToStr(exchange.Forward)}",
-                    $"Up={Utils.VectorToStr(exchange.Up)}",
-                    $"Waypoints={Utils.VectorListToStr(exchange.CalculateRouteToConnector())}",
-                };
-                BroadcastMessage(parts);
-
-                break;
-            }
-        }
-        TimeSpan GetNextExchangeRequest()
-        {
-            return lastExchangeRequest + TimeSpan.FromSeconds(config.RequestReceptionInterval) - DateTime.Now;
-        }
-        #endregion
-
         #region TERMINAL COMMANDS
         void ParseTerminalMessage(string argument)
         {
@@ -229,10 +121,11 @@ namespace IngameScript
             else if (argument == "LIST_EXCHANGE_REQUESTS") ListExchangeRequests();
 
             else if (argument == "ENABLE_LOGS") EnableLogs();
-
             else if (argument == "ENABLE_STATUS_REQUEST") EnableStatusRequest();
             else if (argument == "ENABLE_EXCHANGE_REQUEST") EnableExchangeRequest();
+            else if (argument == "ENABLE_REFRESH_LCDS") EnableRefreshLCDs();
         }
+
         /// <summary>
         /// Resets the state
         /// </summary>
@@ -291,6 +184,13 @@ namespace IngameScript
         {
             requestExchange = !requestExchange;
         }
+        /// <summary>
+        /// Changes the state of the variable that controls the refresh of LCDs
+        /// </summary>
+        void EnableRefreshLCDs()
+        {
+            refreshLCDs = !refreshLCDs;
+        }
         #endregion
 
         #region IGC COMMANDS
@@ -330,7 +230,6 @@ namespace IngameScript
             ship.StatusMessage = statusMessage;
             ship.UpdateTime = DateTime.Now;
         }
-
         /// <summary>
         /// Appends a dock request from a ship
         /// </summary>
@@ -339,19 +238,94 @@ namespace IngameScript
             string from = Utils.ReadString(lines, "From");
             var position = Utils.ReadVector(lines, "Position");
 
-            var dist = Vector3D.Distance(position, GetBasePosition());
-            if (dist > config.DockRequestMaxDistance)
+            EnqueueExchangeRequest(from, position);
+        }
+        #endregion
+
+        #region STATUS
+        /// <summary>
+        /// Requests status from all ships
+        /// </summary>
+        void DoRequestStatus()
+        {
+            if (!requestStatus)
             {
-                WriteLogLCDs($"Dock request from {from} rejected. Distance {dist} exceeds max {Utils.DistanceToStr(config.DockRequestMaxDistance)}.");
                 return;
             }
 
-            exchangeRequests.RemoveAll(r => r.Ship == from);
-
-            exchangeRequests.Add(new ExchangeRequest
+            if (DateTime.Now - lastRequestStatus < config.RequestStatusInterval)
             {
-                Ship = from,
-            });
+                return;
+            }
+            lastRequestStatus = DateTime.Now;
+
+            List<string> parts = new List<string>()
+            {
+                $"Command=REQUEST_STATUS",
+                $"From={baseId}",
+            };
+            BroadcastMessage(parts);
+        }
+        #endregion
+
+        #region EXCHANGE REQUEST
+        /// <summary>
+        /// Base reviews exchange requests. It searches for free connectors and gives a ship the exchange command on the specified connector.
+        /// </summary>
+        void DoRequestExchange()
+        {
+            if (!requestExchange) return;
+
+            if (DateTime.Now - lastExchangeRequest < config.RequestReceptionInterval) return;
+            lastExchangeRequest = DateTime.Now;
+
+            if (IsCurrentExchangeDockRequests()) return;
+
+            var exRequest = GetPendingExchangeRequests();
+            if (exRequest.Count == 0) return;
+
+            var freeExchanges = GetFreeExchanges();
+            if (freeExchanges.Count == 0) return;
+
+            var waitingShips = GetWaitingShips();
+            if (waitingShips.Count == 0)
+            {
+                DoRequestStatus();
+                return;
+            }
+            WriteLogLCDs($"Exchange requests: {exRequest.Count}; Free exchanges: {freeExchanges.Count}; Free ships: {waitingShips.Count}");
+
+            var shipExchangePairs = GetNearestShipsFromExchanges(waitingShips, freeExchanges);
+            if (shipExchangePairs.Count == 0) return;
+
+            foreach (var request in exRequest)
+            {
+                var pair = shipExchangePairs.FirstOrDefault(s => s.Ship.Name == request.Ship);
+                if (pair == null)
+                {
+                    continue;
+                }
+
+                var exchange = pair.Exchange;
+
+                request.SetDone();
+                exchange.DockRequest(request.Ship);
+
+                List<string> parts = new List<string>()
+                {
+                    $"Command=DOCK",
+                    $"To={request.Ship}",
+                    $"From={baseId}",
+
+                    $"Exchange={exchange.Name}",
+                    $"Forward={Utils.VectorToStr(exchange.Forward)}",
+                    $"Up={Utils.VectorToStr(exchange.Up)}",
+                    $"Waypoints={Utils.VectorListToStr(exchange.CalculateRouteToConnector())}",
+                };
+                BroadcastMessage(parts);
+
+                break;
+            }
         }
         #endregion
 
@@ -367,7 +341,16 @@ namespace IngameScript
 
             exchangeRequests.RemoveAll(r => r.Expired);
 
-            if (DateTime.Now - lastRefreshLCDs > refreshLCDsInterval)
+            DoRefreshLCDs();
+        }
+        void DoRefreshLCDs()
+        {
+            if (!refreshLCDs)
+            {
+                return;
+            }
+
+            if (DateTime.Now - lastRefreshLCDs > config.RefreshLCDsInterval)
             {
                 RefreshLCDs();
             }
@@ -398,16 +381,11 @@ namespace IngameScript
             return blocks;
         }
 
-        void WriteLCDs(string wildcard, string text)
+        Vector3D GetBasePosition()
         {
-            List<IMyTextPanel> lcds = new List<IMyTextPanel>();
-            GridTerminalSystem.GetBlocksOfType(lcds, lcd => lcd.CubeGrid == Me.CubeGrid && lcd.CustomName.Contains(wildcard));
-            foreach (var lcd in lcds)
-            {
-                lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-                lcd.WriteText(text, false);
-            }
+            return Me.CubeGrid.GetPosition();
         }
+
         void WriteDataLCDs(string text, bool echo = false)
         {
             if (echo)
@@ -452,6 +430,16 @@ namespace IngameScript
             WriteLogLCDs($"SendIGCMessage: {message}");
 
             IGC.SendBroadcastMessage(config.Channel, message);
+        }
+
+        bool IsForMe(string[] lines)
+        {
+            return Utils.ReadString(lines, "To") == baseId;
+        }
+
+        TimeSpan GetNextStatusRequest()
+        {
+            return lastRequestStatus + config.RequestStatusInterval - DateTime.Now;
         }
 
         void InitializeExchangeGroups()
@@ -503,12 +491,30 @@ namespace IngameScript
                 }
             }
         }
-
-        bool IsForMe(string[] lines)
+        void EnqueueExchangeRequest(string ship, Vector3D position)
         {
-            return Utils.ReadString(lines, "To") == baseId;
-        }
+            var dist = Vector3D.Distance(position, GetBasePosition());
+            if (dist > config.DockRequestMaxDistance)
+            {
+                WriteLogLCDs($"Dock request from {ship} rejected. Distance {dist} exceeds max {Utils.DistanceToStr(config.DockRequestMaxDistance)}.");
+                return;
+            }
 
+            exchangeRequests.RemoveAll(r => r.Ship == ship);
+
+            exchangeRequests.Add(new ExchangeRequest(config)
+            {
+                Ship = ship,
+            });
+        }
+        TimeSpan GetNextExchangeRequest()
+        {
+            return lastExchangeRequest + config.RequestReceptionInterval - DateTime.Now;
+        }
+        bool IsCurrentExchangeDockRequests()
+        {
+            return exchangeRequests.Any(r => r.Doing);
+        }
         List<ExchangeRequest> GetPendingExchangeRequests()
         {
             return exchangeRequests.Where(r => r.Pending).ToList();
@@ -551,11 +557,6 @@ namespace IngameScript
             }
 
             return shipExchangePairs.OrderBy(pair => pair.Distance).ToList();
-        }
-
-        Vector3D GetBasePosition()
-        {
-            return Me.CubeGrid.GetPosition();
         }
 
         void PrintExchanges()
@@ -631,7 +632,7 @@ namespace IngameScript
             string[] storageLines = Storage.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
             if (storageLines.Length == 0) return;
 
-            ExchangeRequest.LoadListFromStorage(storageLines, exchangeRequests);
+            ExchangeRequest.LoadListFromStorage(config, storageLines, exchangeRequests);
             ExchangeGroup.LoadListFromStorage(storageLines, exchanges);
             requestStatus = Utils.ReadInt(storageLines, "RequestStatus", 1) == 1;
             requestExchange = Utils.ReadInt(storageLines, "RequestReception", 1) == 1;

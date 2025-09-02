@@ -5,16 +5,18 @@ namespace IngameScript
 {
     class ExchangeRequest
     {
+        private readonly Config config;
         private DateTime doneTime;
 
         public string Ship;
 
         public bool Pending { get; private set; } = true;
-        public bool Expired => !Pending && (DateTime.Now - doneTime).TotalSeconds > 120;
+        public bool Doing => !Pending && (DateTime.Now - doneTime) <= config.ExchangeRequestTimeOut;
+        public bool Expired => !Pending && (DateTime.Now - doneTime) > config.ExchangeRequestTimeOut;
 
-        public ExchangeRequest()
+        public ExchangeRequest(Config config)
         {
-
+            this.config = config;
         }
 
         public void SetDone()
@@ -37,7 +39,7 @@ namespace IngameScript
                 $"UnloadRequests={string.Join("¬", list)}",
             };
         }
-        public static void LoadListFromStorage(string[] storageLines, List<ExchangeRequest> requests)
+        public static void LoadListFromStorage(Config config, string[] storageLines, List<ExchangeRequest> requests)
         {
             int reqCount = Utils.ReadInt(storageLines, "UnloadRequestCount");
             if (reqCount <= 0) return;
@@ -47,7 +49,7 @@ namespace IngameScript
             for (int i = 0; i < unloadLines.Length; i++)
             {
                 var parts = unloadLines[i].Split('|');
-                var exchange = new ExchangeRequest()
+                var exchange = new ExchangeRequest(config)
                 {
                     Ship = Utils.ReadString(parts, "From"),
                     Pending = Utils.ReadInt(parts, "Pending") == 1,

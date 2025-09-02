@@ -36,20 +36,6 @@ namespace Sandbox.ModAPI.Ingame
             throw new NotImplementedException();
         }
     }
-    public enum MyDetectedEntityType
-    {
-        Asteroid,
-        CharacterHuman,
-        CharacterOther,
-        FloatingObject,
-        LargeGrid,
-        Meteor,
-        Missile,
-        None,
-        Planet,
-        SmallGrid,
-        Unknown,
-    }
     public struct MatrixD
     {
         public Vector3D Forward { get; }
@@ -72,12 +58,31 @@ namespace Sandbox.ModAPI.Ingame
     public struct MyShipMass
     {
         public double PhysicalMass { get; set; }
+        public double TotalMass { get; set; }
     }
     public struct MyIGCMessage
     {
         public object Data { get; set; }
     }
+    public struct SerializableDefinitionId
+    {
+        public string SubtypeId { get; set; }
+    }
 
+    public enum MyDetectedEntityType
+    {
+        Asteroid,
+        CharacterHuman,
+        CharacterOther,
+        FloatingObject,
+        LargeGrid,
+        Meteor,
+        Missile,
+        None,
+        Planet,
+        SmallGrid,
+        Unknown,
+    }
     public enum UpdateType
     {
         IGC,
@@ -123,103 +128,132 @@ namespace Sandbox.ModAPI.Ingame
         IMyTerminalBlock GetBlockWithName(string name);
     }
 
-    public interface IMyTerminalBlock
+    public interface IMyMessageProvider
     {
+        bool HasPendingMessage { get; }
+        MyIGCMessage AcceptMessage();
+        void SetMessageCallback(string v);
+    }
+    public interface IMyBroadcastListener : IMyMessageProvider
+    {
+    }
+
+    public interface IMyEntity
+    {
+        long EntityId { get; }
         string Name { get; set; }
-        bool Enabled { get; set; }
-        string CustomName { get; set; }
+        Vector3D GetPosition();
+        MatrixD WorldMatrix { get; }
+        IMyInventory GetInventory();
+    }
+    public interface IMyCubeBlock : IMyEntity
+    {
+        SerializableDefinitionId BlockDefinition { get; }
         IMyTerminalBlock CubeGrid { get; set; }
     }
-    public interface IMyProgrammableBlock : IMyTerminalBlock
+    public interface IMyTerminalBlock : IMyCubeBlock, IMyEntity
     {
         string CustomData { get; set; }
+        string CustomName { get; set; }
+    }
+    public interface IMyFunctionalBlock : IMyTerminalBlock, IMyCubeBlock, IMyEntity
+    {
+        bool Enabled { get; set; }
+    }
+    public interface IMyShipController : IMyTerminalBlock, IMyCubeBlock, IMyEntity
+    {
+        MyShipMass CalculateShipMass();
+        MyShipVelocities GetShipVelocities();
+        Vector3D GetNaturalGravity();
+        double GetShipSpeed();
+    }
+    public interface IMyPowerProducer : IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity
+    {
+    }
+    public interface IMyTextSurface
+    {
+        ContentType ContentType { get; set; }
+        bool WriteText(string value, bool append = false);
+    }
+    public interface IMyTextSurfaceProvider
+    {
+        IMyTextSurface GetSurface(int index);
+    }
 
+    public interface IMyProgrammableBlock : IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity, IMyTextSurfaceProvider
+    {
         void TryRun(string message);
     }
-    public interface IMyRemoteControl : IMyTerminalBlock
+    public interface IMyRemoteControl : IMyShipController, IMyTerminalBlock, IMyCubeBlock, IMyEntity
     {
-        MatrixD WorldMatrix { get; }
         bool WaitForFreeWay { get; set; }
         FlightMode FlightMode { get; set; }
         float SpeedLimit { get; set; }
 
         void AddWaypoint(Vector3D destination, string destinationName);
-        MyShipMass CalculateShipMass();
         void ClearWaypoints();
-        Vector3D GetPosition();
-        MyShipVelocities GetShipVelocities();
         void SetAutoPilotEnabled(bool v);
         void SetCollisionAvoidance(bool v);
-        Vector3D GetNaturalGravity();
-        double GetShipSpeed();
     }
-    public interface IMyCameraBlock : IMyTerminalBlock
+    public interface IMyCameraBlock : IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity
     {
         bool EnableRaycast { get; set; }
-        MatrixD WorldMatrix { get; set; }
 
         bool CanScan(double collisionDetectRange);
         bool CanScan(double collisionDetectRange, Vector3D localDirection);
-        Vector3D GetPosition();
         MyDetectedEntityInfo Raycast(double collisionDetectRange);
         MyDetectedEntityInfo Raycast(double collisionDetectRange, Vector3D direction);
     }
-    public interface IMyThrust : IMyTerminalBlock
+    public interface IMyThrust : IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity
     {
-        MatrixD WorldMatrix { get; }
         float ThrustOverridePercentage { get; set; }
         float MaxEffectiveThrust { get; set; }
     }
-    public interface IMyGyro : IMyTerminalBlock
+    public interface IMyGyro : IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity
     {
-        MatrixD WorldMatrix { get; }
         bool GyroOverride { get; set; }
         float Pitch { get; set; }
         float Yaw { get; set; }
         float Roll { get; set; }
     }
-    public interface IMyBeacon : IMyTerminalBlock
+    public interface IMyBeacon : IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity
     {
     }
-    public interface IMyLaserAntenna : IMyTerminalBlock
+    public interface IMyLaserAntenna : IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity
     {
         MyLaserAntennaStatus Status { get; set; }
 
         void Connect();
         void SetTargetCoords(string gpsReceptor);
     }
-    public interface IMyBroadcastListener : IMyTerminalBlock
+    public interface IMyCargoContainer : IMyTerminalBlock, IMyCubeBlock, IMyEntity
     {
-        bool HasPendingMessage { get; }
-
-        MyIGCMessage AcceptMessage();
-        void SetMessageCallback(string v);
     }
-    public interface IMyCargoContainer : IMyTerminalBlock
+    public interface IMyTextPanel : IMyTextSurface, IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity
     {
-        IMyInventory GetInventory();
     }
-    public interface IMyTextPanel : IMyTerminalBlock
-    {
-        ContentType ContentType { get; set; }
-        string CustomData { get; }
-
-        void WriteText(string text, bool append = true);
-    }
-    public interface IMyShipConnector : IMyTerminalBlock
+    public interface IMyShipConnector : IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity
     {
         MyShipConnectorStatus Status { get; set; }
-        MatrixD WorldMatrix { get; set; }
         IMyShipConnector OtherConnector { get; }
-
-        Vector3D GetPosition();
     }
-    public interface IMyConveyorSorter : IMyTerminalBlock
+    public interface IMyConveyorSorter : IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity
     {
-
     }
-    public interface IMyRadioAntenna : IMyTerminalBlock
+    public interface IMyRadioAntenna : IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity
     {
-
+    }
+    public interface IMyBatteryBlock : IMyPowerProducer, IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity
+    {
+        float MaxStoredPower { get; }
+        float CurrentStoredPower { get; }
+    }
+    public interface IMyGasTank : IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity
+    {
+        float Capacity { get; }
+        double FilledRatio { get; }
+    }
+    public interface IMyCockpit : IMyShipController, IMyTerminalBlock, IMyCubeBlock, IMyEntity, IMyTextSurfaceProvider
+    {
     }
 }

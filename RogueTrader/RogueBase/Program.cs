@@ -11,7 +11,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "1.1";
+        const string Version = "1.2";
         const string Separate = "------";
 
         #region Blocks
@@ -26,8 +26,8 @@ namespace IngameScript
         readonly StringBuilder sbData = new StringBuilder();
         readonly StringBuilder sbLog = new StringBuilder();
 
-        readonly List<Ship> ships = new List<Ship>();
         readonly List<ExchangeGroup> exchanges = new List<ExchangeGroup>();
+        readonly List<Ship> ships = new List<Ship>();
         readonly List<ExchangeRequest> exchangeRequests = new List<ExchangeRequest>();
 
         bool requestStatus = true;
@@ -60,8 +60,6 @@ namespace IngameScript
             RefreshLCDs();
 
             InitializeExchangeGroups();
-
-            WriteLCDs("[baseId]", baseId);
 
             bl = IGC.RegisterBroadcastListener(config.Channel);
 
@@ -109,9 +107,11 @@ namespace IngameScript
             WriteLogLCDs($"ParseTerminalMessage: {argument}");
 
             if (argument == "RESET") Reset();
-            else if (argument == "LIST_SHIPS") ListShips();
+
             else if (argument == "LIST_EXCHANGES") ListExchanges();
+            else if (argument == "LIST_SHIPS") ListShips();
             else if (argument == "LIST_EXCHANGE_REQUESTS") ListExchangeRequests();
+
             else if (argument == "ENABLE_LOGS") EnableLogs();
             else if (argument == "ENABLE_STATUS_REQUEST") EnableStatusRequest();
             else if (argument == "ENABLE_EXCHANGE_REQUEST") EnableExchangeRequest();
@@ -135,18 +135,18 @@ namespace IngameScript
             InitializeExchangeGroups();
         }
         /// <summary>
-        /// Changes the state of the variable that controls the display of ships
-        /// </summary>
-        void ListShips()
-        {
-            config.ShowShips = !config.ShowShips;
-        }
-        /// <summary>
         /// Changes the state of the variable that controls the display of exchanges
         /// </summary>
         void ListExchanges()
         {
             config.ShowExchanges = !config.ShowExchanges;
+        }
+        /// <summary>
+        /// Changes the state of the variable that controls the display of ships
+        /// </summary>
+        void ListShips()
+        {
+            config.ShowShips = !config.ShowShips;
         }
         /// <summary>
         /// Changes the state of the variable that controls the display of exchange requests
@@ -230,7 +230,6 @@ namespace IngameScript
             ship.Cargo = cargo;
             ship.UpdateTime = DateTime.Now;
         }
-
         /// <summary>
         /// Enqueues a request to make a task to a SHIP.
         /// </summary>
@@ -280,30 +279,19 @@ namespace IngameScript
         /// </remarks>
         void DoExchangeRequest()
         {
-            if (!requestExchange)
-            {
-                return;
-            }
+            if (!requestExchange) return;
 
-            if (DateTime.Now - lastExchangeRequest < config.RequestReceptionInterval)
-            {
-                return;
-            }
+            if (DateTime.Now - lastExchangeRequest < config.RequestReceptionInterval) return;
             lastExchangeRequest = DateTime.Now;
 
-            if (DoExchangeUndockRequest())
-            {
-                return;
-            }
+            if (IsCurrentExchangeDockRequests()) return;
+
+            if (DoExchangeUndockRequest()) return;
 
             DoExchangeDockRequest();
         }
         bool DoExchangeDockRequest()
         {
-            if (IsCurrentExchangeDockRequests())
-            {
-                return false;
-            }
             var exRequest = GetPendingExchangeDockRequests();
             if (exRequest.Count == 0)
             {
@@ -474,16 +462,6 @@ namespace IngameScript
             return blocks;
         }
 
-        void WriteLCDs(string wildcard, string text)
-        {
-            List<IMyTextPanel> lcds = new List<IMyTextPanel>();
-            GridTerminalSystem.GetBlocksOfType(lcds, lcd => lcd.CubeGrid == Me.CubeGrid && lcd.CustomName.Contains(wildcard));
-            foreach (var lcd in lcds)
-            {
-                lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-                lcd.WriteText(text, false);
-            }
-        }
         void WriteDataLCDs(string text, bool echo = false)
         {
             if (echo)
@@ -583,7 +561,6 @@ namespace IngameScript
                 }
             }
         }
-
         void EnqueueExchangeRequest(string ship, ExchangeTasks task)
         {
             exchangeRequests.RemoveAll(r => r.Ship == ship);
@@ -596,7 +573,7 @@ namespace IngameScript
         }
         bool IsCurrentExchangeDockRequests()
         {
-            return exchangeRequests.Any(r => r.Doing && (r.Task == ExchangeTasks.StartLoad || r.Task == ExchangeTasks.StartUnload));
+            return exchangeRequests.Any(r => r.Doing);
         }
         List<ExchangeRequest> GetPendingExchangeDockRequests()
         {
