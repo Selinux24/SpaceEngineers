@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "1.1";
+        const string Version = "1.2";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
@@ -40,7 +40,7 @@ namespace IngameScript
 
         DateTime lastDockRequest = DateTime.MinValue;
 
-        readonly TimeSpan refreshLCDsInterval = TimeSpan.FromSeconds(5);
+        bool refreshLCDs = false;
         DateTime lastRefreshLCDs = DateTime.MinValue;
 
         public Program()
@@ -134,16 +134,7 @@ namespace IngameScript
 
             DoAlign();
 
-            if (DateTime.Now - lastRefreshLCDs > refreshLCDsInterval)
-            {
-                RefreshLCDs();
-            }
-
-            if (shipStatus == ShipStatus.WaitingDock && (DateTime.Now - lastDockRequest) > config.DockRequestTimeout)
-            {
-                shipStatus = ShipStatus.Idle;
-                lastDockRequest = DateTime.MinValue;
-            }
+            UpdateShipStatus();
         }
 
         #region TERMINAL COMMANDS
@@ -154,7 +145,10 @@ namespace IngameScript
             if (argument == "RESET") Reset();
             else if (argument == "PAUSE") Pause();
             else if (argument == "RESUME") Resume();
+
             else if (argument == "ENABLE_LOGS") EnableLogs();
+            else if (argument == "ENABLE_REFRESH_LCDS") EnableRefreshLCDs();
+         
             else if (argument == "REQUEST_DOCK") RequestDock();
         }
 
@@ -196,7 +190,13 @@ namespace IngameScript
         {
             config.EnableLogs = !config.EnableLogs;
         }
-
+        /// <summary>
+        /// Changes the state of the variable that controls the refresh of LCDs
+        /// </summary>
+        void EnableRefreshLCDs()
+        {
+            refreshLCDs = !refreshLCDs;
+        }
         /// <summary>
         /// Requests docking at a base defined in the argument.
         /// </summary>
@@ -328,6 +328,47 @@ namespace IngameScript
         }
         #endregion
 
+        #region UPDATE SHIP STATUS
+        void UpdateShipStatus()
+        {
+            if (shipStatus == ShipStatus.WaitingDock && (DateTime.Now - lastDockRequest) > config.DockRequestTimeout)
+            {
+                shipStatus = ShipStatus.Idle;
+                lastDockRequest = DateTime.MinValue;
+            }
+
+            DoRefreshLCDs();
+        }
+        void DoRefreshLCDs()
+        {
+            if (!refreshLCDs)
+            {
+                return;
+            }
+
+            if (DateTime.Now - lastRefreshLCDs > config.RefreshLCDsInterval)
+            {
+                RefreshLCDs();
+            }
+        }
+        void RefreshLCDs()
+        {
+            infoLCDs.Clear();
+            var info = GetBlocksOfType<IMyTextPanel>(config.WildcardShipInfo);
+            var infoCps = GetBlocksOfType<IMyCockpit>(config.WildcardShipInfo).Where(c => config.WildcardShipInfo.Match(c.CustomName).Groups[1].Success);
+            infoLCDs.AddRange(info);
+            infoLCDs.AddRange(infoCps.Select(c => c.GetSurface(int.Parse(config.WildcardShipInfo.Match(c.CustomName).Groups[1].Value))));
+
+            logLCDs.Clear();
+            var log = GetBlocksOfType<IMyTextPanel>(config.WildcardLogLCDs);
+            var logCps = GetBlocksOfType<IMyCockpit>(config.WildcardLogLCDs).Where(c => config.WildcardLogLCDs.Match(c.CustomName).Groups[1].Success);
+            logLCDs.AddRange(log.Select(l => new TextPanelDesc(l, l)));
+            logLCDs.AddRange(logCps.Select(c => new TextPanelDesc(c, c.GetSurface(int.Parse(config.WildcardLogLCDs.Match(c.CustomName).Groups[1].Value)))));
+
+            lastRefreshLCDs = DateTime.Now;
+        }
+        #endregion
+
         #region UTILITY
         T GetBlockWithName<T>(string name) where T : class, IMyTerminalBlock
         {
@@ -346,23 +387,6 @@ namespace IngameScript
             var blocks = new List<T>();
             GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && regEx.IsMatch(b.CustomName));
             return blocks;
-        }
-
-        void RefreshLCDs()
-        {
-            infoLCDs.Clear();
-            var info = GetBlocksOfType<IMyTextPanel>(config.WildcardShipInfo);
-            var infoCps = GetBlocksOfType<IMyCockpit>(config.WildcardShipInfo).Where(c => config.WildcardShipInfo.Match(c.CustomName).Groups[1].Success);
-            infoLCDs.AddRange(info);
-            infoLCDs.AddRange(infoCps.Select(c => c.GetSurface(int.Parse(config.WildcardShipInfo.Match(c.CustomName).Groups[1].Value))));
-
-            logLCDs.Clear();
-            var log = GetBlocksOfType<IMyTextPanel>(config.WildcardLogLCDs);
-            var logCps = GetBlocksOfType<IMyCockpit>(config.WildcardLogLCDs).Where(c => config.WildcardLogLCDs.Match(c.CustomName).Groups[1].Success);
-            logLCDs.AddRange(log.Select(l => new TextPanelDesc(l, l)));
-            logLCDs.AddRange(logCps.Select(c => new TextPanelDesc(c, c.GetSurface(int.Parse(config.WildcardLogLCDs.Match(c.CustomName).Groups[1].Value)))));
-
-            lastRefreshLCDs = DateTime.Now;
         }
 
         bool IsForMe(string[] lines)
@@ -482,16 +506,6 @@ namespace IngameScript
             sb.AppendLine(alignData.GetAlignState());
         }
 
-        void WriteLCDs(string wildcard, string text)
-        {
-            List<IMyTextPanel> lcds = new List<IMyTextPanel>();
-            GridTerminalSystem.GetBlocksOfType(lcds, lcd => lcd.CubeGrid == Me.CubeGrid && lcd.CustomName.Contains(wildcard));
-            foreach (var lcd in lcds)
-            {
-                lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-                lcd.WriteText(text, false);
-            }
-        }
         void WriteInfoLCDs(string text, bool append = true)
         {
             Echo(text);

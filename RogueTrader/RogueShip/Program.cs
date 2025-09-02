@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "1.3";
+        const string Version = "1.4";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
@@ -47,6 +47,8 @@ namespace IngameScript
         #endregion
 
         readonly string shipId;
+        internal readonly Config Config;
+       
         readonly StringBuilder sbLog = new StringBuilder();
 
         bool paused = false;
@@ -58,9 +60,7 @@ namespace IngameScript
         ShipStatus shipStatus = ShipStatus.Idle;
         readonly Navigator navigator;
 
-        internal readonly Config Config;
-
-        readonly TimeSpan refreshLCDsInterval = TimeSpan.FromSeconds(5);
+        bool refreshLCDs = false;
         DateTime lastRefreshLCDs = DateTime.MinValue;
 
         public Program()
@@ -189,11 +189,11 @@ namespace IngameScript
 
             RefreshLCDs();
 
-            WriteLCDs(Config.WildcardShipId, shipId);
-
             bl = IGC.RegisterBroadcastListener(Config.Channel);
 
             LoadFromStorage();
+
+            lastRefreshLCDs = DateTime.MinValue + TimeSpan.FromTicks(Me.EntityId);
 
             Runtime.UpdateFrequency = UpdateFrequency.Update1;
         }
@@ -239,7 +239,9 @@ namespace IngameScript
             if (argument == "RESET") Reset();
             else if (argument == "PAUSE") Pause();
             else if (argument == "RESUME") Resume();
+
             else if (argument == "ENABLE_LOGS") EnableLogs();
+            else if (argument == "ENABLE_REFRESH_LCDS") EnableRefreshLCDs();
 
             else if (argument == "START_ROUTE") SendWaitingMessage(ExchangeTasks.StartLoad);
             else if (argument == "START_LOAD") SendWaitingMessage(ExchangeTasks.StartLoad);
@@ -289,6 +291,13 @@ namespace IngameScript
         void EnableLogs()
         {
             Config.EnableLogs = !Config.EnableLogs;
+        }
+        /// <summary>
+        /// Changes the state of the variable that controls the refresh of LCDs
+        /// </summary>
+        void EnableRefreshLCDs()
+        {
+            refreshLCDs = !refreshLCDs;
         }
         #endregion
 
@@ -436,8 +445,16 @@ namespace IngameScript
         {
             navigator.Update();
 
-            //Refresh LCDs every 60 seconds
-            if (DateTime.Now - lastRefreshLCDs > refreshLCDsInterval)
+            DoRefreshLCDs();
+        }
+        void DoRefreshLCDs()
+        {
+            if (!refreshLCDs)
+            {
+                return;
+            }
+
+            if (DateTime.Now - lastRefreshLCDs > Config.RefreshLCDsInterval)
             {
                 RefreshLCDs();
             }
@@ -535,16 +552,6 @@ namespace IngameScript
             return Utils.ReadString(lines, "To") == shipId;
         }
 
-        internal void WriteLCDs(string wildcard, string text)
-        {
-            List<IMyTextPanel> lcds = new List<IMyTextPanel>();
-            GridTerminalSystem.GetBlocksOfType(lcds, lcd => lcd.CubeGrid == Me.CubeGrid && lcd.CustomName.Contains(wildcard));
-            foreach (var lcd in lcds)
-            {
-                lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-                lcd.WriteText(text, false);
-            }
-        }
         internal void WriteInfoLCDs(string text, bool append = true)
         {
             Echo(text);

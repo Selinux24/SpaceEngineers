@@ -33,6 +33,8 @@ namespace IngameScript
 
         public readonly TimeSpan DockRequestTimeout = TimeSpan.FromSeconds(300); //Seconds to wait for a docking request to be accepted
 
+        public readonly TimeSpan RefreshLCDsInterval; // seconds, how often to refresh LCDs
+
         public Config(string customData)
         {
             Channel = Utils.ReadConfig(customData, "Channel");
@@ -59,6 +61,8 @@ namespace IngameScript
             AlignDistanceThrWaypoints = ReadConfigDouble(customData, "AlignDistanceThrWaypoints");
 
             DockRequestTimeout = TimeSpan.FromSeconds(ReadConfigInt(customData, "DockRequestTimeout", 300));
+     
+            RefreshLCDsInterval = TimeSpan.FromSeconds(ReadConfigInt(customData, "RefreshLCDsInterval", 10));
         }
         string ReadConfig(string customData, string name, string defaultValue = null)
         {
@@ -129,8 +133,8 @@ namespace IngameScript
                 "\n" +
                 "EnableLogs=false\n" +
                 "\n" +
-                "WildcardShipInfo=[DOCK_INFO]\n" +
-                "WildcardLogLCDs=[DOCK_LOG]\n" +
+                "WildcardShipInfo=DOCK_INFO\n" +
+                "WildcardLogLCDs=DOCK_LOG\n" +
                 "\n" +
                 "ShipTimerDock=Timer Block Docking\n" +
                 "ShipRemoteControlDock=Remote Control Docking\n" +
@@ -148,7 +152,9 @@ namespace IngameScript
                 "AlignSpeedWaypointLast=1.0\n" +
                 "AlignDistanceThrWaypoints=0.5\n" +
                 "\n" +
-                "DockRequestTimeout=300";
+                "DockRequestTimeout=300\n" +
+                "\n" +
+                "RefreshLCDsInterval=10";
         }
     }
 }

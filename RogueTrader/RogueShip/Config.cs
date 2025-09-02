@@ -14,7 +14,6 @@ namespace IngameScript
 
         public bool EnableLogs = true;
 
-        public readonly string WildcardShipId;
         public readonly System.Text.RegularExpressions.Regex WildcardShipInfo;
         public readonly System.Text.RegularExpressions.Regex WildcardLogLCDs;
 
@@ -74,13 +73,14 @@ namespace IngameScript
         public readonly double GyrosThr;
         public readonly double GyrosSpeed;
 
+        public readonly TimeSpan RefreshLCDsInterval; // seconds, how often to refresh LCDs
+
         public Config(string customData)
         {
             Channel = Utils.ReadConfig(customData, "Channel");
 
             EnableLogs = ReadConfigBool(customData, "EnableLogs");
 
-            WildcardShipId = ReadConfig(customData, "WildcardShipId");
             WildcardShipInfo = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "WildcardShipInfo")}(?:\.(\d+))?\]");
             WildcardLogLCDs = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "WildcardLogLCDs")}(?:\.(\d+))?\]");
 
@@ -144,6 +144,8 @@ namespace IngameScript
 
             GyrosThr = ReadConfigDouble(customData, "GyrosThr");
             GyrosSpeed = ReadConfigDouble(customData, "GyrosSpeed");
+
+            RefreshLCDsInterval = TimeSpan.FromSeconds(ReadConfigInt(customData, "RefreshLCDsInterval", 10));
         }
         string ReadConfig(string customData, string name, string defaultValue = null)
         {
@@ -244,7 +246,6 @@ namespace IngameScript
                 "\n" +
                 "EnableLogs=false\n" +
                 "\n" +
-                "WildcardShipId=[shipId]\n" +
                 "WildcardShipInfo=DELIVERY_INFO\n" +
                 "WildcardLogLCDs=DELIVERY_LOG\n" +
                 "\n" +
@@ -306,7 +307,9 @@ namespace IngameScript
                 "CrsNavigationEvadingWaypointThr=100.0\n" +
                 "\n" +
                 "GyrosThr=0.001\n" +
-                "GyrosSpeed=2.0\n";
+                "GyrosSpeed=2.0\n" +
+                "\n" +
+                "RefreshLCDsInterval=10";
         }
     }
 }
