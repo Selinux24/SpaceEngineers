@@ -248,7 +248,7 @@ namespace IngameScript
             }
 
             //Determine if the ship is in gravity.
-            var inGravity = ship.IsInGravity();
+            bool inGravity = ship.IsInAtmosphere();
             if (inGravity)
             {
                 var preStatus = AtmStatus;
@@ -399,7 +399,7 @@ namespace IngameScript
                 return;
             }
 
-            bool inGravity = ship.IsInGravity();
+            bool inGravity = ship.IsInAtmosphere();
             var speed = ship.GetSpeed();
             if (!inGravity && speed >= Config.CrsNavigationMaxCruiseSpeed * Config.CrsNavigationMaxSpeedThr)
             {
@@ -445,7 +445,7 @@ namespace IngameScript
             //Maintain speed
             ship.WriteInfoLCDs(GetState());
 
-            bool inGravity = ship.IsInGravity();
+            bool inGravity = ship.IsInAtmosphere();
             if (inGravity || AlignToDirection(false, DirectionToWaypoint, Config.CrsNavigationAlignThr))
             {
                 ship.WriteInfoLCDs("Not aligned");

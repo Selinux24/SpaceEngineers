@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "1.4";
+        const string Version = "1.5";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
@@ -52,6 +52,7 @@ namespace IngameScript
         readonly StringBuilder sbLog = new StringBuilder();
 
         bool paused = false;
+        bool monitorizeCapacity = false;
         bool monitorizePropulsion = false;
         readonly double minStoredPowerOnLoad = 0;
         readonly double minStoredPowerOnUnload = 0;
@@ -226,9 +227,9 @@ namespace IngameScript
 
             if (DoPause()) return;
 
-            MonitorizeLoad();
-
             UpdateShipStatus();
+
+            MonitorizeLoad();
         }
 
         #region TERMINAL COMMANDS
@@ -247,6 +248,7 @@ namespace IngameScript
             else if (argument == "START_LOAD") SendWaitingMessage(ExchangeTasks.StartLoad);
             else if (argument == "START_UNLOAD") SendWaitingMessage(ExchangeTasks.StartUnload);
 
+            else if (argument == "NEXT") Next();
             else if (argument == "UNDOCK") StopAndUndocK();
         }
 
@@ -394,10 +396,11 @@ namespace IngameScript
                 double capacity = CalculateCargoPercentage();
                 WriteInfoLCDs($"Progress {capacity / Config.MaxLoad:P1}...");
 
-                if (capacity < Config.MaxLoad)
+                if (monitorizeCapacity && capacity < Config.MaxLoad)
                 {
                     return;
                 }
+                monitorizeCapacity = false;
 
                 if (!monitorizePropulsion)
                 {
@@ -417,10 +420,11 @@ namespace IngameScript
                 double capacity = CalculateCargoPercentage();
                 WriteInfoLCDs($"Progress {1.0 - (capacity / Config.MaxLoad):P1}...");
 
-                if (capacity > Config.MinLoad)
+                if (monitorizeCapacity && capacity > Config.MinLoad)
                 {
                     return;
                 }
+                monitorizeCapacity = false;
 
                 if (!monitorizePropulsion)
                 {
@@ -613,10 +617,12 @@ namespace IngameScript
 
         internal void Load()
         {
+            monitorizeCapacity = true;
             timerLoad?.StartCountdown();
         }
         internal void Unload()
         {
+            monitorizeCapacity = true;
             timerUnload?.StartCountdown();
         }
 
@@ -702,9 +708,9 @@ namespace IngameScript
         {
             return remotePilot.GetNaturalGravity();
         }
-        internal bool IsInGravity()
+        internal bool IsInAtmosphere()
         {
-            return GetGravity().Length() > 0.001;
+            return GetGravity().Length() / 9.8 > Config.AtmGravityThr;
         }
         internal double GetMass()
         {
@@ -926,6 +932,21 @@ namespace IngameScript
             Waiting();
         }
 
+        void Next()
+        {
+            if (shipStatus == ShipStatus.Loading)
+            {
+                monitorizeCapacity = false;
+            }
+            else if (shipStatus == ShipStatus.Unloading)
+            {
+                monitorizeCapacity = false;
+            }
+            else
+            {
+                WriteLogLCDs($"Ship is not docked: {shipStatus}");
+            }
+        }
         void StopAndUndocK()
         {
             if (shipStatus == ShipStatus.Loading)

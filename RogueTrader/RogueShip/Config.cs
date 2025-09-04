@@ -56,6 +56,7 @@ namespace IngameScript
         public readonly double AtmNavigationMaxSpeed;
         public readonly double AtmNavigationWaypointThr;
         public readonly double AtmNavigationDestinationThr;
+        public readonly double AtmGravityThr;
 
         public readonly double CrsNavigationAlignThr;
         public readonly double CrsNavigationAlignSeconds;
@@ -132,6 +133,7 @@ namespace IngameScript
             AtmNavigationMaxSpeed = ReadConfigDouble(customData, "AtmNavigationMaxSpeed");
             AtmNavigationWaypointThr = ReadConfigDouble(customData, "AtmNavigationWaypointThr");
             AtmNavigationDestinationThr = ReadConfigDouble(customData, "AtmNavigationDestinationThr");
+            AtmGravityThr = ReadConfigDouble(customData, "AtmGravityThr", 0.001);
 
             CrsNavigationAlignThr = ReadConfigDouble(customData, "CrsNavigationAlignThr");
             CrsNavigationAlignSeconds = ReadConfigDouble(customData, "CrsNavigationAlignSeconds");
@@ -297,6 +299,7 @@ namespace IngameScript
                 "AtmNavigationMaxSpeed=100.0\n" +
                 "AtmNavigationWaypointThr=500.0\n" +
                 "AtmNavigationDestinationThr=1000.0\n" +
+                "AtmGravityThr=0.1\n" +
                 "\n" +
                 "CrsNavigationAlignThr=0.01\n" +
                 "CrsNavigationAlignSeconds=5.0\n" +
