@@ -12,7 +12,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "1.2";
+        const string Version = "1.3";
         const string Separate = "------";
 
         #region Blocks
@@ -356,15 +356,15 @@ namespace IngameScript
         {
             dataLCDs.Clear();
             var data = GetBlocksOfType<IMyTextPanel>(config.DataLCDs);
-            var dataCps = GetBlocksOfType<IMyCockpit>(config.DataLCDs).Where(c => config.DataLCDs.Match(c.CustomName).Groups[1].Success);
+            var dataCps = GetBlocksImplementType<IMyTextSurfaceProvider>(config.DataLCDs).Where(c => config.DataLCDs.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Success);
             dataLCDs.AddRange(data);
-            dataLCDs.AddRange(dataCps.Select(c => c.GetSurface(int.Parse(config.DataLCDs.Match(c.CustomName).Groups[1].Value))));
+            dataLCDs.AddRange(dataCps.Select(c => c.GetSurface(int.Parse(config.DataLCDs.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Value))));
 
             logLCDs.Clear();
             var log = GetBlocksOfType<IMyTextPanel>(config.LogLCDs);
-            var logCps = GetBlocksOfType<IMyCockpit>(config.LogLCDs).Where(c => config.LogLCDs.Match(c.CustomName).Groups[1].Success);
+            var logCps = GetBlocksImplementType<IMyTextSurfaceProvider>(config.LogLCDs).Where(c => config.LogLCDs.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Success);
             logLCDs.AddRange(log.Select(l => new TextPanelDesc(l, l)));
-            logLCDs.AddRange(logCps.Select(c => new TextPanelDesc(c, c.GetSurface(int.Parse(config.LogLCDs.Match(c.CustomName).Groups[1].Value)))));
+            logLCDs.AddRange(logCps.Select(c => new TextPanelDesc((IMyTerminalBlock)c, c.GetSurface(int.Parse(config.LogLCDs.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Value)))));
 
             lastRefreshLCDs = DateTime.Now;
         }
@@ -376,6 +376,12 @@ namespace IngameScript
             var blocks = new List<T>();
             GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && regEx.IsMatch(b.CustomName));
             return blocks;
+        }
+        List<T> GetBlocksImplementType<T>(System.Text.RegularExpressions.Regex regEx) where T : class
+        {
+            var blocks = new List<IMyTerminalBlock>();
+            GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && regEx.IsMatch(b.CustomName) && b is T);
+            return blocks.Cast<T>().ToList();
         }
 
         Vector3D GetBasePosition()

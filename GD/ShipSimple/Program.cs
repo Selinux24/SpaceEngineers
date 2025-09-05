@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "1.2";
+        const string Version = "1.3";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
@@ -288,15 +288,15 @@ namespace IngameScript
         {
             infoLCDs.Clear();
             var info = GetBlocksOfType<IMyTextPanel>(Config.WildcardShipInfo);
-            var infoCps = GetBlocksOfType<IMyCockpit>(Config.WildcardShipInfo).Where(c => Config.WildcardShipInfo.Match(c.CustomName).Groups[1].Success);
+            var infoCps = GetBlocksImplementType<IMyTextSurfaceProvider>(Config.WildcardShipInfo).Where(c => Config.WildcardShipInfo.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Success);
             infoLCDs.AddRange(info);
-            infoLCDs.AddRange(infoCps.Select(c => c.GetSurface(int.Parse(Config.WildcardShipInfo.Match(c.CustomName).Groups[1].Value))));
+            infoLCDs.AddRange(infoCps.Select(c => c.GetSurface(int.Parse(Config.WildcardShipInfo.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Value))));
 
             logLCDs.Clear();
             var log = GetBlocksOfType<IMyTextPanel>(Config.WildcardLogLCDs);
-            var logCps = GetBlocksOfType<IMyCockpit>(Config.WildcardLogLCDs).Where(c => Config.WildcardLogLCDs.Match(c.CustomName).Groups[1].Success);
+            var logCps = GetBlocksImplementType<IMyTextSurfaceProvider>(Config.WildcardLogLCDs).Where(c => Config.WildcardLogLCDs.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Success);
             logLCDs.AddRange(log.Select(l => new TextPanelDesc(l, l)));
-            logLCDs.AddRange(logCps.Select(c => new TextPanelDesc(c, c.GetSurface(int.Parse(Config.WildcardLogLCDs.Match(c.CustomName).Groups[1].Value)))));
+            logLCDs.AddRange(logCps.Select(c => new TextPanelDesc((IMyTerminalBlock)c, c.GetSurface(int.Parse(Config.WildcardLogLCDs.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Value)))));
 
             lastRefreshLCDs = DateTime.Now;
         }
@@ -320,6 +320,12 @@ namespace IngameScript
             var blocks = new List<T>();
             GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && regEx.IsMatch(b.CustomName));
             return blocks;
+        }
+        List<T> GetBlocksImplementType<T>(System.Text.RegularExpressions.Regex regEx) where T : class
+        {
+            var blocks = new List<IMyTerminalBlock>();
+            GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && regEx.IsMatch(b.CustomName) && b is T);
+            return blocks.Cast<T>().ToList();
         }
 
         bool IsForMe(string[] lines)
