@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.NetworkInformation;
 using System.Text;
 using VRage;
 
@@ -9,6 +10,7 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
+        const char AttributeSep = '=';
         const string WildcardLCDs = "[INV]";
 
         readonly StringBuilder sb = new StringBuilder();
@@ -31,11 +33,16 @@ namespace IngameScript
                 return;
             }
 
+            LoadFromStorage();
+
             Runtime.UpdateFrequency = UpdateFrequency.Update100;
 
             Echo("Working...");
         }
-
+        public void Save()
+        {
+            SaveToStorage();
+        }
         public void Main(string argument, UpdateType updateSource)
         {
             Monitorize();
@@ -127,6 +134,26 @@ namespace IngameScript
             }
         }
 
+        void LoadFromStorage()
+        {
+            string[] storageLines = Storage.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+            if (storageLines.Length == 0)
+            {
+                return;
+            }
+
+            lastQuery = new DateTime(ReadLong(storageLines, "lastQuery", 0));
+        }
+        void SaveToStorage()
+        {
+            List<string> parts = new List<string>
+            {
+                $"lastQuery={lastQuery.Ticks}",
+            };
+
+            Storage = string.Join(Environment.NewLine, parts);
+        }
+
         static string ReadConfig(string customData, string name)
         {
             string[] config = customData.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
@@ -198,6 +225,27 @@ namespace IngameScript
             }
 
             return message.ToString();
+        }
+        static string ReadString(string[] lines, string name, string defaultValue = "")
+        {
+            string cmdToken = $"{name}{AttributeSep}";
+            string value = lines.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";
+            if (string.IsNullOrEmpty(value))
+            {
+                return defaultValue;
+            }
+
+            return value;
+        }
+        static long ReadLong(string[] lines, string name, long defaultValue = 0)
+        {
+            string value = ReadString(lines, name);
+            if (string.IsNullOrEmpty(value))
+            {
+                return defaultValue;
+            }
+
+            return long.Parse(value);
         }
     }
 }
