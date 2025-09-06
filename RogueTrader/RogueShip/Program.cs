@@ -716,7 +716,7 @@ namespace IngameScript
         }
         internal bool IsInAtmosphere()
         {
-            return GetGravity().Length() / 9.8 > Config.AtmGravityThr;
+            return GetGravity().Length() / 9.8 > Config.AtmNavigationGravityThr;
         }
         internal double GetMass()
         {
