@@ -18,6 +18,7 @@ namespace IngameScript
         public Vector3D Up => Camera.WorldMatrix.Up;
 
         public string DockedShipName { get; private set; }
+        public string ReservedShipName { get; private set; }
 
         public ExchangeGroup(Config config)
         {
@@ -30,19 +31,9 @@ namespace IngameScript
         }
         public bool IsFree()
         {
-            if (!string.IsNullOrWhiteSpace(DockedShipName) &&
-                MainConnector.Status != MyShipConnectorStatus.Unconnected)
-            {
-                return false;
-            }
-
-            foreach (var connector in Connectors)
-            {
-                if (connector.Status != MyShipConnectorStatus.Unconnected)
-                {
-                    return false;
-                }
-            }
+            if (!string.IsNullOrWhiteSpace(DockedShipName)) return false;
+          
+            if (!string.IsNullOrWhiteSpace(ReservedShipName)) return false;
 
             return true;
         }
@@ -73,7 +64,7 @@ namespace IngameScript
             return names;
         }
 
-        public bool Update(double time)
+        public void Update(double time)
         {
             dockRequestTime += time;
 
@@ -98,28 +89,20 @@ namespace IngameScript
                 }
             }
 
-            bool hasDockRequested = !string.IsNullOrWhiteSpace(DockedShipName) && dockRequestTime <= config.ExchangeDockRequestTimeThr;
-            if (hasDockRequested)
-            {
-                if ((mainConnected && DockedShipName != newShip) || moreThanOneShip)
-                {
-                    //Another ship is docked at least. Not valid for dock
-                    return false;
-                }
-            }
-            else
-            {
-                //Update ship name
-                DockedShipName = moreThanOneShip ? "Several ships" : newShip;
-            }
+            //Update ship name
+            DockedShipName = moreThanOneShip ? "Several ships" : newShip;
 
-            return true;
+            if (!string.IsNullOrWhiteSpace(ReservedShipName) && DockedShipName == ReservedShipName)
+            {
+                //Clears reservation if the reserved ship has docked
+                ReservedShipName = null;
+            }
         }
 
         public void DockRequest(string shipName)
         {
             dockRequestTime = 0;
-            DockedShipName = shipName;
+            ReservedShipName = shipName;
         }
 
         public List<Vector3D> CalculateRouteToConnector()
@@ -151,6 +134,7 @@ namespace IngameScript
             var parts = new List<string>
             {
                 $"Name={Name}",
+                $"ReservedShipName={ReservedShipName}",
                 $"DockedShipName={DockedShipName}",
                 $"DockRequestTime={dockRequestTime}",
             };
@@ -179,12 +163,14 @@ namespace IngameScript
             {
                 var parts = exchangeLines[i].Split('|');
                 string name = Utils.ReadString(parts, "Name");
+                string reservedShipName = Utils.ReadString(parts, "ReservedShipName");
                 string dockedShipName = Utils.ReadString(parts, "DockedShipName");
                 double dockRequestTime = Utils.ReadDouble(parts, "DockRequestTime");
 
                 var exchange = exchanges.Find(e => e.Name == name);
                 if (exchange != null)
                 {
+                    exchange.ReservedShipName = reservedShipName;
                     exchange.DockedShipName = dockedShipName;
                     exchange.dockRequestTime = dockRequestTime;
                 }

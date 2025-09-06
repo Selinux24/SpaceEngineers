@@ -20,10 +20,14 @@ namespace IngameScript
             this.config = config;
         }
 
-        public void SetDone()
+        public void SetDoing()
         {
             Pending = false;
             doneTime = DateTime.Now;
+        }
+        public void SetDone()
+        {
+            doneTime = DateTime.MinValue;
         }
 
         public static List<string> SaveListToStorage(List<ExchangeRequest> requests)

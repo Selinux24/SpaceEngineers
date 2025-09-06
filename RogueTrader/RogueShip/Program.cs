@@ -54,10 +54,6 @@ namespace IngameScript
         bool paused = false;
         bool monitorizeCapacity = false;
         bool monitorizePropulsion = false;
-        readonly double minStoredPowerOnLoad = 0;
-        readonly double minStoredPowerOnUnload = 0;
-        readonly double minStoredHydrogenOnLoad = 0;
-        readonly double minStoredHydrogenOnUnload = 0;
         ShipStatus shipStatus = ShipStatus.Idle;
         readonly Navigator navigator;
 
@@ -80,11 +76,6 @@ namespace IngameScript
                 Echo(Config.GetErrors());
                 return;
             }
-
-            minStoredPowerOnLoad = Config.MinPowerOnLoad;
-            minStoredPowerOnUnload = Config.MinPowerOnUnload;
-            minStoredHydrogenOnLoad = Config.MinHydrogenOnLoad;
-            minStoredHydrogenOnUnload = Config.MinHydrogenOnUnload;
 
             navigator = new Navigator(this);
 
@@ -208,8 +199,8 @@ namespace IngameScript
             WriteInfoLCDs($"RogueShip v{Version}. {DateTime.Now:HH:mm:ss}", false);
             WriteInfoLCDs($"{shipId} in channel {Config.Channel}");
             WriteInfoLCDs($"{CalculateCargoPercentage():P1} cargo.");
-            if (minStoredPowerOnLoad > 0 || minStoredPowerOnUnload > 0) WriteInfoLCDs($"Battery {CalculateBatteryPercentage():P1}.");
-            if (minStoredHydrogenOnLoad > 0 || minStoredHydrogenOnUnload > 0) WriteInfoLCDs($"Hydrogen {CalculateHydrogenPercentage():P1}.");
+            if (Config.MinPowerOnLoad > 0 || Config.MinPowerOnUnload > 0) WriteInfoLCDs($"Battery {CalculateBatteryPercentage():P1}.");
+            if (Config.MinHydrogenOnLoad > 0 || Config.MinHydrogenOnUnload > 0) WriteInfoLCDs($"Hydrogen {CalculateHydrogenPercentage():P1}.");
             WriteInfoLCDs($"{shipStatus}");
             if (Config.EnableRefreshLCDs) WriteInfoLCDs($"Next LCDs Refresh {GetNextLCDsRefresh():hh\\:mm\\:ss}");
 
@@ -808,7 +799,7 @@ namespace IngameScript
         }
         bool IsBatteryFilled(ShipStatus shipStatus, out string msg)
         {
-            var minStoredPower = shipStatus == ShipStatus.Loading ? minStoredPowerOnLoad : minStoredPowerOnUnload;
+            var minStoredPower = shipStatus == ShipStatus.Loading ? Config.MinPowerOnLoad : Config.MinPowerOnUnload;
             if (minStoredPower <= 0)
             {
                 msg = null;
@@ -827,7 +818,7 @@ namespace IngameScript
         }
         bool IsHydrogenFilled(ShipStatus shipStatus, out string msg)
         {
-            var minStoredHydrogen = shipStatus == ShipStatus.Loading ? minStoredHydrogenOnLoad : minStoredHydrogenOnUnload;
+            var minStoredHydrogen = shipStatus == ShipStatus.Loading ? Config.MinHydrogenOnLoad : Config.MinHydrogenOnUnload;
             if (minStoredHydrogen <= 0)
             {
                 msg = null;
@@ -1012,6 +1003,7 @@ namespace IngameScript
             }
 
             paused = Utils.ReadInt(storageLines, "Paused", 0) == 1;
+            monitorizeCapacity = Utils.ReadInt(storageLines, "MonitorizeCapacity", 0) == 1;
             monitorizePropulsion = Utils.ReadInt(storageLines, "MonitorizePropulsion", 0) == 1;
             shipStatus = (ShipStatus)Utils.ReadInt(storageLines, "ShipStatus", (int)ShipStatus.Idle);
             navigator.LoadFromStorage(Utils.ReadString(storageLines, "Navigator"));
@@ -1021,6 +1013,7 @@ namespace IngameScript
             List<string> parts = new List<string>
             {
                 $"Paused={(paused ? 1 : 0)}",
+                $"MonitorizeCapacity={(monitorizeCapacity ? 1 : 0)}",
                 $"MonitorizePropulsion={(monitorizePropulsion ? 1 : 0)}",
                 $"ShipStatus={(int)shipStatus}",
                 $"Navigator={navigator.SaveToStorage()}",

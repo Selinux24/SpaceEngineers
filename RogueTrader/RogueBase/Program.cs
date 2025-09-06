@@ -11,7 +11,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "1.3";
+        const string Version = "1.4";
         const string Separate = "------";
 
         #region Blocks
@@ -324,7 +324,7 @@ namespace IngameScript
 
                 var exchange = pair.Exchange;
 
-                request.SetDone();
+                request.SetDoing();
                 exchange.DockRequest(request.Ship);
 
                 string command = null;
@@ -374,7 +374,7 @@ namespace IngameScript
                     continue;
                 }
 
-                request.SetDone();
+                request.SetDoing();
 
                 string command = null;
                 switch (request.Task)
@@ -414,9 +414,17 @@ namespace IngameScript
         {
             double time = Runtime.TimeSinceLastRun.TotalSeconds;
 
-            foreach (var exchange in exchanges)
+            foreach (var e in exchanges)
             {
-                if (exchange.Update(time)) continue;
+                e.Update(time);
+            }
+
+            foreach (var r in exchangeRequests)
+            {
+                if (exchanges.Any(e => e.DockedShips().Any(d => d == r.Ship)))
+                {
+                    r.SetDone();
+                }
             }
 
             exchangeRequests.RemoveAll(r => r.Expired);
@@ -627,7 +635,7 @@ namespace IngameScript
             foreach (var exchange in exchanges)
             {
                 bool isFree = exchange.IsFree();
-                string status = isFree ? "Free" : string.Join(", ", exchange.DockedShips());
+                string status = isFree ? "Free" : exchange.ReservedShipName ?? string.Join(", ", exchange.DockedShips());
 
                 WriteDataLCDs($"Exchange {exchange.Name} - {status}");
             }
