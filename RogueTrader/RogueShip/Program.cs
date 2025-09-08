@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "1.6";
+        const string Version = "1.7";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
@@ -635,6 +635,7 @@ namespace IngameScript
                 return
                     !hit.IsEmpty() &&
                     hit.Type != MyDetectedEntityType.Planet &&
+                    hit.EntityId != Me.EntityId &&
                     Vector3D.Distance(hit.HitPosition.Value, cameraPilot.GetPosition()) <= collisionDetectRange;
             }
 
@@ -976,7 +977,7 @@ namespace IngameScript
                 double capacity = CalculateCargoPercentage();
                 double pct = capacity / Config.MaxLoad;
                 string msg = null;
-                if (pct > 1.0) IsPropulsionFilled(shipStatus, out msg);
+                if (pct >= 1.0) IsPropulsionFilled(shipStatus, out msg);
                 return $"Loading from {GetDockedGridName()} {pct:P1}. {msg}";
             }
             else if (shipStatus == ShipStatus.Unloading)
@@ -984,7 +985,7 @@ namespace IngameScript
                 double capacity = CalculateCargoPercentage();
                 double pct = 1.0 - (capacity / Config.MaxLoad);
                 string msg = null;
-                if (pct > 1.0) IsPropulsionFilled(shipStatus, out msg);
+                if (pct >= 1.0) IsPropulsionFilled(shipStatus, out msg);
                 return $"Unloading to {GetDockedGridName()} {pct:P1}. {msg}";
             }
             else

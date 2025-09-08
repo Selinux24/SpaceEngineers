@@ -11,7 +11,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "1.4";
+        const string Version = "1.5";
         const string Separate = "------";
 
         #region Blocks
@@ -421,6 +421,10 @@ namespace IngameScript
 
             foreach (var r in exchangeRequests)
             {
+                if (r.Task != ExchangeTasks.StartLoad && r.Task != ExchangeTasks.StartUnload) continue;
+
+                if (string.IsNullOrWhiteSpace(r.Ship)) continue;
+
                 if (exchanges.Any(e => e.DockedShips().Any(d => d == r.Ship)))
                 {
                     r.SetDone();
