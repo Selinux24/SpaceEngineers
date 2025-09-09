@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Numerics;
 using VRage.Game.GUI.TextPanel;
 using VRage.Game.ModAPI.Ingame;
 using VRageMath;
@@ -25,11 +26,13 @@ namespace Sandbox.ModAPI.Ingame
     }
     public struct MyDetectedEntityInfo
     {
-        public Vector3D? HitPosition { get; set; }
-        public string Name { get; set; }
-        public BoundingBoxD BoundingBox { get; set; }
-        public Vector3D Position { get; set; }
-        public MyDetectedEntityType Type { get; set; }
+        public BoundingBoxD BoundingBox;
+        public long EntityId;
+        public Vector3D? HitPosition;
+        public string Name;
+        public MyDetectedEntityType Type;
+
+        public Vector3D Position { get; private set; }
 
         public bool IsEmpty()
         {
