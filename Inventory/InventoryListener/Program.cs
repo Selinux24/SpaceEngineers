@@ -10,14 +10,26 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        const string MessageCallback = "InventorySystem";
+        const string Version = "1.0";
+        const char AttributeSep = '=';
         const string WildcardLCDs = "[INV]";
+        const string MessageCallback = "InventorySystem";
+
+        readonly IMyCargoContainer outputCargo;
+        readonly List<IMyCargoContainer> warehouseCargos;
+        readonly IMyTimerBlock timerOpen;
+        readonly IMyTimerBlock timerClose;
+        readonly List<IMyTextPanel> infoLCDs;
 
         readonly IMyBroadcastListener bl;
         readonly string channel;
-        readonly StringBuilder sb = new StringBuilder();
 
         DateTime lastQuery = DateTime.MinValue;
+        readonly StringBuilder lastQueryState = new StringBuilder();
+        bool preparing = false;
+        string preparingData = null;
+
+        readonly StringBuilder infoText = new StringBuilder();
 
         public Program()
         {
@@ -27,7 +39,8 @@ namespace IngameScript
                     "Channel=name\n" +
                     "OutputCargo=name\n" +
                     "InventoryCargo=name\n" +
-                    "InventoryTimer=name\n" +
+                    "TimerOpen=name\n" +
+                    "TimerClose=name\n" +
                     "WildcardLCDs=name(optional)";
 
                 Echo("CustomData not set.");
@@ -41,13 +54,77 @@ namespace IngameScript
                 return;
             }
 
+            string outputCargoName = ReadConfig(Me.CustomData, "OutputCargo");
+            if (string.IsNullOrWhiteSpace(outputCargoName))
+            {
+                Echo("OutputCargo name not set.");
+                return;
+            }
+
+            string inventoryCargoName = ReadConfig(Me.CustomData, "InventoryCargo");
+            if (string.IsNullOrWhiteSpace(inventoryCargoName))
+            {
+                Echo("InventoryCargo name not set.");
+                return;
+            }
+
+            string timerOpenName = ReadConfig(Me.CustomData, "TimerOpen");
+            if (string.IsNullOrWhiteSpace(timerOpenName))
+            {
+                Echo("TimerOpen name not set.");
+                return;
+            }
+
+            string timerCloseName = ReadConfig(Me.CustomData, "TimerClose");
+            if (string.IsNullOrWhiteSpace(timerCloseName))
+            {
+                Echo("TimerClose name not set.");
+                return;
+            }
+
+            //Get the output container
+            outputCargo = GetBlockWithName<IMyCargoContainer>(outputCargoName);
+            if (outputCargo == null)
+            {
+                Echo($"No output cargo found with name {outputCargoName}");
+                return;
+            }
+
+            //Get all input containers
+            warehouseCargos = GetBlocksOfType<IMyCargoContainer>(inventoryCargoName);
+            if (warehouseCargos.Count == 0)
+            {
+                Echo($"No warehouse cargo containers found with name {inventoryCargoName}");
+                return;
+            }
+
+            timerOpen = GetBlockWithName<IMyTimerBlock>(timerOpenName);
+            if (timerOpen == null)
+            {
+                Echo($"No timer found with name {timerOpenName}");
+            }
+
+            timerClose = GetBlockWithName<IMyTimerBlock>(timerCloseName);
+            if (timerClose == null)
+            {
+                Echo($"No timer found with name {timerCloseName}");
+            }
+
+            string wildcard = ReadConfig(Me.CustomData, "WildcardLCDs") ?? WildcardLCDs;
+            infoLCDs = GetBlocksOfType<IMyTextPanel>(wildcard);
+
             bl = IGC.RegisterBroadcastListener(channel);
             bl.SetMessageCallback(MessageCallback);
             Echo($"Listener registered on {channel}");
 
-            Runtime.UpdateFrequency = UpdateFrequency.Update100;
+            LoadFromStorage();
 
-            Echo("Working...");
+            Runtime.UpdateFrequency = UpdateFrequency.Update100;
+        }
+
+        public void Save()
+        {
+            SaveToStorage();
         }
 
         public void Main(string argument, UpdateType updateSource)
@@ -58,64 +135,52 @@ namespace IngameScript
                 {
                     var msg = bl.AcceptMessage();
                     Prepare(msg.Data.ToString());
-                    lastQuery = DateTime.Now;
                 }
             }
 
-            string wildcard = ReadConfig(Me.CustomData, "WildcardLCDs") ?? WildcardLCDs;
-            var infoLCDs = GetBlocksOfType<IMyTextPanel>(wildcard);
-            WriteInfoLCDs(infoLCDs);
+            if (preparing)
+            {
+                if (timerOpen.IsCountingDown) return;
+                Preparing();
+                return;
+            }
+
+            infoText.Clear();
+            infoText.AppendLine($"Inventory Listener v{Version} - {channel}. {DateTime.Now:HH:mm:ss}");
+            if (lastQuery.Ticks > 0) infoText.AppendLine($"Last message received {(int)(DateTime.Now - lastQuery).TotalMinutes} minutes ago.");
+            infoText.AppendLine(lastQueryState.ToString());
+
+            WriteInfo();
         }
+
         void Prepare(string data)
         {
+            if (preparing) return;
+
+            lastQuery = DateTime.Now;
+            lastQueryState.Clear();
+
             if (string.IsNullOrWhiteSpace(data))
             {
-                WriteText("No components Needed.", false);
+                lastQueryState.AppendLine("No components Needed.");
                 return;
             }
 
-            string outputCargoName = ReadConfig(Me.CustomData, "OutputCargo");
-            if (string.IsNullOrWhiteSpace(outputCargoName))
-            {
-                WriteText("OutputCargo name not set.", false);
-                return;
-            }
+            timerOpen.StartCountdown();
+            preparing = true;
+            preparingData = data;
+        }
+        void Preparing()
+        {
+            if (!preparing) return;
 
-            string inventoryCargoName = ReadConfig(Me.CustomData, "InventoryCargo");
-            if (string.IsNullOrWhiteSpace(inventoryCargoName))
-            {
-                WriteText("InventoryCargo name not set.", false);
-                return;
-            }
+            if (timerOpen.IsCountingDown) return;
 
-            string timerName = ReadConfig(Me.CustomData, "InventoryTimer");
-            if (string.IsNullOrWhiteSpace(timerName))
-            {
-                WriteText("InventoryTimer name not set.", false);
-                return;
-            }
-
-            //Get the output container
-            var outputCargo = GetBlockWithName<IMyCargoContainer>(outputCargoName);
-            if (outputCargo == null)
-            {
-                WriteText($"No output cargo found with name {outputCargoName}", false);
-                return;
-            }
-
-            //Get all input containers
-            var warehouseCargos = GetBlocksOfType<IMyCargoContainer>(inventoryCargoName);
-            if (warehouseCargos.Count == 0)
-            {
-                WriteText($"No warehouse cargo containers found with name {inventoryCargoName}", false);
-                return;
-            }
-
-            var requestedItems = ReadItems(data);
+            var requestedItems = ReadItems(preparingData);
             var outputInv = outputCargo.GetInventory();
             var orderItems = GetItemsFromCargo(outputInv);
 
-            WriteText("Preparing Cargo...", false);
+            lastQueryState.AppendLine("Preparing Cargo...");
 
             //Go through each requested item
             bool anyMoved = false;
@@ -152,28 +217,23 @@ namespace IngameScript
                         {
                             anyMoved = true;
                             itemRemaining -= (int)toTransfer;
-                            WriteText($"Transfered {(int)toTransfer} of {item.Type}");
+                            lastQueryState.AppendLine($"Transfered {(int)toTransfer} of {item.Type}");
                         }
                     }
                 }
 
-                WriteText($"{itemType}: {(itemRemaining > 0 ? $"Missing {itemRemaining}" : "Transfered")}");
+                lastQueryState.AppendLine($"{itemType}: {(itemRemaining > 0 ? $"Missing {itemRemaining}" : "Transfered")}");
             }
 
             if (!anyMoved)
             {
-                WriteText("No items moved");
-                return;
+                lastQueryState.AppendLine("No items moved");
             }
 
-            var timer = GetBlockWithName<IMyTimerBlock>(timerName);
-            if (timer == null)
-            {
-                WriteText($"No timer found with name {timerName}");
-            }
+            timerClose.StartCountdown();
 
-            timer.Trigger();
-            WriteText($"{timerName} triggered");
+            preparing = false;
+            preparingData = null;
         }
         Dictionary<string, int> ReadItems(string data)
         {
@@ -214,25 +274,14 @@ namespace IngameScript
             GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && b.CustomName.Contains(filter));
             return blocks;
         }
-        void WriteText(string text, bool append = true)
+        void WriteInfo()
         {
-            Echo(text);
+            Echo(infoText.ToString());
 
-            if (!append)
-            {
-                sb.Clear();
-            }
-
-            sb.AppendLine(text);
-        }
-        void WriteInfoLCDs(List<IMyTextPanel> lcds)
-        {
-            foreach (var lcd in lcds)
+            foreach (var lcd in infoLCDs)
             {
                 lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-                lcd.WriteText($"Inventory Listener - {channel}. {DateTime.Now:HH:mm:ss}" + Environment.NewLine);
-                lcd.WriteText($"Last query {DateTime.Now - lastQuery:hh\\:mm\\:ss}" + Environment.NewLine, true);
-                lcd.WriteText(sb.ToString(), true);
+                lcd.WriteText(infoText);
             }
         }
 
@@ -242,6 +291,61 @@ namespace IngameScript
 
             string cmdToken = $"{name}=";
             return config.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";
+        }
+
+        void LoadFromStorage()
+        {
+            string[] storageLines = Storage.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+            if (storageLines.Length == 0)
+            {
+                return;
+            }
+
+            lastQuery = new DateTime(ReadLong(storageLines, "lastQuery", 0));
+            preparing = ReadInt(storageLines, "preparing", 0) == 1;
+            preparingData = ReadString(storageLines, "preparingData", null);
+        }
+        void SaveToStorage()
+        {
+            List<string> parts = new List<string>
+            {
+                $"lastQuery={lastQuery.Ticks}",
+                $"preparing={(preparing ? 1 : 0)}",
+                $"preparingData={preparingData}"
+            };
+
+            Storage = string.Join(Environment.NewLine, parts);
+        }
+        static string ReadString(string[] lines, string name, string defaultValue = "")
+        {
+            string cmdToken = $"{name}{AttributeSep}";
+            string value = lines.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";
+            if (string.IsNullOrEmpty(value))
+            {
+                return defaultValue;
+            }
+
+            return value;
+        }
+        static int ReadInt(string[] lines, string name, int defaultValue = 0)
+        {
+            string value = ReadString(lines, name);
+            if (string.IsNullOrEmpty(value))
+            {
+                return defaultValue;
+            }
+
+            return int.Parse(value);
+        }
+        static long ReadLong(string[] lines, string name, long defaultValue = 0)
+        {
+            string value = ReadString(lines, name);
+            if (string.IsNullOrEmpty(value))
+            {
+                return defaultValue;
+            }
+
+            return long.Parse(value);
         }
     }
 }

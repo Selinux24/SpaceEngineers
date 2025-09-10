@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net.NetworkInformation;
 using System.Text;
 using VRage;
 
@@ -10,13 +9,22 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
+        const string Version = "1.0";
         const char AttributeSep = '=';
         const string WildcardLCDs = "[INV]";
 
-        readonly StringBuilder sb = new StringBuilder();
+        readonly List<IMyCargoContainer> cargoContainers;
+        readonly List<IMyTextPanel> infoLCDs;
 
-        TimeSpan queryInterval = TimeSpan.FromMinutes(10);
+        readonly string channel;
+        readonly Dictionary<string, int> required;
+        readonly TimeSpan queryInterval;
         DateTime lastQuery = DateTime.MinValue;
+        bool lastQueryHastItems = false;
+        DateTime lastMessageDate = DateTime.MinValue;
+        readonly StringBuilder lastMessage = new StringBuilder();
+
+        readonly StringBuilder infoText = new StringBuilder();
 
         public Program()
         {
@@ -33,127 +41,52 @@ namespace IngameScript
                 return;
             }
 
-            LoadFromStorage();
-
-            Runtime.UpdateFrequency = UpdateFrequency.Update100;
-
-            Echo("Working...");
-        }
-        public void Save()
-        {
-            SaveToStorage();
-        }
-        public void Main(string argument, UpdateType updateSource)
-        {
-            Monitorize();
-
-            string wildcard = ReadConfig(Me.CustomData, "WildcardLCDs") ?? WildcardLCDs;
-            var infoLCDs = GetBlocksOfType<IMyTextPanel>(wildcard);
-            WriteInfoLCDs(infoLCDs);
-        }
-        void Monitorize()
-        {
-            var interval = ReadConfigInt(Me.CustomData, "QueryInterval");
-            if (!interval.HasValue || interval.Value < 1)
-            {
-                WriteText("QueryInterval minutes not valid. Must be a positive integer.", false);
-                return;
-            }
-            queryInterval = TimeSpan.FromMinutes(interval.Value);
-
-            var time = DateTime.Now - lastQuery;
-            if (time < queryInterval)
-            {
-                WriteText($"Waiting for next query: {queryInterval - time:hh\\:mm\\:ss}", false);
-                return;
-            }
-            lastQuery = DateTime.Now;
-
-            string channel = ReadConfig(Me.CustomData, "Channel");
+            channel = ReadConfig(Me.CustomData, "Channel");
             if (string.IsNullOrWhiteSpace(channel))
             {
-                WriteText("Channel not set.", false);
-                return;
-            }
-
-            string cargoContainerName = ReadConfig(Me.CustomData, "CargoContainerName");
-            if (string.IsNullOrWhiteSpace(cargoContainerName))
-            {
-                WriteText("CargoContainerName not set.", false);
+                Echo("Channel not set.");
                 return;
             }
 
             string inventory = ReadConfig(Me.CustomData, "Inventory");
             if (string.IsNullOrWhiteSpace(inventory))
             {
-                WriteText("Inventory not set.", false);
+                Echo("Inventory not set.");
+                return;
+            }
+            required = ReadConfigInventory(inventory);
+
+            var interval = ReadConfigInt(Me.CustomData, "QueryInterval");
+            if (!interval.HasValue || interval.Value < 1)
+            {
+                Echo("QueryInterval minutes not valid. Must be a positive integer.");
+                return;
+            }
+            queryInterval = TimeSpan.FromMinutes(interval.Value);
+
+            string cargoContainerName = ReadConfig(Me.CustomData, "CargoContainerName");
+            if (string.IsNullOrWhiteSpace(cargoContainerName))
+            {
+                Echo("CargoContainerName not set.");
                 return;
             }
 
-            var cargoContainers = GetBlocksOfType<IMyCargoContainer>(cargoContainerName);
+            cargoContainers = GetBlocksOfType<IMyCargoContainer>(cargoContainerName);
             if (cargoContainers.Count == 0)
             {
-                WriteText("Cargo Containers Not Found.", false);
+                Echo("Cargo Containers Not Found.");
                 return;
             }
 
-            var required = ReadItemsFromCustomData(inventory);
+            string wildcard = ReadConfig(Me.CustomData, "WildcardLCDs") ?? WildcardLCDs;
+            infoLCDs = GetBlocksOfType<IMyTextPanel>(wildcard);
 
-            var current = GetCurrentItemsInStores(cargoContainers);
+            LoadFromStorage();
 
-            string message = WriteMessage(required, current);
-            IGC.SendBroadcastMessage(channel, message.ToString());
-            WriteText($"Sending from {channel}", false);
-            WriteText(message);
+            Runtime.UpdateFrequency = UpdateFrequency.Update100;
+
+            Echo("Working...");
         }
-
-        List<T> GetBlocksOfType<T>(string name) where T : class, IMyTerminalBlock
-        {
-            var blocks = new List<T>();
-            GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && b.CustomName.Contains(name));
-            return blocks;
-        }
-        void WriteText(string text, bool append = true)
-        {
-            Echo(text);
-
-            if (!append)
-            {
-                sb.Clear();
-            }
-
-            sb.AppendLine(text);
-        }
-        void WriteInfoLCDs(List<IMyTextPanel> lcds)
-        {
-            foreach (var lcd in lcds)
-            {
-                lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-                lcd.WriteText($"Inventory Monitor. {DateTime.Now:HH:mm:ss}" + Environment.NewLine);
-                lcd.WriteText(sb.ToString(), true);
-            }
-        }
-
-        void LoadFromStorage()
-        {
-            string[] storageLines = Storage.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
-            if (storageLines.Length == 0)
-            {
-                return;
-            }
-
-            lastQuery = new DateTime(ReadLong(storageLines, "lastQuery", 0));
-        }
-        void SaveToStorage()
-        {
-            List<string> parts = new List<string>
-            {
-                $"lastQuery={lastQuery.Ticks}",
-            };
-
-            Storage = string.Join(Environment.NewLine, parts);
-        }
-
         static string ReadConfig(string customData, string name)
         {
             string[] config = customData.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
@@ -171,14 +104,14 @@ namespace IngameScript
 
             return int.Parse(value);
         }
-        static Dictionary<string, int> ReadItemsFromCustomData(string customData)
+        static Dictionary<string, int> ReadConfigInventory(string inventory)
         {
-            Dictionary<string, int> required = new Dictionary<string, int>();
+            var required = new Dictionary<string, int>();
 
-            string[] lines = customData.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+            var lines = inventory.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
             foreach (string line in lines)
             {
-                string[] parts = line.Split(':');
+                var parts = line.Split(':');
                 if (parts.Length == 2)
                 {
                     string item = parts[0].Trim();
@@ -189,11 +122,80 @@ namespace IngameScript
 
             return required;
         }
-        static Dictionary<string, MyFixedPoint> GetCurrentItemsInStores(List<IMyCargoContainer> cargos)
+
+        public void Save()
+        {
+            SaveToStorage();
+        }
+
+        public void Main(string argument)
+        {
+            if (argument == "FORCE")
+            {
+                Send();
+                return;
+            }
+
+            infoText.Clear();
+            infoText.AppendLine($"Inventory Monitor v{Version} - {channel}. {DateTime.Now:HH:mm:ss}");
+            if (lastMessageDate.Ticks > 0) infoText.AppendLine($"Last message sent {(int)(DateTime.Now - lastMessageDate).TotalMinutes} minutes ago.");
+            infoText.AppendLine(lastMessage.ToString());
+            infoText.AppendLine($"Last query has items? {lastQueryHastItems}");
+
+            Monitorize();
+
+            WriteInfo();
+        }
+
+        void Monitorize()
+        {
+            var time = DateTime.Now - lastQuery;
+            if (time < queryInterval)
+            {
+                infoText.AppendLine($"Waiting for next query: {queryInterval - time:hh\\:mm\\:ss}");
+                return;
+            }
+
+            Send();
+        }
+        void Send()
+        {
+            lastQuery = DateTime.Now;
+
+            StringBuilder message = new StringBuilder();
+            lastQueryHastItems = WriteMessage(message);
+
+            if (!lastQueryHastItems) return;
+
+            lastMessageDate = DateTime.Now;
+            lastMessage.Clear();
+            lastMessage.AppendLine(message.ToString());
+
+            IGC.SendBroadcastMessage(channel, message.ToString());
+        }
+        bool WriteMessage(StringBuilder message)
+        {
+            bool anyNeeded = false;
+
+            var current = GetCurrentItemsInStores();
+
+            foreach (var req in required)
+            {
+                int c = req.Value - (current.ContainsKey(req.Key) ? (int)current[req.Key] : 0);
+                if (c > 0)
+                {
+                    message.Append($"{req.Key}={c};");
+                    anyNeeded = true;
+                }
+            }
+
+            return anyNeeded;
+        }
+        Dictionary<string, MyFixedPoint> GetCurrentItemsInStores()
         {
             var list = new Dictionary<string, MyFixedPoint>();
 
-            foreach (var cargo in cargos)
+            foreach (var cargo in cargoContainers)
             {
                 var inv = cargo.GetInventory();
 
@@ -211,20 +213,46 @@ namespace IngameScript
 
             return list;
         }
-        static string WriteMessage(Dictionary<string, int> required, Dictionary<string, MyFixedPoint> inventory)
-        {
-            StringBuilder message = new StringBuilder();
 
-            foreach (var req in required)
+        List<T> GetBlocksOfType<T>(string name) where T : class, IMyTerminalBlock
+        {
+            var blocks = new List<T>();
+            GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && b.CustomName.Contains(name));
+            return blocks;
+        }
+        void WriteInfo()
+        {
+            Echo(infoText.ToString());
+
+            foreach (var lcd in infoLCDs)
             {
-                int c = req.Value - (inventory.ContainsKey(req.Key) ? (int)inventory[req.Key] : 0);
-                if (c > 0)
-                {
-                    message.Append($"{req.Key}={c};");
-                }
+                lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
+                lcd.WriteText(infoText);
+            }
+        }
+
+        void LoadFromStorage()
+        {
+            string[] storageLines = Storage.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+            if (storageLines.Length == 0)
+            {
+                return;
             }
 
-            return message.ToString();
+            lastQuery = new DateTime(ReadLong(storageLines, "lastQuery", 0));
+            lastQueryHastItems = ReadInt(storageLines, "lastQueryHastItems", 0) == 1;
+            lastMessageDate = new DateTime(ReadLong(storageLines, "lastMessageDate", 0));
+        }
+        void SaveToStorage()
+        {
+            List<string> parts = new List<string>
+            {
+                $"lastQuery={lastQuery.Ticks}",
+                $"lastQueryHastItems={(lastQueryHastItems ? 1 : 0)}",
+                $"lastMessageDate={lastMessageDate.Ticks}"
+            };
+
+            Storage = string.Join(Environment.NewLine, parts);
         }
         static string ReadString(string[] lines, string name, string defaultValue = "")
         {
@@ -236,6 +264,16 @@ namespace IngameScript
             }
 
             return value;
+        }
+        static int ReadInt(string[] lines, string name, int defaultValue = 0)
+        {
+            string value = ReadString(lines, name);
+            if (string.IsNullOrEmpty(value))
+            {
+                return defaultValue;
+            }
+
+            return int.Parse(value);
         }
         static long ReadLong(string[] lines, string name, long defaultValue = 0)
         {
