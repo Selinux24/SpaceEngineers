@@ -1,4 +1,5 @@
 ﻿using Sandbox.ModAPI.Ingame;
+using SpaceEngineers.Game.ModAPI.Ingame;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,7 +12,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "1.6";
+        const string Version = "1.7";
         const string Separate = "------";
 
         #region Blocks
@@ -332,9 +333,11 @@ namespace IngameScript
                 {
                     case ExchangeTasks.StartLoad:
                         command = "COME_TO_LOAD";
+                        exchange.TimerLoad?.StartCountdown();
                         break;
                     case ExchangeTasks.StartUnload:
                         command = "COME_TO_UNLOAD";
+                        exchange.TimerUnload?.StartCountdown();
                         break;
                 }
 
@@ -569,6 +572,13 @@ namespace IngameScript
                     if (camera != null)
                     {
                         exchangeGroup.Camera = camera;
+                    }
+
+                    var timer = block as IMyTimerBlock;
+                    if (timer != null)
+                    {
+                        if (timer.CustomName.Contains(config.ExchangeTimerLoad)) exchangeGroup.TimerLoad = timer;
+                        else if (timer.CustomName.Contains(config.ExchangeTimerUnload)) exchangeGroup.TimerUnload = timer;
                     }
                 }
 

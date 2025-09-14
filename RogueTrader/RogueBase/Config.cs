@@ -29,6 +29,8 @@ namespace IngameScript
         public readonly System.Text.RegularExpressions.Regex ExchangesRegex;
         public readonly string ExchangeMainConnector;
         public readonly string ExchangeOtherConnector;
+        public readonly string ExchangeTimerLoad;
+        public readonly string ExchangeTimerUnload;
         public readonly TimeSpan ExchangeRequestTimeOut;
 
         public readonly TimeSpan RequestStatusInterval; // seconds, how often to request status from ships
@@ -58,6 +60,8 @@ namespace IngameScript
             ExchangesRegex = new System.Text.RegularExpressions.Regex(ReadConfig(customData, "ExchangeGroupName"));
             ExchangeMainConnector = ReadConfig(customData, "ExchangeMainConnector");
             ExchangeOtherConnector = ReadConfig(customData, "ExchangeOtherConnector");
+            ExchangeTimerLoad = ReadConfig(customData, "ExchangeTimerLoad", "Timer Load");
+            ExchangeTimerUnload = ReadConfig(customData, "ExchangeTimerUnload", "Timer Unload");
             ExchangeRequestTimeOut = TimeSpan.FromSeconds(ReadConfigInt(customData, "ExchangeRequestTimeOut"));
 
             RequestStatusInterval = TimeSpan.FromSeconds(ReadConfigInt(customData, "RequestStatusInterval"));
@@ -165,6 +169,8 @@ namespace IngameScript
                 $"ExchangeGroupName={@"GR_\w+"}\n" +
                 "ExchangeMainConnector=Input\n" +
                 "ExchangeOtherConnector=Output\n" +
+                "ExchangeTimerLoad=Timer Load\n" +
+                "ExchangeTimerUnload=Timer Unload\n" +
                 "ExchangeRequestTimeOut=300\n" +
                 "\n" +
                 "RequestStatusInterval=30\n" +

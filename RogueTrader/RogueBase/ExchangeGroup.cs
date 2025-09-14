@@ -1,4 +1,5 @@
 ﻿using Sandbox.ModAPI.Ingame;
+using SpaceEngineers.Game.ModAPI.Ingame;
 using System.Collections.Generic;
 using System.Linq;
 using VRageMath;
@@ -14,6 +15,8 @@ namespace IngameScript
         public IMyShipConnector MainConnector;
         public readonly List<IMyShipConnector> Connectors = new List<IMyShipConnector>();
         public IMyCameraBlock Camera;
+        public IMyTimerBlock TimerLoad;
+        public IMyTimerBlock TimerUnload;
         public Vector3D Forward => Camera.WorldMatrix.Forward;
         public Vector3D Up => Camera.WorldMatrix.Up;
 
