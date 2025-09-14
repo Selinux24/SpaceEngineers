@@ -11,7 +11,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "1.5";
+        const string Version = "1.6";
         const string Separate = "------";
 
         #region Blocks
@@ -638,10 +638,7 @@ namespace IngameScript
 
             foreach (var exchange in exchanges)
             {
-                bool isFree = exchange.IsFree();
-                string status = isFree ? "Free" : exchange.ReservedShipName ?? string.Join(", ", exchange.DockedShips());
-
-                WriteDataLCDs($"Exchange {exchange.Name} - {status}");
+                WriteDataLCDs($"Exchange {exchange.Name} - {exchange.GetState()}");
             }
         }
         void PrintShipStatus()

@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "1.7";
+        const string Version = "1.8";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
@@ -635,7 +635,7 @@ namespace IngameScript
                 return
                     !hit.IsEmpty() &&
                     hit.Type != MyDetectedEntityType.Planet &&
-                    hit.EntityId != Me.EntityId &&
+                    hit.EntityId != Me.CubeGrid.EntityId &&
                     Vector3D.Distance(hit.HitPosition.Value, cameraPilot.GetPosition()) <= collisionDetectRange;
             }
 

@@ -129,17 +129,10 @@ namespace IngameScript
             return waypoints;
         }
 
-        public string SaveToStorage()
+        public string GetState()
         {
-            var parts = new List<string>
-            {
-                $"Name={Name}",
-                $"ReservedShipName={ReservedShipName}",
-                $"DockedShipName={DockedShipName}",
-                $"DockRequestTime={dockRequestTime}",
-            };
-
-            return string.Join("|", parts);
+            bool isFree = IsFree();
+            return isFree ? "Free" : string.IsNullOrWhiteSpace(ReservedShipName) ? string.Join(", ", DockedShips()) : ReservedShipName;
         }
 
         public static List<string> SaveListToStorage(List<ExchangeGroup> exchanges)
@@ -151,6 +144,18 @@ namespace IngameScript
                 $"ExchangeCount={exchanges.Count}",
                 $"Exchanges={exchangeList}",
             };
+        }
+        string SaveToStorage()
+        {
+            var parts = new List<string>
+            {
+                $"Name={Name}",
+                $"ReservedShipName={ReservedShipName}",
+                $"DockedShipName={DockedShipName}",
+                $"DockRequestTime={dockRequestTime}",
+            };
+
+            return string.Join("|", parts);
         }
         public static void LoadListFromStorage(string[] storageLines, List<ExchangeGroup> exchanges)
         {
