@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Numerics;
+using System.Text;
 using VRage.Game.GUI.TextPanel;
 using VRage.Game.ModAPI.Ingame;
 using VRageMath;
@@ -177,6 +177,7 @@ namespace Sandbox.ModAPI.Ingame
     {
         ContentType ContentType { get; set; }
         bool WriteText(string value, bool append = false);
+        bool WriteText(StringBuilder value, bool append = false);
     }
     public interface IMyTextSurfaceProvider
     {

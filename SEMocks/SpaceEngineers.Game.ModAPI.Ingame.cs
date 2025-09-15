@@ -4,6 +4,7 @@ namespace SpaceEngineers.Game.ModAPI.Ingame
 {
     public interface IMyTimerBlock : IMyTerminalBlock
     {
+        bool IsCountingDown { get; }
         void ApplyAction(string v);
         void StartCountdown();
         void Trigger();
