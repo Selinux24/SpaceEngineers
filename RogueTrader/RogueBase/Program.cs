@@ -12,7 +12,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "1.7";
+        const string Version = "1.8";
         const string Separate = "------";
 
         #region Blocks
@@ -424,17 +424,16 @@ namespace IngameScript
 
             foreach (var r in exchangeRequests)
             {
-                if (r.Task != ExchangeTasks.StartLoad && r.Task != ExchangeTasks.StartUnload) continue;
+                if (r.Expired) continue;
 
                 if (string.IsNullOrWhiteSpace(r.Ship)) continue;
 
-                if (exchanges.Any(e => e.DockedShips().Any(d => d == r.Ship)))
-                {
-                    r.SetDone();
-                }
+                if (r.Task != ExchangeTasks.StartLoad && r.Task != ExchangeTasks.StartUnload) continue;
+
+                if (ShipIsDocked(r.Ship)) r.SetDone();
             }
 
-            exchangeRequests.RemoveAll(r => r.Expired);
+            FreeExchanges();
 
             DoRefreshLCDs();
         }
@@ -579,6 +578,7 @@ namespace IngameScript
                     {
                         if (timer.CustomName.Contains(config.ExchangeTimerLoad)) exchangeGroup.TimerLoad = timer;
                         else if (timer.CustomName.Contains(config.ExchangeTimerUnload)) exchangeGroup.TimerUnload = timer;
+                        else if (timer.CustomName.Contains(config.ExchangeTimerFree)) exchangeGroup.TimerFree = timer;
                     }
                 }
 
@@ -626,6 +626,35 @@ namespace IngameScript
         List<Ship> GetWaitingShips()
         {
             return ships.Where(s => s.Status == ShipStatus.WaitingDock).ToList();
+        }
+        bool ShipIsDocked(string ship)
+        {
+            if (string.IsNullOrWhiteSpace(ship)) return false;
+
+            return exchanges.Any(e => e.DockedShips().Any(d => d == ship));
+        }
+        List<ExchangeGroup> GetShipExchanges(string ship)
+        {
+            if (string.IsNullOrWhiteSpace(ship)) return new List<ExchangeGroup>();
+
+            return exchanges.Where(e => e.DockedShips().Any(d => d == ship)).Distinct().ToList();
+        }
+        void FreeExchanges()
+        {
+            var exGroups = new List<ExchangeGroup>();
+            foreach (var r in exchangeRequests)
+            {
+                if (!r.Expired) continue;
+
+                exGroups.AddRange(GetShipExchanges(r.Ship));
+            }
+
+            foreach (var e in exGroups.Distinct())
+            {
+                e.TimerFree?.StartCountdown();
+            }
+
+            exchangeRequests.RemoveAll(r => r.Expired);
         }
 
         TimeSpan GetNextLCDsRefresh()

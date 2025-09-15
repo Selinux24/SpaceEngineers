@@ -17,6 +17,7 @@ namespace IngameScript
         public IMyCameraBlock Camera;
         public IMyTimerBlock TimerLoad;
         public IMyTimerBlock TimerUnload;
+        public IMyTimerBlock TimerFree;
         public Vector3D Forward => Camera.WorldMatrix.Forward;
         public Vector3D Up => Camera.WorldMatrix.Up;
 

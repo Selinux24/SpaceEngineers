@@ -31,6 +31,7 @@ namespace IngameScript
         public readonly string ExchangeOtherConnector;
         public readonly string ExchangeTimerLoad;
         public readonly string ExchangeTimerUnload;
+        public readonly string ExchangeTimerFree;
         public readonly TimeSpan ExchangeRequestTimeOut;
 
         public readonly TimeSpan RequestStatusInterval; // seconds, how often to request status from ships
@@ -62,6 +63,7 @@ namespace IngameScript
             ExchangeOtherConnector = ReadConfig(customData, "ExchangeOtherConnector");
             ExchangeTimerLoad = ReadConfig(customData, "ExchangeTimerLoad", "Timer Load");
             ExchangeTimerUnload = ReadConfig(customData, "ExchangeTimerUnload", "Timer Unload");
+            ExchangeTimerFree = ReadConfig(customData, "ExchangeTimerFree", "Timer Free");
             ExchangeRequestTimeOut = TimeSpan.FromSeconds(ReadConfigInt(customData, "ExchangeRequestTimeOut"));
 
             RequestStatusInterval = TimeSpan.FromSeconds(ReadConfigInt(customData, "RequestStatusInterval"));
@@ -171,6 +173,7 @@ namespace IngameScript
                 "ExchangeOtherConnector=Output\n" +
                 "ExchangeTimerLoad=Timer Load\n" +
                 "ExchangeTimerUnload=Timer Unload\n" +
+                "ExchangeTimerFree=Timer Free\n" +
                 "ExchangeRequestTimeOut=300\n" +
                 "\n" +
                 "RequestStatusInterval=30\n" +
