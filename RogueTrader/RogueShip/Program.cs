@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "1.8";
+        const string Version = "1.9";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
@@ -43,6 +43,7 @@ namespace IngameScript
         readonly List<IMyGasTank> shipTanks = new List<IMyGasTank>();
 
         readonly List<IMyTextSurface> infoLCDs = new List<IMyTextSurface>();
+        readonly List<IMyTextSurface> planLCDs = new List<IMyTextSurface>();
         readonly List<TextPanelDesc> logLCDs = new List<TextPanelDesc>();
         #endregion
 
@@ -241,6 +242,8 @@ namespace IngameScript
 
             else if (argument == "NEXT") Next();
             else if (argument == "UNDOCK") StopAndUndocK();
+
+            else if (argument == "PLAN") Plan();
         }
 
         /// <summary>
@@ -303,6 +306,7 @@ namespace IngameScript
             string command = Utils.ReadArgument(lines, "Command");
 
             if (command == "REQUEST_STATUS") ProcessRequestStatus(lines);
+            if (command == "REQUEST_PLAN") ProcessRequestPlan(lines);
 
             if (!IsForMe(lines)) return;
 
@@ -358,6 +362,25 @@ namespace IngameScript
                 navigator.SeparateFromDock(landing, exchange, fw, up, wpList, "ON_SEPARATION_COMPLETED", task);
                 shipStatus = ShipStatus.Undocking;
             }
+        }
+
+        /// <summary>
+        /// The ship responds with its current flight plan
+        /// </summary>
+        void ProcessRequestPlan(string[] lines)
+        {
+            string from = Utils.ReadString(lines, "From");
+            var plan = navigator.GetPlan(false);
+
+            List<string> parts = new List<string>()
+            {
+                $"Command=RESPONSE_PLAN",
+                $"To={from}",
+                $"From={shipId}",
+                $"Position={Utils.VectorToStr(remotePilot.GetPosition())}",
+                $"Plan={plan}",
+            };
+            BroadcastMessage(parts);
         }
         #endregion
 
@@ -461,6 +484,12 @@ namespace IngameScript
             var infoCps = GetBlocksImplementType<IMyTextSurfaceProvider>(Config.WildcardShipInfo).Where(c => Config.WildcardShipInfo.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Success);
             infoLCDs.AddRange(info);
             infoLCDs.AddRange(infoCps.Select(c => c.GetSurface(int.Parse(Config.WildcardShipInfo.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Value))));
+
+            planLCDs.Clear();
+            var plan = GetBlocksOfType<IMyTextPanel>(Config.WildcardPlanLCDs);
+            var planCps = GetBlocksImplementType<IMyTextSurfaceProvider>(Config.WildcardPlanLCDs).Where(c => Config.WildcardPlanLCDs.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Success);
+            planLCDs.AddRange(plan);
+            planLCDs.AddRange(planCps.Select(c => c.GetSurface(int.Parse(Config.WildcardPlanLCDs.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Value))));
 
             logLCDs.Clear();
             var log = GetBlocksOfType<IMyTextPanel>(Config.WildcardLogLCDs);
@@ -578,6 +607,13 @@ namespace IngameScript
             foreach (var lcd in logLCDs)
             {
                 lcd.Write(log, logLines);
+            }
+        }
+        internal void WritePlanLCDs(string text)
+        {
+            foreach (var lcd in planLCDs)
+            {
+                lcd.WriteText(text + Environment.NewLine);
             }
         }
         internal void BroadcastMessage(List<string> parts)
@@ -963,6 +999,12 @@ namespace IngameScript
             {
                 WriteLogLCDs($"Ship is not docked: {shipStatus}");
             }
+        }
+
+        void Plan()
+        {
+            //Fetch the current flight plan from the navigator and display it on the PLAN LCDs
+            WritePlanLCDs(navigator.GetPlan(true));
         }
 
         string GetShipState()

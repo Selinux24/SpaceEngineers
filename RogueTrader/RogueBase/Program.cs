@@ -12,7 +12,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "1.8";
+        const string Version = "1.9";
         const string Separate = "------";
 
         #region Blocks
@@ -29,6 +29,7 @@ namespace IngameScript
 
         readonly List<ExchangeGroup> exchanges = new List<ExchangeGroup>();
         readonly List<Ship> ships = new List<Ship>();
+        readonly List<Plan> plans = new List<Plan>();
         readonly List<ExchangeRequest> exchangeRequests = new List<ExchangeRequest>();
 
         DateTime lastRequestStatus = DateTime.MinValue;
@@ -97,6 +98,7 @@ namespace IngameScript
             PrintExchanges();
             PrintShipStatus();
             PrintExchangeRequests();
+            PrintShipPlans();
             FlushDataLCDs();
             FlushLogLCDs();
         }
@@ -111,11 +113,14 @@ namespace IngameScript
             else if (argument == "LIST_EXCHANGES") ListExchanges();
             else if (argument == "LIST_SHIPS") ListShips();
             else if (argument == "LIST_EXCHANGE_REQUESTS") ListExchangeRequests();
+            else if (argument == "LIST_PLANS") ListPlans();
 
             else if (argument == "ENABLE_LOGS") EnableLogs();
             else if (argument == "ENABLE_STATUS_REQUEST") EnableStatusRequest();
             else if (argument == "ENABLE_EXCHANGE_REQUEST") EnableExchangeRequest();
             else if (argument == "ENABLE_REFRESH_LCDS") EnableRefreshLCDs();
+
+            else if (argument == "LIST_PLAN") RequestShipPlan();
         }
 
         /// <summary>
@@ -156,6 +161,13 @@ namespace IngameScript
             config.ShowExchangeRequests = !config.ShowExchangeRequests;
         }
         /// <summary>
+        /// Changes the state of the variable that controls the display of the flight plans
+        /// </summary>
+        void ListPlans()
+        {
+            config.ShowPlans = !config.ShowPlans;
+        }
+        /// <summary>
         /// Changes the state of the variable that controls the display of logs
         /// </summary>
         void EnableLogs()
@@ -183,6 +195,18 @@ namespace IngameScript
         {
             config.EnableRefreshLCDs = !config.EnableRefreshLCDs;
         }
+        /// <summary>
+        /// Requests all SHIPs to send its plan
+        /// </summary>
+        void RequestShipPlan()
+        {
+            List<string> parts = new List<string>()
+            {
+                $"Command=REQUEST_PLAN",
+                $"From={baseId}",
+            };
+            BroadcastMessage(parts);
+        }
         #endregion
 
         #region IGC COMMANDS
@@ -196,6 +220,7 @@ namespace IngameScript
             if (!IsForMe(lines)) return;
 
             if (command == "RESPONSE_STATUS") ProcessResponseStatus(lines);
+            if (command == "RESPONSE_PLAN") ProcessResponsePlan(lines);
 
             else if (command == "WAITING_LOAD") ProcessWaiting(lines, ExchangeTasks.StartLoad);
             else if (command == "WAITING_UNLOAD") ProcessWaiting(lines, ExchangeTasks.StartUnload);
@@ -229,6 +254,23 @@ namespace IngameScript
             ship.Position = position;
             ship.Cargo = cargo;
             ship.UpdateTime = DateTime.Now;
+        }
+        /// <summary>
+        /// BASE updates the SHIP plan
+        /// </summary>
+        void ProcessResponsePlan(string[] lines)
+        {
+            string from = Utils.ReadString(lines, "From");
+            var position = Utils.ReadVector(lines, "Position");
+            var plan = Utils.ReadStringList(lines, "Plan");
+
+            plans.RemoveAll(p => p.Ship == from);
+            plans.Add(new Plan()
+            {
+                Ship = from,
+                Position = position,
+                GPSList = plan,
+            });
         }
         /// <summary>
         /// Enqueues a request to make a task to a SHIP.
@@ -722,6 +764,30 @@ namespace IngameScript
                 string unloadStatus = req.Pending ? "Pending" : "On route";
                 WriteDataLCDs($"{req.Ship} {req.Task}. {unloadStatus}");
             }
+        }
+        void PrintShipPlans()
+        {
+            if (!config.ShowPlans) return;
+
+            WriteDataLCDs("");
+            WriteDataLCDs("FLIGHT PLANS");
+
+            if (plans.Count == 0)
+            {
+                WriteDataLCDs("No plans available.");
+                return;
+            }
+
+            var last = plans[plans.Count - 1];
+            foreach (var plan in plans)
+            {
+                WriteDataLCDs($"+{plan.Ship}");
+                WriteDataLCDs(plan.GetWaypoints());
+                if (plan != last) WriteDataLCDs(Separate);
+            }
+
+            //Remove ships that have not been updated in a while
+            ships.RemoveAll(s => (DateTime.Now - s.UpdateTime).TotalMinutes > 5);
         }
         #endregion
 

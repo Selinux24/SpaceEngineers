@@ -87,6 +87,15 @@ namespace IngameScript
 
             return StrToVector(value);
         }
+        public static List<string> ReadStringList(string[] lines, string name)
+        {
+            string value = ReadString(lines, name);
+            if (string.IsNullOrEmpty(value))
+            {
+                return new List<string>();
+            }
+            return value.Split(VariableSep).ToList();
+        }
 
         public static bool IsFromGroup(string input, System.Text.RegularExpressions.Regex regEx)
         {

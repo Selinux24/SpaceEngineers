@@ -14,6 +14,7 @@ namespace IngameScript
         public bool ShowShips = true;
         public bool ShowExchanges = true;
         public bool ShowExchangeRequests = true;
+        public bool ShowPlans = false;
 
         public bool EnableLogs = false;
         public bool EnableRequestStatus = true;
@@ -46,6 +47,7 @@ namespace IngameScript
             ShowShips = ReadConfigBool(customData, "ShowShips", true);
             ShowExchanges = ReadConfigBool(customData, "ShowExchanges", true);
             ShowExchangeRequests = ReadConfigBool(customData, "ShowExchangeRequests", true);
+            ShowPlans = ReadConfigBool(customData, "ShowPlans", false);
 
             EnableLogs = ReadConfigBool(customData, "EnableLogs", false);
             EnableRequestStatus = ReadConfigBool(customData, "EnableRequestStatus", true);
@@ -156,6 +158,7 @@ namespace IngameScript
                 "ShowShips=true\n" +
                 "ShowExchanges=true\n" +
                 "ShowExchangeRequests=true\n" +
+                "ShowPlans=false\n" +
                 "\n" +
                 "EnableLogs=false\n" +
                 "EnableRequestStatus=true\n" +

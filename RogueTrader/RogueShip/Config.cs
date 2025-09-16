@@ -16,6 +16,7 @@ namespace IngameScript
         public bool EnableRefreshLCDs = false;
 
         public readonly System.Text.RegularExpressions.Regex WildcardShipInfo;
+        public readonly System.Text.RegularExpressions.Regex WildcardPlanLCDs;
         public readonly System.Text.RegularExpressions.Regex WildcardLogLCDs;
 
         public readonly string TimerPilot;
@@ -85,6 +86,7 @@ namespace IngameScript
             EnableRefreshLCDs = ReadConfigBool(customData, "EnableRefreshLCDs");
 
             WildcardShipInfo = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "WildcardShipInfo")}(?:\.(\d+))?\]");
+            WildcardPlanLCDs = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "WildcardPlanLCDs")}(?:\.(\d+))?\]");
             WildcardLogLCDs = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "WildcardLogLCDs")}(?:\.(\d+))?\]");
 
             TimerPilot = ReadConfig(customData, "TimerPilot", "");
@@ -252,6 +254,7 @@ namespace IngameScript
                 "EnableRefreshLCDs=false\n" +
                 "\n" +
                 "WildcardShipInfo=DELIVERY_INFO\n" +
+                "WildcardPlanLCDs=DELIVERY_PLAN\n" +
                 "WildcardLogLCDs=DELIVERY_LOG\n" +
                 "\n" +
                 "TimerPilot=Timer Block Pilot\n" +
