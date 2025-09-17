@@ -9,7 +9,7 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        const string Version = "1.0";
+        const string Version = "1.1";
         const char AttributeSep = '=';
         const string WildcardLCDs = "[INV]";
 
@@ -17,8 +17,10 @@ namespace IngameScript
         readonly List<IMyTextPanel> infoLCDs;
 
         readonly string channel;
+        readonly string name;
         readonly Dictionary<string, int> required;
         readonly TimeSpan queryInterval;
+        bool retained = false;
         DateTime lastQuery = DateTime.MinValue;
         bool lastQueryHastItems = false;
         DateTime lastMessageDate = DateTime.MinValue;
@@ -26,12 +28,15 @@ namespace IngameScript
 
         readonly StringBuilder infoText = new StringBuilder();
 
+        readonly StringBuilder message = new StringBuilder();
+
         public Program()
         {
             if (string.IsNullOrWhiteSpace(Me.CustomData))
             {
                 Me.CustomData =
                     "Channel=name\n" +
+                    "Name=name\n" +
                     "CargoContainerName=name\n" +
                     "QueryInterval=int\n" +
                     "Inventory=item1:quantity1;itemN:quantityN;\n" +
@@ -45,6 +50,13 @@ namespace IngameScript
             if (string.IsNullOrWhiteSpace(channel))
             {
                 Echo("Channel not set.");
+                return;
+            }
+
+            name = ReadConfig(Me.CustomData, "Name");
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                Echo("Name not set.");
                 return;
             }
 
@@ -128,27 +140,58 @@ namespace IngameScript
             SaveToStorage();
         }
 
-        public void Main(string argument)
+        public void Main(string argument, UpdateType updateSource)
         {
-            if (argument == "FORCE")
+            if ((updateSource & (UpdateType.Trigger | UpdateType.Terminal)) != 0)
             {
-                Send();
-                return;
+                if (argument == "FORCE")
+                {
+                    Send();
+                    return;
+                }
             }
 
-            infoText.Clear();
-            infoText.AppendLine($"Inventory Monitor v{Version} - {channel}. {DateTime.Now:HH:mm:ss}");
-            if (lastMessageDate.Ticks > 0) infoText.AppendLine($"Last message sent {(int)(DateTime.Now - lastMessageDate).TotalMinutes} minutes ago.");
-            infoText.AppendLine(lastMessage.ToString());
-            infoText.AppendLine($"Last query has items? {lastQueryHastItems}");
+            if ((updateSource & UpdateType.IGC) != 0)
+            {
+                while (IGC.UnicastListener.HasPendingMessage)
+                {
+                    var msg = IGC.UnicastListener.AcceptMessage();
+                    string state = msg.Data as string;
+                    if (state == "1")
+                    {
+                        //Retain next query
+                        retained = true;
+                    }
+                    else if (state == "2")
+                    {
+                        //Free query
+                        retained = false;
+                        lastQuery = DateTime.Now;
+                    }
+                }
+            }
 
-            Monitorize();
+            if ((updateSource & UpdateType.Update100) != 0)
+            {
+                infoText.Clear();
+                infoText.AppendLine($"Inventory Monitor v{Version} - {channel}. {DateTime.Now:HH:mm:ss}");
+                if (lastMessageDate.Ticks > 0) infoText.AppendLine($"Last message sent {(int)(DateTime.Now - lastMessageDate).TotalMinutes} minutes ago.");
+                infoText.AppendLine(lastMessage.ToString());
+                infoText.AppendLine($"Last query has items? {lastQueryHastItems}");
 
-            WriteInfo();
+                Monitorize();
+
+                WriteInfo();
+            }
         }
 
         void Monitorize()
         {
+            if (retained)
+            {
+                return;
+            }
+
             var time = DateTime.Now - lastQuery;
             if (time < queryInterval)
             {
@@ -162,8 +205,7 @@ namespace IngameScript
         {
             lastQuery = DateTime.Now;
 
-            StringBuilder message = new StringBuilder();
-            lastQueryHastItems = WriteMessage(message);
+            lastQueryHastItems = WriteMessage();
 
             if (!lastQueryHastItems) return;
 
@@ -173,11 +215,14 @@ namespace IngameScript
 
             IGC.SendBroadcastMessage(channel, message.ToString());
         }
-        bool WriteMessage(StringBuilder message)
+        bool WriteMessage()
         {
+            message.Clear();
             bool anyNeeded = false;
 
             var current = GetCurrentItemsInStores();
+
+            message.AppendLine(name);
 
             foreach (var req in required)
             {
@@ -239,6 +284,7 @@ namespace IngameScript
                 return;
             }
 
+            retained = ReadInt(storageLines, "retained", 0) == 1;
             lastQuery = new DateTime(ReadLong(storageLines, "lastQuery", 0));
             lastQueryHastItems = ReadInt(storageLines, "lastQueryHastItems", 0) == 1;
             lastMessageDate = new DateTime(ReadLong(storageLines, "lastMessageDate", 0));
@@ -247,6 +293,7 @@ namespace IngameScript
         {
             List<string> parts = new List<string>
             {
+                $"retained={(retained ? 1 : 0)}",
                 $"lastQuery={lastQuery.Ticks}",
                 $"lastQueryHastItems={(lastQueryHastItems ? 1 : 0)}",
                 $"lastMessageDate={lastMessageDate.Ticks}"
