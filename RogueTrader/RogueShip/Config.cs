@@ -11,6 +11,7 @@ namespace IngameScript
         readonly StringBuilder errors = new StringBuilder();
 
         public readonly string Channel;
+        public readonly string ExchangeType;
 
         public bool EnableLogs = true;
         public bool EnableRefreshLCDs = false;
@@ -81,6 +82,7 @@ namespace IngameScript
         public Config(string customData)
         {
             Channel = Utils.ReadConfig(customData, "Channel");
+            ExchangeType = Utils.ReadConfig(customData, "ExchangeType");
 
             EnableLogs = ReadConfigBool(customData, "EnableLogs");
             EnableRefreshLCDs = ReadConfigBool(customData, "EnableRefreshLCDs");
@@ -249,6 +251,7 @@ namespace IngameScript
         {
             return
                 "Channel=name\n" +
+                "ExchangeType=type\n" +
                 "\n" +
                 "EnableLogs=false\n" +
                 "EnableRefreshLCDs=false\n" +

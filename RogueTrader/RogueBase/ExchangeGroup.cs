@@ -36,7 +36,7 @@ namespace IngameScript
         public bool IsFree()
         {
             if (!string.IsNullOrWhiteSpace(DockedShipName)) return false;
-          
+
             if (!string.IsNullOrWhiteSpace(ReservedShipName)) return false;
 
             return true;
@@ -139,15 +139,17 @@ namespace IngameScript
             return isFree ? "Free" : string.IsNullOrWhiteSpace(ReservedShipName) ? string.Join(", ", DockedShips()) : ReservedShipName;
         }
 
-        public static List<string> SaveListToStorage(List<ExchangeGroup> exchanges)
+        public static string SaveListToStorage(List<ExchangeGroup> exchanges)
         {
             var exchangeList = string.Join("¬", exchanges.Select(e => e.SaveToStorage()).ToList());
 
-            return new List<string>
+            var parts = new List<string>
             {
                 $"ExchangeCount={exchanges.Count}",
                 $"Exchanges={exchangeList}",
             };
+
+            return string.Join(";", parts);
         }
         string SaveToStorage()
         {
@@ -161,8 +163,10 @@ namespace IngameScript
 
             return string.Join("|", parts);
         }
-        public static void LoadListFromStorage(string[] storageLines, List<ExchangeGroup> exchanges)
+        public static void LoadListFromStorage(string line, List<ExchangeGroup> exchanges)
         {
+            string[] storageLines = line.Split(';');
+
             int exchangeCount = Utils.ReadInt(storageLines, "ExchangeCount");
             if (exchangeCount == 0) return;
 

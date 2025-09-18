@@ -9,7 +9,7 @@ namespace IngameScript
         const char ArgumentSep = '=';
         const char VariableSep = ';';
         const char VariablePartSep = ':';
-        const char AttributeSep = '=';
+        public const char AttributeSep = '=';
 
         public static string ReadArgument(string[] arguments, string command, char sep = ArgumentSep)
         {

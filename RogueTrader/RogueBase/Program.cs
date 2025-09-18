@@ -12,7 +12,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "1.9";
+        const string Version = "2.0";
         const string Separate = "------";
 
         #region Blocks
@@ -27,7 +27,7 @@ namespace IngameScript
         readonly StringBuilder sbData = new StringBuilder();
         readonly StringBuilder sbLog = new StringBuilder();
 
-        readonly List<ExchangeGroup> exchanges = new List<ExchangeGroup>();
+        readonly Dictionary<string, List<ExchangeGroup>> exchanges = new Dictionary<string, List<ExchangeGroup>>();
         readonly List<Ship> ships = new List<Ship>();
         readonly List<Plan> plans = new List<Plan>();
         readonly List<ExchangeRequest> exchangeRequests = new List<ExchangeRequest>();
@@ -56,7 +56,7 @@ namespace IngameScript
 
             RefreshLCDs();
 
-            InitializeExchangeGroups();
+            InitializeExchanges();
 
             bl = IGC.RegisterBroadcastListener(config.Channel);
 
@@ -137,7 +137,7 @@ namespace IngameScript
             ships.Clear();
             exchangeRequests.Clear();
 
-            InitializeExchangeGroups();
+            InitializeExchanges();
         }
         /// <summary>
         /// Changes the state of the variable that controls the display of exchanges
@@ -237,6 +237,7 @@ namespace IngameScript
         void ProcessResponseStatus(string[] lines)
         {
             string from = Utils.ReadString(lines, "From");
+            string exchangeType = Utils.ReadString(lines, "ExchangeType");
             ShipStatus status = (ShipStatus)Utils.ReadInt(lines, "Status");
             string statusMessage = Utils.ReadString(lines, "StatusMessage");
             var position = Utils.ReadVector(lines, "Position");
@@ -249,6 +250,7 @@ namespace IngameScript
                 ships.Add(ship);
             }
 
+            ship.ExchangeType = exchangeType;
             ship.Status = status;
             ship.StatusMessage = statusMessage;
             ship.Position = position;
@@ -278,8 +280,9 @@ namespace IngameScript
         void ProcessWaiting(string[] lines, ExchangeTasks task)
         {
             string from = Utils.ReadString(lines, "From");
+            string exchangeType = Utils.ReadString(lines, "ExchangeType");
 
-            EnqueueExchangeRequest(from, task);
+            EnqueueExchangeRequest(exchangeType, from, task);
         }
         #endregion
 
@@ -334,120 +337,126 @@ namespace IngameScript
         }
         bool DoExchangeDockRequest()
         {
-            var exRequest = GetPendingExchangeDockRequests();
-            if (exRequest.Count == 0)
+            foreach (var ex in exchanges.Keys)
             {
-                return false;
-            }
-            var freeExchanges = GetFreeExchanges();
-            if (freeExchanges.Count == 0)
-            {
-                return false;
-            }
-            var waitingShips = GetWaitingShips();
-            if (waitingShips.Count == 0)
-            {
-                return false;
-            }
-            WriteLogLCDs($"Exchange requests: {exRequest.Count}; Free exchanges: {freeExchanges.Count}; Free ships: {waitingShips.Count}");
+                var exRequest = GetPendingExchangeDockRequests(ex);
+                if (exRequest.Count == 0)
+                {
+                    continue;
+                }
+                var freeExchanges = GetFreeExchanges(ex);
+                if (freeExchanges.Count == 0)
+                {
+                    continue;
+                }
+                var waitingShips = GetWaitingShips(ex);
+                if (waitingShips.Count == 0)
+                {
+                    continue;
+                }
+                WriteLogLCDs($"Exchange {ex} requests: {exRequest.Count}; Free exchanges: {freeExchanges.Count}; Free ships: {waitingShips.Count}");
 
-            var shipExchangePairs = ShipExchangePair.GetNearestShipsFromExchanges(waitingShips, freeExchanges);
-            if (shipExchangePairs.Count == 0)
-            {
-                return false;
-            }
-
-            foreach (var request in exRequest)
-            {
-                var pair = shipExchangePairs.FirstOrDefault(s => s.Ship.Name == request.Ship);
-                if (pair == null)
+                var shipExchangePairs = ShipExchangePair.GetNearestShipsFromExchanges(waitingShips, freeExchanges);
+                if (shipExchangePairs.Count == 0)
                 {
                     continue;
                 }
 
-                var exchange = pair.Exchange;
-
-                request.SetDoing();
-                exchange.DockRequest(request.Ship);
-
-                string command = null;
-                switch (request.Task)
+                foreach (var request in exRequest)
                 {
-                    case ExchangeTasks.StartLoad:
-                        command = "COME_TO_LOAD";
-                        exchange.TimerLoad?.StartCountdown();
-                        break;
-                    case ExchangeTasks.StartUnload:
-                        command = "COME_TO_UNLOAD";
-                        exchange.TimerUnload?.StartCountdown();
-                        break;
+                    var pair = shipExchangePairs.FirstOrDefault(s => s.Ship.Name == request.Ship);
+                    if (pair == null)
+                    {
+                        continue;
+                    }
+
+                    var exchange = pair.Exchange;
+
+                    request.SetDoing();
+                    exchange.DockRequest(request.Ship);
+
+                    string command = null;
+                    switch (request.Task)
+                    {
+                        case ExchangeTasks.StartLoad:
+                            command = "COME_TO_LOAD";
+                            exchange.TimerLoad?.StartCountdown();
+                            break;
+                        case ExchangeTasks.StartUnload:
+                            command = "COME_TO_UNLOAD";
+                            exchange.TimerUnload?.StartCountdown();
+                            break;
+                    }
+
+                    var parts = new List<string>()
+                    {
+                        $"Command={command}",
+                        $"To={request.Ship}",
+                        $"From={baseId}",
+
+                        $"Landing={(config.InGravity?1:0)}",
+
+                        $"Exchange={exchange.Name}",
+                        $"Forward={Utils.VectorToStr(exchange.Forward)}",
+                        $"Up={Utils.VectorToStr(exchange.Up)}",
+                        $"Waypoints={Utils.VectorListToStr(exchange.CalculateRouteToConnector())}",
+                    };
+                    BroadcastMessage(parts);
+
+                    return true;
                 }
-
-                List<string> parts = new List<string>()
-                {
-                    $"Command={command}",
-                    $"To={request.Ship}",
-                    $"From={baseId}",
-
-                    $"Landing={(config.InGravity?1:0)}",
-
-                    $"Exchange={exchange.Name}",
-                    $"Forward={Utils.VectorToStr(exchange.Forward)}",
-                    $"Up={Utils.VectorToStr(exchange.Up)}",
-                    $"Waypoints={Utils.VectorListToStr(exchange.CalculateRouteToConnector())}",
-                };
-                BroadcastMessage(parts);
-
-                return true;
             }
 
             return false;
         }
         bool DoExchangeUndockRequest()
         {
-            var exRequest = GetPendingExchangeUndockRequests();
-            if (exRequest.Count == 0)
+            foreach (var ex in exchanges.Keys)
             {
-                return false;
-            }
-
-            foreach (var request in exRequest)
-            {
-                var exchange = exchanges.FirstOrDefault(e => e.DockedShipName == request.Ship);
-                if (exchange == null)
+                var exRequest = GetPendingExchangeUndockRequests(ex);
+                if (exRequest.Count == 0)
                 {
                     continue;
                 }
 
-                request.SetDoing();
-
-                string command = null;
-                switch (request.Task)
+                foreach (var request in exRequest)
                 {
-                    case ExchangeTasks.EndLoad:
-                        command = "UNDOCK_TO_LOAD";
-                        break;
-                    case ExchangeTasks.EndUnload:
-                        command = "UNDOCK_TO_UNLOAD";
-                        break;
+                    var exchange = FindShipExchange(request.Ship);
+                    if (exchange == null)
+                    {
+                        continue;
+                    }
+
+                    request.SetDoing();
+
+                    string command = null;
+                    switch (request.Task)
+                    {
+                        case ExchangeTasks.EndLoad:
+                            command = "UNDOCK_TO_LOAD";
+                            break;
+                        case ExchangeTasks.EndUnload:
+                            command = "UNDOCK_TO_UNLOAD";
+                            break;
+                    }
+
+                    var parts = new List<string>()
+                    {
+                        $"Command={command}",
+                        $"To={request.Ship}",
+                        $"From={baseId}",
+
+                        $"Landing={(config.InGravity?1:0)}",
+
+                        $"Exchange={exchange.Name}",
+                        $"Forward={Utils.VectorToStr(exchange.Forward)}",
+                        $"Up={Utils.VectorToStr(exchange.Up)}",
+                        $"Waypoints={Utils.VectorListToStr(exchange.CalculateRouteFromConnector())}",
+                    };
+                    BroadcastMessage(parts);
+
+                    return true;
                 }
-
-                List<string> parts = new List<string>()
-                {
-                    $"Command={command}",
-                    $"To={request.Ship}",
-                    $"From={baseId}",
-
-                    $"Landing={(config.InGravity?1:0)}",
-
-                    $"Exchange={exchange.Name}",
-                    $"Forward={Utils.VectorToStr(exchange.Forward)}",
-                    $"Up={Utils.VectorToStr(exchange.Up)}",
-                    $"Waypoints={Utils.VectorListToStr(exchange.CalculateRouteFromConnector())}",
-                };
-                BroadcastMessage(parts);
-
-                return true;
             }
 
             return false;
@@ -459,9 +468,12 @@ namespace IngameScript
         {
             double time = Runtime.TimeSinceLastRun.TotalSeconds;
 
-            foreach (var e in exchanges)
+            foreach (var exchange in exchanges.Values)
             {
-                e.Update(time);
+                foreach (var e in exchange)
+                {
+                    e.Update(time);
+                }
             }
 
             foreach (var r in exchangeRequests)
@@ -579,11 +591,23 @@ namespace IngameScript
             return lastRequestStatus + config.RequestStatusInterval - DateTime.Now;
         }
 
-        void InitializeExchangeGroups()
+        void InitializeExchanges()
         {
             exchanges.Clear();
 
-            var regEx = config.ExchangesRegex;
+            foreach (var exchange in config.Exchanges)
+            {
+                //Calculate the regex for the exchange group
+                var regEx = new System.Text.RegularExpressions.Regex($@"{exchange}_\w+");
+
+                var exchangeGroups = InitializeExchangeGroups(regEx);
+
+                exchanges.Add(exchange, exchangeGroups);
+            }
+        }
+        List<ExchangeGroup> InitializeExchangeGroups(System.Text.RegularExpressions.Regex regEx)
+        {
+            var exchangeGroups = new List<ExchangeGroup>();
 
             //Find all blocks that have the exchange regex in their name
             var blocks = new List<IMyTerminalBlock>();
@@ -627,23 +651,21 @@ namespace IngameScript
                 if (exchangeGroup.IsValid())
                 {
                     WriteLogLCDs($"ExchangeGroup {exchangeGroup.Name} initialized.");
-                    exchanges.Add(exchangeGroup);
+                    exchangeGroups.Add(exchangeGroup);
                 }
                 else
                 {
                     WriteLogLCDs($"ExchangeGroup {exchangeGroup.Name} is invalid.");
                 }
             }
+
+            return exchangeGroups;
         }
-        void EnqueueExchangeRequest(string ship, ExchangeTasks task)
+        void EnqueueExchangeRequest(string exchangeType, string ship, ExchangeTasks task)
         {
             exchangeRequests.RemoveAll(r => r.Ship == ship);
 
-            exchangeRequests.Add(new ExchangeRequest(config)
-            {
-                Ship = ship,
-                Task = task,
-            });
+            exchangeRequests.Add(new ExchangeRequest(config, exchangeType, ship, task));
         }
         TimeSpan GetNextExchangeRequest()
         {
@@ -653,33 +675,49 @@ namespace IngameScript
         {
             return exchangeRequests.Any(r => r.Doing);
         }
-        List<ExchangeRequest> GetPendingExchangeDockRequests()
+        List<ExchangeRequest> GetPendingExchangeDockRequests(string exchangeType)
         {
-            return exchangeRequests.Where(r => r.Pending && (r.Task == ExchangeTasks.StartLoad || r.Task == ExchangeTasks.StartUnload)).ToList();
+            return exchangeRequests.
+                FindAll(r =>
+                    r.ExchangeType == exchangeType &&
+                    r.Pending &&
+                    (r.Task == ExchangeTasks.StartLoad || r.Task == ExchangeTasks.StartUnload));
         }
-        List<ExchangeRequest> GetPendingExchangeUndockRequests()
+        List<ExchangeRequest> GetPendingExchangeUndockRequests(string exchangeType)
         {
-            return exchangeRequests.Where(r => r.Pending && (r.Task == ExchangeTasks.EndLoad || r.Task == ExchangeTasks.EndUnload)).ToList();
+            return exchangeRequests.
+                FindAll(r =>
+                    r.ExchangeType == exchangeType &&
+                    r.Pending &&
+                    (r.Task == ExchangeTasks.EndLoad || r.Task == ExchangeTasks.EndUnload));
         }
-        List<ExchangeGroup> GetFreeExchanges()
+        List<ExchangeGroup> GetFreeExchanges(string exchangeType)
         {
-            return exchanges.Where(e => e.IsFree()).ToList();
+            return exchanges[exchangeType].FindAll(e => e.IsFree());
         }
-        List<Ship> GetWaitingShips()
+        List<Ship> GetWaitingShips(string exchangeType)
         {
-            return ships.Where(s => s.Status == ShipStatus.WaitingDock).ToList();
+            return ships.Where(s => s.ExchangeType == exchangeType && s.Status == ShipStatus.WaitingDock).ToList();
         }
         bool ShipIsDocked(string ship)
         {
             if (string.IsNullOrWhiteSpace(ship)) return false;
 
-            return exchanges.Any(e => e.DockedShips().Any(d => d == ship));
+            foreach (var exchange in exchanges.Values)
+            {
+                if (exchange.Any(e => e.DockedShips().Any(d => d == ship)))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
-        List<ExchangeGroup> GetShipExchanges(string ship)
+        List<ExchangeGroup> GetShipExchanges(string exchangeType, string ship)
         {
             if (string.IsNullOrWhiteSpace(ship)) return new List<ExchangeGroup>();
 
-            return exchanges.Where(e => e.DockedShips().Any(d => d == ship)).Distinct().ToList();
+            return exchanges[exchangeType].Where(e => e.DockedShips().Any(d => d == ship)).Distinct().ToList();
         }
         void FreeExchanges()
         {
@@ -688,7 +726,7 @@ namespace IngameScript
             {
                 if (!r.Expired) continue;
 
-                exGroups.AddRange(GetShipExchanges(r.Ship));
+                exGroups.AddRange(GetShipExchanges(r.ExchangeType, r.Ship));
             }
 
             foreach (var e in exGroups.Distinct())
@@ -697,6 +735,21 @@ namespace IngameScript
             }
 
             exchangeRequests.RemoveAll(r => r.Expired);
+        }
+        ExchangeGroup FindShipExchange(string ship)
+        {
+            foreach (var exchange in exchanges.Values)
+            {
+                foreach (var ex in exchange)
+                {
+                    if (ex.DockedShips().Any(d => d == ship))
+                    {
+                        return ex;
+                    }
+                }
+            }
+
+            return null;
         }
 
         TimeSpan GetNextLCDsRefresh()
@@ -717,9 +770,12 @@ namespace IngameScript
                 return;
             }
 
-            foreach (var exchange in exchanges)
+            foreach (var exchange in exchanges.Values)
             {
-                WriteDataLCDs($"Exchange {exchange.Name} - {exchange.GetState()}");
+                foreach (var e in exchange)
+                {
+                    WriteDataLCDs($"Exchange {e.Name} - {e.GetState()}");
+                }
             }
         }
         void PrintShipStatus()
@@ -762,7 +818,7 @@ namespace IngameScript
             foreach (var req in exchangeRequests)
             {
                 string unloadStatus = req.Pending ? "Pending" : "On route";
-                WriteDataLCDs($"{req.Ship} {req.Task}. {unloadStatus}");
+                WriteDataLCDs($"{req.ExchangeType}-{req.Ship} {req.Task}. {unloadStatus}");
             }
         }
         void PrintShipPlans()
@@ -799,13 +855,22 @@ namespace IngameScript
             if (storageLines.Length == 0) return;
 
             ExchangeRequest.LoadListFromStorage(config, storageLines, exchangeRequests);
-            ExchangeGroup.LoadListFromStorage(storageLines, exchanges);
+
+            foreach (var exchange in exchanges)
+            {
+                ExchangeGroup.LoadListFromStorage(Utils.ReadString(storageLines, $"Exchange_{exchange.Key}"), exchange.Value);
+            }
         }
         void SaveToStorage()
         {
             List<string> parts = new List<string>();
+
             parts.AddRange(ExchangeRequest.SaveListToStorage(exchangeRequests));
-            parts.AddRange(ExchangeGroup.SaveListToStorage(exchanges));
+
+            foreach (var exchange in exchanges)
+            {
+                parts.Add($"Exchange_{exchange.Key}{Utils.AttributeSep}{ExchangeGroup.SaveListToStorage(exchange.Value)}");
+            }
 
             Storage = string.Join(Environment.NewLine, parts);
         }

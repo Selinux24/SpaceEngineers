@@ -8,16 +8,20 @@ namespace IngameScript
         private readonly Config config;
         private DateTime doneTime;
 
-        public string Ship;
-        public ExchangeTasks Task;
+        public string ExchangeType { get; private set; }
+        public string Ship { get; private set; }
+        public ExchangeTasks Task { get; private set; }
 
         public bool Pending { get; private set; } = true;
         public bool Doing => !Pending && (DateTime.Now - doneTime) <= config.ExchangeRequestTimeOut;
         public bool Expired => !Pending && (DateTime.Now - doneTime) > config.ExchangeRequestTimeOut;
 
-        public ExchangeRequest(Config config)
+        public ExchangeRequest(Config config, string exchangeType, string ship, ExchangeTasks task)
         {
             this.config = config;
+            ExchangeType = exchangeType;
+            Ship = ship;
+            Task = task;
         }
 
         public void SetDoing()
@@ -35,7 +39,7 @@ namespace IngameScript
             List<string> list = new List<string>();
             foreach (var r in requests)
             {
-                list.Add($"From={r.Ship}|Task={(int)r.Task}|Pending={(r.Pending ? 1 : 0)}|doneTime={r.doneTime.Ticks}");
+                list.Add($"Type={r.ExchangeType}|From={r.Ship}|Task={(int)r.Task}|Pending={(r.Pending ? 1 : 0)}|doneTime={r.doneTime.Ticks}");
             }
 
             return new List<string>
@@ -54,10 +58,13 @@ namespace IngameScript
             for (int i = 0; i < unloadLines.Length; i++)
             {
                 var parts = unloadLines[i].Split('|');
-                var exchange = new ExchangeRequest(config)
+
+                var exchangeType = Utils.ReadString(parts, "Type");
+                var ship = Utils.ReadString(parts, "From");
+                var task = (ExchangeTasks)Utils.ReadInt(parts, "Task");
+
+                var exchange = new ExchangeRequest(config, exchangeType, ship, task)
                 {
-                    Ship = Utils.ReadString(parts, "From"),
-                    Task = (ExchangeTasks)Utils.ReadInt(parts, "Task"),
                     Pending = Utils.ReadInt(parts, "Pending") == 1,
                     doneTime = new DateTime(Utils.ReadLong(parts, "doneTime")),
                 };

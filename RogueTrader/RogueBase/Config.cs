@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
@@ -24,16 +25,17 @@ namespace IngameScript
         public readonly System.Text.RegularExpressions.Regex DataLCDs;
         public readonly System.Text.RegularExpressions.Regex LogLCDs;
 
+        public readonly List<string> Exchanges = new List<string>();
+
         public readonly int ExchangeNumWaypoints;
         public readonly double ExchangePathDistance; //Meters, distance from the dock to the first waypoint
         public readonly double ExchangeDockRequestTimeThr; //Seconds
-        public readonly System.Text.RegularExpressions.Regex ExchangesRegex;
+        public readonly TimeSpan ExchangeRequestTimeOut;
         public readonly string ExchangeMainConnector;
         public readonly string ExchangeOtherConnector;
         public readonly string ExchangeTimerLoad;
         public readonly string ExchangeTimerUnload;
         public readonly string ExchangeTimerFree;
-        public readonly TimeSpan ExchangeRequestTimeOut;
 
         public readonly TimeSpan RequestStatusInterval; // seconds, how often to request status from ships
         public readonly TimeSpan RequestReceptionInterval; // seconds, how often to request receptions
@@ -57,16 +59,17 @@ namespace IngameScript
             DataLCDs = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "DataLCDs")}(?:\.(\d+))?\]");
             LogLCDs = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "LogLCDs")}(?:\.(\d+))?\]");
 
+            Exchanges = ReadConfigList(customData, "Exchanges");
+
             ExchangeNumWaypoints = ReadConfigInt(customData, "ExchangeNumWaypoints");
             ExchangePathDistance = ReadConfigDouble(customData, "ExchangePathDistance");
             ExchangeDockRequestTimeThr = ReadConfigDouble(customData, "ExchangeDockRequestTimeThr");
-            ExchangesRegex = new System.Text.RegularExpressions.Regex(ReadConfig(customData, "ExchangeGroupName"));
+            ExchangeRequestTimeOut = TimeSpan.FromSeconds(ReadConfigInt(customData, "ExchangeRequestTimeOut"));
             ExchangeMainConnector = ReadConfig(customData, "ExchangeMainConnector");
             ExchangeOtherConnector = ReadConfig(customData, "ExchangeOtherConnector");
             ExchangeTimerLoad = ReadConfig(customData, "ExchangeTimerLoad", "Timer Load");
             ExchangeTimerUnload = ReadConfig(customData, "ExchangeTimerUnload", "Timer Unload");
             ExchangeTimerFree = ReadConfig(customData, "ExchangeTimerFree", "Timer Free");
-            ExchangeRequestTimeOut = TimeSpan.FromSeconds(ReadConfigInt(customData, "ExchangeRequestTimeOut"));
 
             RequestStatusInterval = TimeSpan.FromSeconds(ReadConfigInt(customData, "RequestStatusInterval"));
             RequestReceptionInterval = TimeSpan.FromSeconds(ReadConfigInt(customData, "RequestReceptionInterval"));
@@ -132,6 +135,15 @@ namespace IngameScript
 
             return double.Parse(value.Trim());
         }
+        List<string> ReadConfigList(string customData, string name)
+        {
+            var value = ReadConfigLine(customData, name);
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return new List<string>();
+            }
+            return value.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
+        }
         static string ReadConfigLine(string customData, string name)
         {
             string[] lines = customData.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
@@ -168,16 +180,17 @@ namespace IngameScript
                 "DataLCDs=DELIVERY_DATA\n" +
                 "LogLCDs=DELIVERY_LOG\n" +
                 "\n" +
+                "Exchanges=type1,type2,type3\n" +
+                "\n" +
                 "ExchangeNumWaypoints=5\n" +
                 "ExchangePathDistance=150\n" +
                 "ExchangeDockRequestTimeThr=900\n" +
-                $"ExchangeGroupName={@"GR_\w+"}\n" +
+                "ExchangeRequestTimeOut=300\n" +
                 "ExchangeMainConnector=Input\n" +
                 "ExchangeOtherConnector=Output\n" +
                 "ExchangeTimerLoad=Timer Load\n" +
                 "ExchangeTimerUnload=Timer Unload\n" +
                 "ExchangeTimerFree=Timer Free\n" +
-                "ExchangeRequestTimeOut=300\n" +
                 "\n" +
                 "RequestStatusInterval=30\n" +
                 "RequestReceptionInterval=60\n" +

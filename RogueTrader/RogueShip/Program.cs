@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "1.9";
+        const string Version = "2.0";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
@@ -332,6 +332,7 @@ namespace IngameScript
                 $"Command=RESPONSE_STATUS",
                 $"To={from}",
                 $"From={shipId}",
+                $"ExchangeType={Config.ExchangeType}",
                 $"Status={(int)shipStatus}",
                 $"StatusMessage={GetShipState()}",
                 $"Cargo={CalculateCargoPercentage()}",
@@ -960,6 +961,7 @@ namespace IngameScript
                 $"Command={message}",
                 $"To={to}",
                 $"From={shipId}",
+                $"ExchangeType={Config.ExchangeType}",
             };
             BroadcastMessage(parts);
 
