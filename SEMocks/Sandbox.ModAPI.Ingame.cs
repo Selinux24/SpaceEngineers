@@ -65,7 +65,21 @@ namespace Sandbox.ModAPI.Ingame
     }
     public struct MyIGCMessage
     {
-        public object Data { get; set; }
+        public object Data;
+        public long Source;
+        public string Tag;
+
+        public MyIGCMessage(object data, string tag, long source)
+        {
+            Data = data;
+            Tag = tag;
+            Source = source;
+        }
+
+        public TData As<TData>()
+        {
+            return (TData)Data;
+        }
     }
     public struct SerializableDefinitionId
     {
@@ -89,7 +103,14 @@ namespace Sandbox.ModAPI.Ingame
     public enum UpdateType
     {
         IGC,
+        Mod,
+        None,
+        Once,
+        Script,
+        Terminal,
+        Trigger,
         Update1,
+        Update10,
         Update100,
     }
     public enum UpdateFrequency
@@ -120,10 +141,18 @@ namespace Sandbox.ModAPI.Ingame
         UpdateFrequency UpdateFrequency { get; set; }
         TimeSpan TimeSinceLastRun { get; }
     }
+    public interface IMyUnicastListener : IMyMessageProvider
+    {
+
+    }
     public interface IMyIntergridCommunicationSystem
     {
+        long Me { get; }
+        IMyUnicastListener UnicastListener { get; }
+
         IMyBroadcastListener RegisterBroadcastListener(string canal);
         void SendBroadcastMessage(string v, string msg);
+        bool SendUnicastMessage<TData>(long addressee, string tag, TData data);
     }
     public interface IMyGridTerminalSystem
     {
