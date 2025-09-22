@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Text;
 using VRageMath;
 
 namespace IngameScript
@@ -166,6 +167,26 @@ namespace IngameScript
             return
                 $"Distance to destination: {Utils.DistanceToStr(Distance)}" + Environment.NewLine +
                 $"Progress: {CurrentTarget + 1}/{Waypoints.Count}." + Environment.NewLine;
+        }
+
+        public string GetPlan(bool formatted)
+        {
+            if (Waypoints.Count <= 0) return "No waypoints";
+
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < Waypoints.Count; i++)
+            {
+                if (formatted)
+                {
+                    sb.AppendLine($"GPS:WP_{i + 1}:{Utils.VectorToStr(Waypoints[i])}:#FFAAE9B3:");
+                }
+                else
+                {
+                    sb.Append($"GPS:WP_{i + 1}:{Utils.VectorToStr(Waypoints[i])}:#FFAAE9B3:");
+                    if (i < Waypoints.Count - 1) sb.Append(";");
+                }
+            }
+            return sb.ToString();
         }
 
         public void LoadFromStorage(string storageLine)

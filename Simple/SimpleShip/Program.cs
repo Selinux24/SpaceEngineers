@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "1.3";
+        const string Version = "1.4";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
@@ -26,6 +26,7 @@ namespace IngameScript
         readonly List<IMyGyro> gyros = new List<IMyGyro>();
 
         readonly List<IMyTextSurface> infoLCDs = new List<IMyTextSurface>();
+        readonly List<IMyTextSurface> planLCDs = new List<IMyTextSurface>();
         readonly List<TextPanelDesc> logLCDs = new List<TextPanelDesc>();
         #endregion
 
@@ -148,7 +149,9 @@ namespace IngameScript
             else if (argument == "ENABLE_LOGS") EnableLogs();
             else if (argument == "ENABLE_REFRESH_LCDS") EnableRefreshLCDs();
 
-            else if (argument == "REQUEST_DOCK") RequestDock();
+            else if (argument == "REQUEST_DOCK") SendRequestDock();
+       
+            else if (argument == "PLAN") Plan();
         }
 
         /// <summary>
@@ -196,22 +199,6 @@ namespace IngameScript
         {
             Config.EnableRefreshLCDs = !Config.EnableRefreshLCDs;
         }
-        /// <summary>
-        /// Requests docking at a base defined in the argument.
-        /// </summary>
-        void RequestDock()
-        {
-            List<string> parts = new List<string>()
-            {
-                $"Command=REQUEST_DOCK",
-                $"From={shipId}",
-                $"Position={Utils.VectorToStr(remoteDock.GetPosition())}",
-            };
-            BroadcastMessage(parts);
-
-            shipStatus = ShipStatus.WaitingDock;
-            lastDockRequest = DateTime.Now;
-        }
         #endregion
 
         #region IGC COMMANDS
@@ -222,17 +209,18 @@ namespace IngameScript
             string[] lines = signal.Split('|');
             string command = Utils.ReadArgument(lines, "Command");
 
-            if (command == "REQUEST_STATUS") CmdRequestStatus(lines);
+            if (command == "REQUEST_STATUS") ProcessRequestStatus(lines);
+            if (command == "REQUEST_PLAN") ProcessRequestPlan(lines);
 
             if (!IsForMe(lines)) return;
 
-            if (command == "DOCK") CmdDock(lines);
+            if (command == "DOCK") ProcessDocking(lines);
         }
 
         /// <summary>
         /// Replies the status of the ship
         /// </summary>
-        void CmdRequestStatus(string[] lines)
+        void ProcessRequestStatus(string[] lines)
         {
             string from = Utils.ReadString(lines, "From");
 
@@ -241,6 +229,7 @@ namespace IngameScript
                 $"Command=RESPONSE_STATUS",
                 $"To={from}",
                 $"From={shipId}",
+                $"ExchangeType={Config.ExchangeType}",
                 $"Status={(int)shipStatus}",
                 $"Position={Utils.VectorToStr(remoteDock.GetPosition())}",
                 $"StatusMessage={PrintShipStatus()}"
@@ -251,11 +240,30 @@ namespace IngameScript
         /// <summary>
         /// Docks in a exchange
         /// </summary>
-        void CmdDock(string[] lines)
+        void ProcessDocking(string[] lines)
         {
             alignData.Initialize(new ExchangeInfo(lines));
 
             shipStatus = ShipStatus.Docking;
+        }
+
+        /// <summary>
+        /// The ship responds with its current flight plan
+        /// </summary>
+        void ProcessRequestPlan(string[] lines)
+        {
+            string from = Utils.ReadString(lines, "From");
+            var plan = alignData.GetPlan(false);
+
+            List<string> parts = new List<string>()
+            {
+                $"Command=RESPONSE_PLAN",
+                $"To={from}",
+                $"From={shipId}",
+                $"Position={Utils.VectorToStr(remoteDock.GetPosition())}",
+                $"Plan={plan}",
+            };
+            BroadcastMessage(parts);
         }
         #endregion
 
@@ -279,26 +287,33 @@ namespace IngameScript
                 return;
             }
 
-            if (DateTime.Now - lastRefreshLCDs > Config.RefreshLCDsInterval)
-            {
-                RefreshLCDs();
-            }
+            RefreshLCDs();
         }
         void RefreshLCDs()
         {
+            if (DateTime.Now - lastRefreshLCDs <= Config.RefreshLCDsInterval)
+            {
+                return;
+            }
+            lastRefreshLCDs = DateTime.Now;
+
             infoLCDs.Clear();
             var info = GetBlocksOfType<IMyTextPanel>(Config.WildcardShipInfo);
             var infoCps = GetBlocksImplementType<IMyTextSurfaceProvider>(Config.WildcardShipInfo).Where(c => Config.WildcardShipInfo.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Success);
             infoLCDs.AddRange(info);
             infoLCDs.AddRange(infoCps.Select(c => c.GetSurface(int.Parse(Config.WildcardShipInfo.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Value))));
 
+            planLCDs.Clear();
+            var plan = GetBlocksOfType<IMyTextPanel>(Config.WildcardPlanLCDs);
+            var planCps = GetBlocksImplementType<IMyTextSurfaceProvider>(Config.WildcardPlanLCDs).Where(c => Config.WildcardPlanLCDs.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Success);
+            planLCDs.AddRange(plan);
+            planLCDs.AddRange(planCps.Select(c => c.GetSurface(int.Parse(Config.WildcardPlanLCDs.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Value))));
+
             logLCDs.Clear();
             var log = GetBlocksOfType<IMyTextPanel>(Config.WildcardLogLCDs);
             var logCps = GetBlocksImplementType<IMyTextSurfaceProvider>(Config.WildcardLogLCDs).Where(c => Config.WildcardLogLCDs.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Success);
             logLCDs.AddRange(log.Select(l => new TextPanelDesc(l, l)));
             logLCDs.AddRange(logCps.Select(c => new TextPanelDesc((IMyTerminalBlock)c, c.GetSurface(int.Parse(Config.WildcardLogLCDs.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Value)))));
-
-            lastRefreshLCDs = DateTime.Now;
         }
         #endregion
 
@@ -453,6 +468,13 @@ namespace IngameScript
                 lcd.WriteText(text + Environment.NewLine, append);
             }
         }
+        internal void WritePlanLCDs(string text)
+        {
+            foreach (var lcd in planLCDs)
+            {
+                lcd.WriteText(text + Environment.NewLine);
+            }
+        }
         internal void WriteLogLCDs(string text)
         {
             if (!Config.EnableLogs)
@@ -477,6 +499,27 @@ namespace IngameScript
             WriteLogLCDs($"BroadcastMessage: {message}");
 
             IGC.SendBroadcastMessage(Config.Channel, message);
+        }
+      
+        void SendRequestDock()
+        {
+            List<string> parts = new List<string>()
+            {
+                $"Command=REQUEST_DOCK",
+                $"From={shipId}",
+                $"ExchangeType={Config.ExchangeType}",
+                $"Position={Utils.VectorToStr(remoteDock.GetPosition())}",
+            };
+            BroadcastMessage(parts);
+
+            shipStatus = ShipStatus.WaitingDock;
+            lastDockRequest = DateTime.Now;
+        }
+
+        void Plan()
+        {
+            //Fetch the current flight plan from the navigator and display it on the PLAN LCDs
+            WritePlanLCDs(alignData.GetPlan(true));
         }
         #endregion
 

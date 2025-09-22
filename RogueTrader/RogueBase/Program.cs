@@ -648,14 +648,15 @@ namespace IngameScript
                     }
                 }
 
-                if (exchangeGroup.IsValid())
+                string errMsg;
+                if (exchangeGroup.IsValid(out errMsg))
                 {
                     WriteLogLCDs($"ExchangeGroup {exchangeGroup.Name} initialized.");
                     exchangeGroups.Add(exchangeGroup);
                 }
                 else
                 {
-                    WriteLogLCDs($"ExchangeGroup {exchangeGroup.Name} is invalid.");
+                    WriteLogLCDs($"ExchangeGroup {exchangeGroup.Name} is invalid. {errMsg}");
                 }
             }
 
@@ -677,19 +678,17 @@ namespace IngameScript
         }
         List<ExchangeRequest> GetPendingExchangeDockRequests(string exchangeType)
         {
-            return exchangeRequests.
-                FindAll(r =>
-                    r.ExchangeType == exchangeType &&
-                    r.Pending &&
-                    (r.Task == ExchangeTasks.StartLoad || r.Task == ExchangeTasks.StartUnload));
+            return exchangeRequests.FindAll(r =>
+                r.ExchangeType == exchangeType &&
+                r.Pending &&
+                (r.Task == ExchangeTasks.StartLoad || r.Task == ExchangeTasks.StartUnload));
         }
         List<ExchangeRequest> GetPendingExchangeUndockRequests(string exchangeType)
         {
-            return exchangeRequests.
-                FindAll(r =>
-                    r.ExchangeType == exchangeType &&
-                    r.Pending &&
-                    (r.Task == ExchangeTasks.EndLoad || r.Task == ExchangeTasks.EndUnload));
+            return exchangeRequests.FindAll(r =>
+                r.ExchangeType == exchangeType &&
+                r.Pending &&
+                (r.Task == ExchangeTasks.EndLoad || r.Task == ExchangeTasks.EndUnload));
         }
         List<ExchangeGroup> GetFreeExchanges(string exchangeType)
         {
@@ -697,7 +696,9 @@ namespace IngameScript
         }
         List<Ship> GetWaitingShips(string exchangeType)
         {
-            return ships.Where(s => s.ExchangeType == exchangeType && s.Status == ShipStatus.WaitingDock).ToList();
+            return ships.FindAll(s =>
+                s.ExchangeType == exchangeType &&
+                s.Status == ShipStatus.WaitingDock);
         }
         bool ShipIsDocked(string ship)
         {

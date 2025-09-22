@@ -18,6 +18,7 @@ namespace IngameScript
         public Vector3D Up => Camera.WorldMatrix.Up;
 
         public string DockedShipName { get; private set; }
+        public string ReservedShipName { get; private set; }
 
         public ExchangeGroup(Config config)
         {
@@ -85,7 +86,7 @@ namespace IngameScript
             return names;
         }
 
-        public bool Update(double time)
+        public void Update(double time)
         {
             dockRequestTime += time;
 
@@ -110,28 +111,20 @@ namespace IngameScript
                 }
             }
 
-            bool hasDockRequested = !string.IsNullOrWhiteSpace(DockedShipName) && dockRequestTime <= config.ExchangeDockRequestTimeThr;
-            if (hasDockRequested)
-            {
-                if ((mainConnected && DockedShipName != newShip) || moreThanOneShip)
-                {
-                    //Another ship is docked at least. Not valid for dock
-                    return false;
-                }
-            }
-            else
-            {
-                //Update ship name
-                DockedShipName = moreThanOneShip ? "Several ships" : newShip;
-            }
+            //Update ship name
+            DockedShipName = moreThanOneShip ? "Several ships" : newShip;
 
-            return true;
+            if (!string.IsNullOrWhiteSpace(ReservedShipName) && DockedShipName == ReservedShipName)
+            {
+                //Clears reservation if the reserved ship has docked
+                ReservedShipName = null;
+            }
         }
 
         public void DockRequest(string shipName)
         {
             dockRequestTime = 0;
-            DockedShipName = shipName;
+            ReservedShipName = shipName;
         }
 
         public List<Vector3D> CalculateRouteToConnector()
@@ -158,30 +151,40 @@ namespace IngameScript
             return waypoints;
         }
 
-        public string SaveToStorage()
+        public string GetState()
+        {
+            bool isFree = IsFree();
+            return isFree ? "Free" : string.IsNullOrWhiteSpace(ReservedShipName) ? string.Join(", ", DockedShips()) : ReservedShipName;
+        }
+
+        public static string SaveListToStorage(List<ExchangeGroup> exchanges)
+        {
+            var exchangeList = string.Join("¬", exchanges.Select(e => e.SaveToStorage()).ToList());
+
+            var parts = new List<string>
+            {
+                $"ExchangeCount={exchanges.Count}",
+                $"Exchanges={exchangeList}",
+            };
+
+            return string.Join(";", parts);
+        }
+        string SaveToStorage()
         {
             var parts = new List<string>
             {
                 $"Name={Name}",
+                $"ReservedShipName={ReservedShipName}",
                 $"DockedShipName={DockedShipName}",
                 $"DockRequestTime={dockRequestTime}",
             };
 
             return string.Join("|", parts);
         }
-
-        public static List<string> SaveListToStorage(List<ExchangeGroup> exchanges)
+        public static void LoadListFromStorage(string line, List<ExchangeGroup> exchanges)
         {
-            var exchangeList = string.Join("¬", exchanges.Select(e => e.SaveToStorage()).ToList());
+            string[] storageLines = line.Split(';');
 
-            return new List<string>
-            {
-                $"ExchangeCount={exchanges.Count}",
-                $"Exchanges={exchangeList}",
-            };
-        }
-        public static void LoadListFromStorage(string[] storageLines, List<ExchangeGroup> exchanges)
-        {
             int exchangeCount = Utils.ReadInt(storageLines, "ExchangeCount");
             if (exchangeCount == 0) return;
 
@@ -191,12 +194,14 @@ namespace IngameScript
             {
                 var parts = exchangeLines[i].Split('|');
                 string name = Utils.ReadString(parts, "Name");
+                string reservedShipName = Utils.ReadString(parts, "ReservedShipName");
                 string dockedShipName = Utils.ReadString(parts, "DockedShipName");
                 double dockRequestTime = Utils.ReadDouble(parts, "DockRequestTime");
 
                 var exchange = exchanges.Find(e => e.Name == name);
                 if (exchange != null)
                 {
+                    exchange.ReservedShipName = reservedShipName;
                     exchange.DockedShipName = dockedShipName;
                     exchange.dockRequestTime = dockRequestTime;
                 }

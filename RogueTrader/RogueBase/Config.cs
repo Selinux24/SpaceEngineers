@@ -135,7 +135,7 @@ namespace IngameScript
 
             return double.Parse(value.Trim());
         }
-        List<string> ReadConfigList(string customData, string name)
+        static List<string> ReadConfigList(string customData, string name)
         {
             var value = ReadConfigLine(customData, name);
             if (string.IsNullOrWhiteSpace(value))

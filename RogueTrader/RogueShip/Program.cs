@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "2.0";
+        const string Version = "2.1";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
@@ -473,13 +473,16 @@ namespace IngameScript
                 return;
             }
 
-            if (DateTime.Now - lastRefreshLCDs > Config.RefreshLCDsInterval)
-            {
-                RefreshLCDs();
-            }
+            RefreshLCDs();
         }
         void RefreshLCDs()
         {
+            if (DateTime.Now - lastRefreshLCDs <= Config.RefreshLCDsInterval)
+            {
+                return;
+            }
+            lastRefreshLCDs = DateTime.Now;
+
             infoLCDs.Clear();
             var info = GetBlocksOfType<IMyTextPanel>(Config.WildcardShipInfo);
             var infoCps = GetBlocksImplementType<IMyTextSurfaceProvider>(Config.WildcardShipInfo).Where(c => Config.WildcardShipInfo.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Success);
@@ -497,8 +500,6 @@ namespace IngameScript
             var logCps = GetBlocksImplementType<IMyTextSurfaceProvider>(Config.WildcardLogLCDs).Where(c => Config.WildcardLogLCDs.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Success);
             logLCDs.AddRange(log.Select(l => new TextPanelDesc(l, l)));
             logLCDs.AddRange(logCps.Select(c => new TextPanelDesc((IMyTerminalBlock)c, c.GetSurface(int.Parse(Config.WildcardLogLCDs.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Value)))));
-
-            lastRefreshLCDs = DateTime.Now;
         }
         #endregion
 

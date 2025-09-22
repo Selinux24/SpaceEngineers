@@ -29,15 +29,37 @@ namespace IngameScript
             this.config = config;
         }
 
-        public bool IsValid()
+        public bool IsValid(out string errorMessage)
         {
-            return MainConnector != null && Camera != null;
+            if (MainConnector == null)
+            {
+                errorMessage = "No main connector";
+                return false;
+            }
+            if (Camera == null)
+            {
+                errorMessage = "No camera";
+                return false;
+            }
+
+            errorMessage = "";
+            return true;
         }
         public bool IsFree()
         {
-            if (!string.IsNullOrWhiteSpace(DockedShipName)) return false;
+            if (!string.IsNullOrWhiteSpace(DockedShipName) &&
+                MainConnector.Status != MyShipConnectorStatus.Unconnected)
+            {
+                return false;
+            }
 
-            if (!string.IsNullOrWhiteSpace(ReservedShipName)) return false;
+            foreach (var connector in Connectors)
+            {
+                if (connector.Status != MyShipConnectorStatus.Unconnected)
+                {
+                    return false;
+                }
+            }
 
             return true;
         }

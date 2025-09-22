@@ -9,11 +9,13 @@ namespace IngameScript
         readonly StringBuilder errors = new StringBuilder();
 
         public readonly string Channel;
+        public readonly string ExchangeType;
 
         public bool EnableLogs = true;
         public bool EnableRefreshLCDs = false;
 
         public readonly System.Text.RegularExpressions.Regex WildcardShipInfo;
+        public readonly System.Text.RegularExpressions.Regex WildcardPlanLCDs;
         public readonly System.Text.RegularExpressions.Regex WildcardLogLCDs;
 
         public readonly string ShipTimerDock;
@@ -39,11 +41,13 @@ namespace IngameScript
         public Config(string customData)
         {
             Channel = Utils.ReadConfig(customData, "Channel");
+            ExchangeType = Utils.ReadConfig(customData, "ExchangeType");
 
             EnableLogs = ReadConfig(customData, "EnableLogs", "false") == "true";
             EnableRefreshLCDs = ReadConfig(customData, "EnableRefreshLCDs", "false") == "true";
 
             WildcardShipInfo = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "WildcardShipInfo")}(?:\.(\d+))?\]");
+            WildcardPlanLCDs = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "WildcardPlanLCDs")}(?:\.(\d+))?\]");
             WildcardLogLCDs = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "WildcardLogLCDs")}(?:\.(\d+))?\]");
 
             ShipTimerDock = ReadConfig(customData, "ShipTimerDock", "");
@@ -132,11 +136,13 @@ namespace IngameScript
         {
             return
                 "Channel=name\n" +
+                "ExchangeType=type\n" +
                 "\n" +
                 "EnableLogs=false\n" +
                 "EnableRefreshLCDs=false\n" +
                 "\n" +
                 "WildcardShipInfo=DOCK_INFO\n" +
+                "WildcardPlanLCDs=DOCK_PLAN\n" +
                 "WildcardLogLCDs=DOCK_LOG\n" +
                 "\n" +
                 "ShipTimerDock=Timer Block Docking\n" +

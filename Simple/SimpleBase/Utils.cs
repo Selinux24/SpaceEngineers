@@ -9,7 +9,7 @@ namespace IngameScript
         const char ArgumentSep = '=';
         const char VariableSep = ';';
         const char VariablePartSep = ':';
-        const char AttributeSep = '=';
+        public const char AttributeSep = '=';
 
         public static string ReadArgument(string[] arguments, string command, char sep = ArgumentSep)
         {
@@ -101,6 +101,15 @@ namespace IngameScript
             }
 
             return StrToVector(value);
+        }
+        public static List<string> ReadStringList(string[] lines, string name)
+        {
+            string value = ReadString(lines, name);
+            if (string.IsNullOrEmpty(value))
+            {
+                return new List<string>();
+            }
+            return value.Split(VariableSep).ToList();
         }
 
         public static bool IsFromGroup(string input, System.Text.RegularExpressions.Regex regEx)
