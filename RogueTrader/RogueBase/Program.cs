@@ -62,7 +62,11 @@ namespace IngameScript
 
             LoadFromStorage();
 
-            Runtime.UpdateFrequency = UpdateFrequency.Update100; // Ejecuta cada ~1.6s
+            lastRequestStatus = DateTime.MinValue + TimeSpan.FromTicks(Me.EntityId);
+            lastExchangeRequest = DateTime.MinValue + TimeSpan.FromTicks(Me.EntityId);
+            lastRefreshLCDs = DateTime.MinValue + TimeSpan.FromTicks(Me.EntityId);
+
+            Runtime.UpdateFrequency = UpdateFrequency.Update100;
         }
 
         public void Save()
@@ -89,16 +93,12 @@ namespace IngameScript
             UpdateBaseState();
 
             sbData.Clear();
-            WriteDataLCDs($"RogueBase v{Version}. {DateTime.Now:HH:mm:ss}", true);
-            WriteDataLCDs($"{baseId} in channel {config.Channel}", true);
-            if (config.EnableRequestStatus) WriteDataLCDs($"Next Status Request {GetNextStatusRequest():hh\\:mm\\:ss}", true);
-            if (config.EnableRequestExchange) WriteDataLCDs($"Next Exchange Request {GetNextExchangeRequest():hh\\:mm\\:ss}", true);
-            if (config.EnableRefreshLCDs) WriteDataLCDs($"Next LCDs Refresh {GetNextLCDsRefresh():hh\\:mm\\:ss}", true);
-
+            PrintBase();
             PrintExchanges();
             PrintShipStatus();
             PrintExchangeRequests();
             PrintShipPlans();
+
             FlushDataLCDs();
             FlushLogLCDs();
         }
@@ -758,6 +758,14 @@ namespace IngameScript
             return lastRefreshLCDs + config.RefreshLCDsInterval - DateTime.Now;
         }
 
+        void PrintBase()
+        {
+            WriteDataLCDs($"RogueBase v{Version}. {DateTime.Now:HH:mm:ss}", true);
+            WriteDataLCDs($"{baseId} in channel {config.Channel}", true);
+            if (config.EnableRequestStatus) WriteDataLCDs($"Next Status Request {GetNextStatusRequest():hh\\:mm\\:ss}", true);
+            if (config.EnableRequestExchange) WriteDataLCDs($"Next Exchange Request {GetNextExchangeRequest():hh\\:mm\\:ss}", true);
+            if (config.EnableRefreshLCDs) WriteDataLCDs($"Next LCDs Refresh {GetNextLCDsRefresh():hh\\:mm\\:ss}", true);
+        }
         void PrintExchanges()
         {
             if (!config.ShowExchanges) return;
