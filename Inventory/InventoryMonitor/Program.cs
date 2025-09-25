@@ -9,7 +9,7 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        const string Version = "1.1";
+        const string Version = "1.2";
         const char AttributeSep = '=';
         const string WildcardLCDs = "[INV]";
 
@@ -20,14 +20,13 @@ namespace IngameScript
         readonly string name;
         readonly Dictionary<string, int> required;
         readonly TimeSpan queryInterval;
+        readonly double threshold;
         bool retained = false;
         DateTime lastQuery = DateTime.MinValue;
         bool lastQueryHastItems = false;
         DateTime lastMessageDate = DateTime.MinValue;
         readonly StringBuilder lastMessage = new StringBuilder();
-
         readonly StringBuilder infoText = new StringBuilder();
-
         readonly StringBuilder message = new StringBuilder();
 
         public Program()
@@ -39,6 +38,7 @@ namespace IngameScript
                     "Name=name\n" +
                     "CargoContainerName=name\n" +
                     "QueryInterval=int\n" +
+                    "Threshold=int\n" +
                     "Inventory=item1:quantity1;itemN:quantityN;\n" +
                     "WildcardLCDs=name(optional)";
 
@@ -75,6 +75,14 @@ namespace IngameScript
                 return;
             }
             queryInterval = TimeSpan.FromMinutes(interval.Value);
+
+            var thr = ReadConfigDouble(Me.CustomData, "Threshold");
+            if (!thr.HasValue || thr.Value < 0 || thr.Value > 1)
+            {
+                Echo("Threshold not valid. Must be a positive double major than 0 and less or equal than 1.");
+                return;
+            }
+            threshold = thr.Value;
 
             string cargoContainerName = ReadConfig(Me.CustomData, "CargoContainerName");
             if (string.IsNullOrWhiteSpace(cargoContainerName))
@@ -115,6 +123,16 @@ namespace IngameScript
             }
 
             return int.Parse(value);
+        }
+        static double? ReadConfigDouble(string customData, string name)
+        {
+            string value = ReadConfig(customData, name);
+            if (string.IsNullOrEmpty(value))
+            {
+                return null;
+            }
+
+            return double.Parse(value);
         }
         static Dictionary<string, int> ReadConfigInventory(string inventory)
         {
@@ -176,7 +194,7 @@ namespace IngameScript
                 infoText.Clear();
                 infoText.AppendLine($"Inventory Monitor v{Version} - {channel}. {DateTime.Now:HH:mm:ss}");
                 if (lastMessageDate.Ticks > 0) infoText.AppendLine($"Last message sent {(int)(DateTime.Now - lastMessageDate).TotalMinutes} minutes ago.");
-                infoText.AppendLine(lastMessage.ToString());
+                infoText.Append(lastMessage.ToString().Replace(";", Environment.NewLine));
                 infoText.AppendLine($"Last query has items? {lastQueryHastItems}");
 
                 Monitorize();
@@ -226,7 +244,10 @@ namespace IngameScript
 
             foreach (var req in required)
             {
-                int c = req.Value - (current.ContainsKey(req.Key) ? (int)current[req.Key] : 0);
+                //Add line only if needed quantity is major then the required quantity times the threshold
+                var reqThr = (int)(req.Value * threshold);
+
+                int c = reqThr - (current.ContainsKey(req.Key) ? (int)current[req.Key] : 0);
                 if (c > 0)
                 {
                     message.Append($"{req.Key}={c};");
