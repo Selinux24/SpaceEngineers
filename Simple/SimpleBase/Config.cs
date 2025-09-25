@@ -26,7 +26,6 @@ namespace IngameScript
 
         public readonly List<ExchangeConfig> Exchanges = new List<ExchangeConfig>();
 
-        public readonly double ExchangeDockRequestTimeThr; //Seconds
         public readonly TimeSpan ExchangeRequestTimeOut;
         public readonly string ExchangeMainConnector;
         public readonly string ExchangeOtherConnector;
@@ -55,8 +54,6 @@ namespace IngameScript
             LogLCDs = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "LogLCDs")}(?:\.(\d+))?\]");
 
             Exchanges = ReadExchanges(customData, "Exchanges");
-
-            ExchangeDockRequestTimeThr = ReadConfigDouble(customData, "ExchangeDockRequestTimeThr");
             ExchangeMainConnector = ReadConfig(customData, "ExchangeMainConnector");
             ExchangeOtherConnector = ReadConfig(customData, "ExchangeOtherConnector");
             ExchangeRequestTimeOut = TimeSpan.FromSeconds(ReadConfigInt(customData, "ExchangeRequestTimeOut"));
@@ -181,8 +178,6 @@ namespace IngameScript
                 "LogLCDs=DOCK_LOG\n" +
                 "\n" +
                 "Exchanges=type1:5:150,type2:5:150,type3:5:150\n" +
-                "\n" +
-                "ExchangeDockRequestTimeThr=900\n" +
                 "ExchangeRequestTimeOut=300\n" +
                 "ExchangeMainConnector=Input\n" +
                 "ExchangeOtherConnector=Output\n" +

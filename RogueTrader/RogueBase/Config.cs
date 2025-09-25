@@ -27,7 +27,6 @@ namespace IngameScript
 
         public readonly List<ExchangeConfig> Exchanges = new List<ExchangeConfig>();
 
-        public readonly double ExchangeDockRequestTimeThr; //Seconds
         public readonly TimeSpan ExchangeRequestTimeOut;
         public readonly string ExchangeMainConnector;
         public readonly string ExchangeOtherConnector;
@@ -58,8 +57,6 @@ namespace IngameScript
             LogLCDs = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "LogLCDs")}(?:\.(\d+))?\]");
 
             Exchanges = ReadExchanges(customData, "Exchanges");
-
-            ExchangeDockRequestTimeThr = ReadConfigDouble(customData, "ExchangeDockRequestTimeThr");
             ExchangeRequestTimeOut = TimeSpan.FromSeconds(ReadConfigInt(customData, "ExchangeRequestTimeOut"));
             ExchangeMainConnector = ReadConfig(customData, "ExchangeMainConnector");
             ExchangeOtherConnector = ReadConfig(customData, "ExchangeOtherConnector");
@@ -116,21 +113,6 @@ namespace IngameScript
 
             return int.Parse(value.Trim());
         }
-        double ReadConfigDouble(string customData, string name, double? defaultValue = null)
-        {
-            var value = ReadConfigLine(customData, name);
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                if (!defaultValue.HasValue)
-                {
-                    errors.AppendLine($"{name} not set.");
-                }
-
-                return defaultValue ?? 0;
-            }
-
-            return double.Parse(value.Trim());
-        }
         static List<ExchangeConfig> ReadExchanges(string customData, string name)
         {
             var value = ReadConfigLine(customData, name);
@@ -186,8 +168,6 @@ namespace IngameScript
                 "LogLCDs=DELIVERY_LOG\n" +
                 "\n" +
                 "Exchanges=type1:5:150,type2:5:150,type3:5:150\n" +
-                "\n" +
-                "ExchangeDockRequestTimeThr=900\n" +
                 "ExchangeRequestTimeOut=300\n" +
                 "ExchangeMainConnector=Input\n" +
                 "ExchangeOtherConnector=Output\n" +

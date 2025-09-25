@@ -595,35 +595,28 @@ namespace IngameScript
         {
             exchanges.Clear();
 
-            foreach (var exchange in config.Exchanges)
+            foreach (var exConfig in config.Exchanges)
             {
-                //Calculate the regex for the exchange group
-                var regEx = new System.Text.RegularExpressions.Regex($@"{exchange}_\w+");
+                var exchangeGroups = InitializeExchangeGroups(exConfig);
 
-                var exchangeGroups = InitializeExchangeGroups(regEx);
-
-                exchanges.Add(exchange.Name, exchangeGroups);
+                exchanges.Add(exConfig.Name, exchangeGroups);
             }
         }
-        List<ExchangeGroup> InitializeExchangeGroups(System.Text.RegularExpressions.Regex regEx)
+        List<ExchangeGroup> InitializeExchangeGroups(ExchangeConfig exConfig)
         {
             var exchangeGroups = new List<ExchangeGroup>();
 
             //Find all blocks that have the exchange regex in their name
             var blocks = new List<IMyTerminalBlock>();
-            GridTerminalSystem.GetBlocksOfType(blocks, i => i.CubeGrid == Me.CubeGrid && Utils.IsFromGroup(i.CustomName, regEx));
+            GridTerminalSystem.GetBlocksOfType(blocks, i => i.CubeGrid == Me.CubeGrid && Utils.IsFromGroup(i.CustomName, exConfig.RegEx));
 
             //Group them by the group name
-            var groups = blocks.GroupBy(b => Utils.ExtractGroupName(b.CustomName, regEx)).ToList();
+            var groups = blocks.GroupBy(b => Utils.ExtractGroupName(b.CustomName, exConfig.RegEx)).ToList();
 
             //For each group, initialize the blocks of the ExchangeGroup class
             foreach (var group in groups)
             {
-                //Find config
-                var exConfig = config.Exchanges.Find(e => e.Name == group.Key);
-                if (exConfig == null) continue;
-
-                var exchangeGroup = new ExchangeGroup(exConfig);
+                var exchangeGroup = new ExchangeGroup(group.Key, exConfig.NumWaypoints, exConfig.PathDistance);
 
                 foreach (var block in group)
                 {
@@ -784,7 +777,7 @@ namespace IngameScript
             {
                 foreach (var e in exchange)
                 {
-                    WriteDataLCDs($"Exchange {e.Name} - {e.GetState()}");
+                    WriteDataLCDs($"{e.Name} {e.NumWaypoints}wps {Utils.DistanceToStr(e.PathDistance)} - {e.GetState()}");
                 }
             }
         }

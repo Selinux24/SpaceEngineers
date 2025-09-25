@@ -6,6 +6,7 @@ namespace IngameScript
         public string Name;
         public int NumWaypoints;
         public double PathDistance; //Meters, distance from the dock to the first waypoint
+        public System.Text.RegularExpressions.Regex RegEx => new System.Text.RegularExpressions.Regex($@"{Name}_\w+");
 
         public static bool Read(string cfgLine, out ExchangeConfig exchange)
         {

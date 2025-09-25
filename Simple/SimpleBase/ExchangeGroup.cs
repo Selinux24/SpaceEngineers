@@ -21,11 +21,11 @@ namespace IngameScript
         public string DockedShipName { get; private set; }
         public string ReservedShipName { get; private set; }
 
-        public ExchangeGroup(ExchangeConfig config)
+        public ExchangeGroup(string name, int numWaypoints, double pathDistance)
         {
-            Name = config.Name;
-            NumWaypoints = config.NumWaypoints;
-            PathDistance = config.PathDistance;
+            Name = name;
+            NumWaypoints = numWaypoints;
+            PathDistance = pathDistance;
         }
 
         public bool IsValid(out string errorMessage)
