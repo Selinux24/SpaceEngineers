@@ -24,10 +24,8 @@ namespace IngameScript
         public readonly System.Text.RegularExpressions.Regex DataLCDs;
         public readonly System.Text.RegularExpressions.Regex LogLCDs;
 
-        public readonly List<string> Exchanges = new List<string>();
+        public readonly List<ExchangeConfig> Exchanges = new List<ExchangeConfig>();
 
-        public readonly int ExchangeNumWaypoints;
-        public readonly double ExchangePathDistance; //Meters, distance from the dock to the first waypoint
         public readonly double ExchangeDockRequestTimeThr; //Seconds
         public readonly TimeSpan ExchangeRequestTimeOut;
         public readonly string ExchangeMainConnector;
@@ -56,10 +54,8 @@ namespace IngameScript
             DataLCDs = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "DataLCDs")}(?:\.(\d+))?\]");
             LogLCDs = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "LogLCDs")}(?:\.(\d+))?\]");
 
-            Exchanges = ReadConfigList(customData, "Exchanges");
+            Exchanges = ReadExchanges(customData, "Exchanges");
 
-            ExchangeNumWaypoints = ReadConfigInt(customData, "ExchangeNumWaypoints");
-            ExchangePathDistance = ReadConfigDouble(customData, "ExchangePathDistance");
             ExchangeDockRequestTimeThr = ReadConfigDouble(customData, "ExchangeDockRequestTimeThr");
             ExchangeMainConnector = ReadConfig(customData, "ExchangeMainConnector");
             ExchangeOtherConnector = ReadConfig(customData, "ExchangeOtherConnector");
@@ -131,14 +127,23 @@ namespace IngameScript
 
             return double.Parse(value.Trim());
         }
-        static List<string> ReadConfigList(string customData, string name)
+        static List<ExchangeConfig> ReadExchanges(string customData, string name)
         {
             var value = ReadConfigLine(customData, name);
             if (string.IsNullOrWhiteSpace(value))
             {
-                return new List<string>();
+                return new List<ExchangeConfig>();
             }
-            return value.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
+
+            var exchanges = new List<ExchangeConfig>();
+            var lines = value.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
+            foreach (var line in lines)
+            {
+                ExchangeConfig ex;
+                if (!ExchangeConfig.Read(line, out ex)) continue;
+                exchanges.Add(ex);
+            }
+            return exchanges;
         }
         static string ReadConfigLine(string customData, string name)
         {
@@ -175,10 +180,8 @@ namespace IngameScript
                 "DataLCDs=DOCK_DATA\n" +
                 "LogLCDs=DOCK_LOG\n" +
                 "\n" +
-                "Exchanges=type1,type2,type3\n" +
+                "Exchanges=type1:5:150,type2:5:150,type3:5:150\n" +
                 "\n" +
-                "ExchangeNumWaypoints=5\n" +
-                "ExchangePathDistance=150\n" +
                 "ExchangeDockRequestTimeThr=900\n" +
                 "ExchangeRequestTimeOut=300\n" +
                 "ExchangeMainConnector=Input\n" +

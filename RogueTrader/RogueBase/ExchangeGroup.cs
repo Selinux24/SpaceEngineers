@@ -8,10 +8,11 @@ namespace IngameScript
 {
     class ExchangeGroup
     {
-        private readonly Config config;
         private double dockRequestTime = 0;
 
-        public string Name;
+        public readonly string Name;
+        public readonly int NumWaypoints;
+        public readonly double PathDistance; //Meters, distance from the dock to the first waypoint
         public IMyShipConnector MainConnector;
         public readonly List<IMyShipConnector> Connectors = new List<IMyShipConnector>();
         public IMyCameraBlock Camera;
@@ -24,9 +25,11 @@ namespace IngameScript
         public string DockedShipName { get; private set; }
         public string ReservedShipName { get; private set; }
 
-        public ExchangeGroup(Config config)
+        public ExchangeGroup(ExchangeConfig config)
         {
-            this.config = config;
+            Name = config.Name;
+            NumWaypoints = config.NumWaypoints;
+            PathDistance = config.PathDistance;
         }
 
         public bool IsValid(out string errorMessage)
@@ -137,11 +140,11 @@ namespace IngameScript
 
             var targetDock = MainConnector.GetPosition();   //Last point
             var forward = MainConnector.WorldMatrix.Forward;
-            var approachStart = targetDock + forward * config.ExchangePathDistance;  //Initial approach point
+            var approachStart = targetDock + forward * PathDistance;  //Initial approach point
 
-            for (int i = 0; i <= config.ExchangeNumWaypoints; i++)
+            for (int i = 0; i <= NumWaypoints; i++)
             {
-                double t = i / (double)config.ExchangeNumWaypoints;
+                double t = i / (double)NumWaypoints;
                 var point = Vector3D.Lerp(approachStart, targetDock, t) + forward * 2.3;
                 waypoints.Add(point);
             }

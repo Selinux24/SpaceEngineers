@@ -12,7 +12,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "2.0";
+        const string Version = "2.1";
         const string Separate = "------";
 
         #region Blocks
@@ -602,7 +602,7 @@ namespace IngameScript
 
                 var exchangeGroups = InitializeExchangeGroups(regEx);
 
-                exchanges.Add(exchange, exchangeGroups);
+                exchanges.Add(exchange.Name, exchangeGroups);
             }
         }
         List<ExchangeGroup> InitializeExchangeGroups(System.Text.RegularExpressions.Regex regEx)
@@ -619,10 +619,11 @@ namespace IngameScript
             //For each group, initialize the blocks of the ExchangeGroup class
             foreach (var group in groups)
             {
-                var exchangeGroup = new ExchangeGroup(config)
-                {
-                    Name = group.Key,
-                };
+                //Find config
+                var exConfig = config.Exchanges.Find(e => e.Name == group.Key);
+                if (exConfig == null) continue;
+
+                var exchangeGroup = new ExchangeGroup(exConfig);
 
                 foreach (var block in group)
                 {
