@@ -77,6 +77,8 @@ namespace IngameScript
         public readonly double GyrosThr;
         public readonly double GyrosSpeed;
 
+        public readonly TimeSpan DockRequestTimeout = TimeSpan.FromSeconds(300); //Seconds to wait for a docking request to be accepted
+
         public readonly TimeSpan RefreshLCDsInterval; // seconds, how often to refresh LCDs
 
         public Config(string customData)
@@ -152,6 +154,8 @@ namespace IngameScript
 
             GyrosThr = ReadConfigDouble(customData, "GyrosThr");
             GyrosSpeed = ReadConfigDouble(customData, "GyrosSpeed");
+
+            DockRequestTimeout = TimeSpan.FromSeconds(ReadConfigInt(customData, "DockRequestTimeout", 300));
 
             RefreshLCDsInterval = TimeSpan.FromSeconds(ReadConfigInt(customData, "RefreshLCDsInterval", 10));
         }
@@ -320,6 +324,8 @@ namespace IngameScript
                 "\n" +
                 "GyrosThr=0.001\n" +
                 "GyrosSpeed=2.0\n" +
+                "\n" +
+                "DockRequestTimeout=300\n" +
                 "\n" +
                 "RefreshLCDsInterval=10";
         }

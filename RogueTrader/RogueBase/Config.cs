@@ -38,6 +38,8 @@ namespace IngameScript
         public readonly TimeSpan RequestReceptionInterval; // seconds, how often to request receptions
         public readonly TimeSpan RefreshLCDsInterval; // seconds, how often to refresh LCDs
 
+        public readonly double DockRequestMaxDistance; // meters, max distance from the dock to request docking
+
         public Config(string customData)
         {
             Channel = ReadConfig(customData, "Channel");
@@ -67,6 +69,8 @@ namespace IngameScript
             RequestStatusInterval = TimeSpan.FromSeconds(ReadConfigInt(customData, "RequestStatusInterval"));
             RequestReceptionInterval = TimeSpan.FromSeconds(ReadConfigInt(customData, "RequestReceptionInterval"));
             RefreshLCDsInterval = TimeSpan.FromSeconds(ReadConfigInt(customData, "RefreshLCDsInterval", 10));
+      
+            DockRequestMaxDistance = ReadConfigDouble(customData, "DockRequestMaxDistance", 2000);
         }
         string ReadConfig(string customData, string name, string defaultValue = null)
         {
@@ -112,6 +116,21 @@ namespace IngameScript
             }
 
             return int.Parse(value.Trim());
+        }
+        double ReadConfigDouble(string customData, string name, double? defaultValue = null)
+        {
+            var value = ReadConfigLine(customData, name);
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                if (!defaultValue.HasValue)
+                {
+                    errors.AppendLine($"{name} not set.");
+                }
+
+                return defaultValue ?? 0;
+            }
+
+            return double.Parse(value.Trim());
         }
         static List<ExchangeConfig> ReadExchanges(string customData, string name)
         {
@@ -177,7 +196,9 @@ namespace IngameScript
                 "\n" +
                 "RequestStatusInterval=30\n" +
                 "RequestReceptionInterval=60\n" +
-                "RefreshLCDsInterval=10";
+                "RefreshLCDsInterval=10\n" +
+                "\n" +
+                "DockRequestMaxDistance=2000.0\n";
         }
     }
 }

@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using VRageMath;
 
 namespace IngameScript
 {
@@ -12,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "2.1";
+        const string Version = "2.2";
         const string Separate = "------";
 
         #region Blocks
@@ -217,6 +218,8 @@ namespace IngameScript
             string[] lines = signal.Split('|');
             string command = Utils.ReadArgument(lines, "Command");
 
+            if (command == "REQUEST_DOCK") ProcessRequestDock(lines);
+
             if (!IsForMe(lines)) return;
 
             if (command == "RESPONSE_STATUS") ProcessResponseStatus(lines);
@@ -228,6 +231,24 @@ namespace IngameScript
             else if (command == "WAITING_UNDOCK_UNLOAD") ProcessWaiting(lines, ExchangeTasks.EndUnload);
         }
 
+        /// <summary>
+        /// Appends a dock request from a ship
+        /// </summary>
+        void ProcessRequestDock(string[] lines)
+        {
+            string from = Utils.ReadString(lines, "From");
+            string exchangeType = Utils.ReadString(lines, "ExchangeType");
+            var position = Utils.ReadVector(lines, "Position");
+
+            var dist = Vector3D.Distance(position, GetBasePosition());
+            if (dist > config.DockRequestMaxDistance)
+            {
+                WriteLogLCDs($"Dock request from {from} rejected. Distance {dist} exceeds max {Utils.DistanceToStr(config.DockRequestMaxDistance)}.");
+                return;
+            }
+
+            EnqueueExchangeRequest(exchangeType, from, ExchangeTasks.Dock);
+        }
         /// <summary>
         /// BASE updates the SHIP status
         /// </summary>
@@ -385,6 +406,9 @@ namespace IngameScript
                         case ExchangeTasks.StartUnload:
                             command = "COME_TO_UNLOAD";
                             exchange.TimerUnload?.StartCountdown();
+                            break;
+                        case ExchangeTasks.Dock:
+                            command = "COME_TO_DOCK";
                             break;
                     }
 
@@ -586,6 +610,11 @@ namespace IngameScript
             return Utils.ReadString(lines, "To") == baseId;
         }
 
+        Vector3D GetBasePosition()
+        {
+            return Me.CubeGrid.GetPosition();
+        }
+
         TimeSpan GetNextStatusRequest()
         {
             return lastRequestStatus + config.RequestStatusInterval - DateTime.Now;
@@ -675,7 +704,7 @@ namespace IngameScript
             return exchangeRequests.FindAll(r =>
                 r.ExchangeType == exchangeType &&
                 r.Pending &&
-                (r.Task == ExchangeTasks.StartLoad || r.Task == ExchangeTasks.StartUnload));
+                (r.Task == ExchangeTasks.StartLoad || r.Task == ExchangeTasks.StartUnload || r.Task == ExchangeTasks.Dock));
         }
         List<ExchangeRequest> GetPendingExchangeUndockRequests(string exchangeType)
         {

@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "2.1";
+        const string Version = "2.2";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
@@ -58,6 +58,7 @@ namespace IngameScript
         ShipStatus shipStatus = ShipStatus.Idle;
         readonly Navigator navigator;
 
+        DateTime lastDockRequest = DateTime.MinValue;
         DateTime lastRefreshLCDs = DateTime.MinValue;
 
         public Program()
@@ -80,99 +81,91 @@ namespace IngameScript
 
             navigator = new Navigator(this);
 
-            timerPilot = GetBlockWithName<IMyTimerBlock>(Config.TimerPilot);
-            if (timerPilot == null)
-            {
-                Echo($"Timer '{Config.TimerPilot}' not found.");
-                return;
-            }
-            timerWaiting = GetBlockWithName<IMyTimerBlock>(Config.TimerWaiting);
-            if (timerWaiting == null)
-            {
-                Echo($"Timer '{Config.TimerWaiting}' not found.");
-                return;
-            }
-
-            timerDock = GetBlockWithName<IMyTimerBlock>(Config.TimerDock);
-            if (timerDock == null)
-            {
-                Echo($"Timer '{Config.TimerDock}' not found.");
-                return;
-            }
-            timerUndock = GetBlockWithName<IMyTimerBlock>(Config.TimerUndock);
-            if (timerUndock == null)
-            {
-                Echo($"Timer '{Config.TimerUndock}' not found.");
-                return;
-            }
-
-            timerLoad = GetBlockWithName<IMyTimerBlock>(Config.TimerLoad);
-            if (timerLoad == null)
-            {
-                Echo($"Timer '{Config.TimerLoad}' not found.");
-                return;
-            }
-            timerUnload = GetBlockWithName<IMyTimerBlock>(Config.TimerUnload);
-            if (timerUnload == null)
-            {
-                Echo($"Timer '{Config.TimerUnload}' not found.");
-                return;
-            }
-            timerFinalize = GetBlockWithName<IMyTimerBlock>(Config.TimerFinalizeCargo);
-            if (timerFinalize == null)
-            {
-                Echo($"Timer '{Config.TimerFinalizeCargo}' not found.");
-                return;
-            }
-
-            remotePilot = GetBlockWithName<IMyRemoteControl>(Config.RemoteControlPilot);
-            if (remotePilot == null)
-            {
-                Echo($"Remote Control '{Config.RemoteControlPilot}' not found.");
-                return;
-            }
+            //Must have
             remoteDocking = GetBlockWithName<IMyRemoteControl>(Config.RemoteControlDocking);
             if (remoteDocking == null)
             {
-                Echo($"Remote Control '{Config.RemoteControlDocking}' not found.");
-                return;
-            }
-            remoteLanding = GetBlockWithName<IMyRemoteControl>(Config.RemoteControlLanding);
-            if (remoteLanding == null)
-            {
-                Echo($"Remote Control '{Config.RemoteControlLanding}' not found. This ship is not available for landing.");
-            }
-
-            antenna = GetBlockWithName<IMyRadioAntenna>(Config.Antenna);
-            if (antenna == null)
-            {
-                Echo($"Antenna {Config.Antenna} not found.");
+                WriteLogLCDs($"Remote Control '{Config.RemoteControlDocking}' not found.", true);
                 return;
             }
             connectorA = GetBlockWithName<IMyShipConnector>(Config.Connector);
             if (connectorA == null)
             {
-                Echo($"Connector '{Config.Connector}' not found.");
+                WriteLogLCDs($"Connector '{Config.Connector}' not found.", true);
                 return;
             }
-            cameraPilot = GetBlockWithName<IMyCameraBlock>(Config.Camera);
-            if (cameraPilot == null)
+            timerDock = GetBlockWithName<IMyTimerBlock>(Config.TimerDock);
+            if (timerDock == null)
             {
-                Echo($"Camera {Config.Camera} not found.");
+                WriteLogLCDs($"Timer '{Config.TimerDock}' not found.", true);
                 return;
             }
-
             gyros = GetBlocksOfType<IMyGyro>();
             if (gyros.Count == 0)
             {
-                Echo("Grid without gyroscopes.");
+                WriteLogLCDs("Grid without gyroscopes.", true);
                 return;
             }
             thrusters = GetBlocksOfType<IMyThrust>();
             if (thrusters.Count == 0)
             {
-                Echo("Grid without thrusters.");
+                WriteLogLCDs("Grid without thrusters.", true);
                 return;
+            }
+
+            //Optional
+            timerPilot = GetBlockWithName<IMyTimerBlock>(Config.TimerPilot);
+            if (timerPilot == null)
+            {
+                WriteLogLCDs($"Timer '{Config.TimerPilot}' not found.", true);
+            }
+            timerWaiting = GetBlockWithName<IMyTimerBlock>(Config.TimerWaiting);
+            if (timerWaiting == null)
+            {
+                WriteLogLCDs($"Timer '{Config.TimerWaiting}' not found.", true);
+            }
+            timerUndock = GetBlockWithName<IMyTimerBlock>(Config.TimerUndock);
+            if (timerUndock == null)
+            {
+                WriteLogLCDs($"Timer '{Config.TimerUndock}' not found.", true);
+            }
+            timerLoad = GetBlockWithName<IMyTimerBlock>(Config.TimerLoad);
+            if (timerLoad == null)
+            {
+                WriteLogLCDs($"Timer '{Config.TimerLoad}' not found.", true);
+            }
+            timerUnload = GetBlockWithName<IMyTimerBlock>(Config.TimerUnload);
+            if (timerUnload == null)
+            {
+                WriteLogLCDs($"Timer '{Config.TimerUnload}' not found.", true);
+            }
+            timerFinalize = GetBlockWithName<IMyTimerBlock>(Config.TimerFinalizeCargo);
+            if (timerFinalize == null)
+            {
+                WriteLogLCDs($"Timer '{Config.TimerFinalizeCargo}' not found.", true);
+            }
+
+            remotePilot = GetBlockWithName<IMyRemoteControl>(Config.RemoteControlPilot);
+            if (remotePilot == null)
+            {
+                WriteLogLCDs($"Remote Control '{Config.RemoteControlPilot}' not found.", true);
+            }
+            remoteLanding = GetBlockWithName<IMyRemoteControl>(Config.RemoteControlLanding);
+            if (remoteLanding == null)
+            {
+                WriteLogLCDs($"Remote Control '{Config.RemoteControlLanding}' not found. This ship is not available for landing.", true);
+            }
+
+            antenna = GetBlockWithName<IMyRadioAntenna>(Config.Antenna);
+            if (antenna == null)
+            {
+                WriteLogLCDs($"Antenna {Config.Antenna} not found.", true);
+            }
+
+            cameraPilot = GetBlockWithName<IMyCameraBlock>(Config.Camera);
+            if (cameraPilot == null)
+            {
+                WriteLogLCDs($"Camera {Config.Camera} not found.", true);
             }
 
             shipCargos = GetBlocksOfType<IMyCargoContainer>();
@@ -197,13 +190,7 @@ namespace IngameScript
 
         public void Main(string argument)
         {
-            WriteInfoLCDs($"RogueShip v{Version}. {DateTime.Now:HH:mm:ss}", false);
-            WriteInfoLCDs($"{shipId} in channel {Config.Channel}");
-            WriteInfoLCDs($"{CalculateCargoPercentage():P1} cargo.");
-            if (Config.MinPowerOnLoad > 0 || Config.MinPowerOnUnload > 0) WriteInfoLCDs($"Battery {CalculateBatteryPercentage():P1}.");
-            if (Config.MinHydrogenOnLoad > 0 || Config.MinHydrogenOnUnload > 0) WriteInfoLCDs($"Hydrogen {CalculateHydrogenPercentage():P1}.");
-            WriteInfoLCDs($"{shipStatus}");
-            if (Config.EnableRefreshLCDs) WriteInfoLCDs($"Next LCDs Refresh {GetNextLCDsRefresh():hh\\:mm\\:ss}");
+            PrintShipStatus();
 
             if (!string.IsNullOrEmpty(argument))
             {
@@ -239,6 +226,7 @@ namespace IngameScript
             else if (argument == "START_ROUTE") SendWaitingMessage(ExchangeTasks.StartLoad);
             else if (argument == "START_LOAD") SendWaitingMessage(ExchangeTasks.StartLoad);
             else if (argument == "START_UNLOAD") SendWaitingMessage(ExchangeTasks.StartUnload);
+            else if (argument == "START_DOCK") SendWaitingMessage(ExchangeTasks.Dock);
 
             else if (argument == "NEXT") Next();
             else if (argument == "UNDOCK") StopAndUndocK();
@@ -253,12 +241,6 @@ namespace IngameScript
         {
             Storage = "";
 
-            remotePilot.SetAutoPilotEnabled(false);
-            remotePilot.ClearWaypoints();
-            remoteDocking.SetAutoPilotEnabled(false);
-            remoteDocking.ClearWaypoints();
-            remoteLanding.SetAutoPilotEnabled(false);
-            remoteLanding.ClearWaypoints();
             ResetGyros();
             ResetThrust();
 
@@ -312,6 +294,7 @@ namespace IngameScript
 
             if (command == "COME_TO_LOAD") ProcessDocking(lines, ExchangeTasks.StartLoad);
             if (command == "COME_TO_UNLOAD") ProcessDocking(lines, ExchangeTasks.StartUnload);
+            if (command == "COME_TO_DOCK") ProcessDocking(lines, ExchangeTasks.Dock);
             if (command == "UNDOCK_TO_LOAD") ProcessDocking(lines, ExchangeTasks.EndLoad);
             if (command == "UNDOCK_TO_UNLOAD") ProcessDocking(lines, ExchangeTasks.EndUnload);
         }
@@ -336,7 +319,7 @@ namespace IngameScript
                 $"Status={(int)shipStatus}",
                 $"StatusMessage={GetShipState()}",
                 $"Cargo={CalculateCargoPercentage()}",
-                $"Position={Utils.VectorToStr(remotePilot.GetPosition())}",
+                $"Position={Utils.VectorToStr(Me.CubeGrid.GetPosition())}",
             };
             BroadcastMessage(parts);
         }
@@ -363,6 +346,11 @@ namespace IngameScript
                 navigator.SeparateFromDock(landing, exchange, fw, up, wpList, "ON_SEPARATION_COMPLETED", task);
                 shipStatus = ShipStatus.Undocking;
             }
+            else if (task == ExchangeTasks.Dock)
+            {
+                navigator.ApproachToDock(landing, exchange, fw, up, wpList, "ON_APPROACHING_COMPLETED", task);
+                shipStatus = ShipStatus.Docking;
+            }
         }
 
         /// <summary>
@@ -378,7 +366,7 @@ namespace IngameScript
                 $"Command=RESPONSE_PLAN",
                 $"To={from}",
                 $"From={shipId}",
-                $"Position={Utils.VectorToStr(remotePilot.GetPosition())}",
+                $"Position={Utils.VectorToStr(Me.CubeGrid.GetPosition())}",
                 $"Plan={plan}",
             };
             BroadcastMessage(parts);
@@ -464,23 +452,28 @@ namespace IngameScript
         {
             navigator.Update();
 
+            UpdateDockStatus();
+
             DoRefreshLCDs();
+        }
+        void UpdateDockStatus()
+        {
+            if (shipStatus != ShipStatus.WaitingDock) return;
+
+            if ((DateTime.Now - lastDockRequest) <= Config.DockRequestTimeout) return;
+
+            shipStatus = ShipStatus.Idle;
+            lastDockRequest = DateTime.MinValue;
         }
         void DoRefreshLCDs()
         {
-            if (!Config.EnableRefreshLCDs)
-            {
-                return;
-            }
+            if (!Config.EnableRefreshLCDs) return;
 
             RefreshLCDs();
         }
         void RefreshLCDs()
         {
-            if (DateTime.Now - lastRefreshLCDs <= Config.RefreshLCDsInterval)
-            {
-                return;
-            }
+            if (DateTime.Now - lastRefreshLCDs <= Config.RefreshLCDsInterval) return;
             lastRefreshLCDs = DateTime.Now;
 
             infoLCDs.Clear();
@@ -524,18 +517,36 @@ namespace IngameScript
                 Unload();
                 shipStatus = ShipStatus.Unloading;
             }
+            else if (task == ExchangeTasks.Dock)
+            {
+                shipStatus = ShipStatus.Idle;
+            }
         }
         void OnSeparationCompleted(ExchangeTasks task)
         {
-            shipStatus = ShipStatus.OnRoute;
-
+            bool onPlanet;
+            List<Vector3D> waypoints;
+            string callBack;
             if (task == ExchangeTasks.EndLoad)
             {
-                navigator.NavigateTo(Config.Route.UnloadBaseOnPlanet, Config.Route.ToUnloadBaseWaypoints, "ON_NAVIGATION_COMPLETED", task);
+                onPlanet = Config.Route.UnloadBaseOnPlanet;
+                waypoints = Config.Route.ToUnloadBaseWaypoints;
+                callBack = "ON_NAVIGATION_COMPLETED";
             }
             else if (task == ExchangeTasks.EndUnload)
             {
-                navigator.NavigateTo(Config.Route.LoadBaseOnPlanet, Config.Route.ToLoadBaseWaypoints, "ON_NAVIGATION_COMPLETED", task);
+                onPlanet = Config.Route.LoadBaseOnPlanet;
+                waypoints = Config.Route.ToLoadBaseWaypoints;
+                callBack = "ON_NAVIGATION_COMPLETED";
+            }
+            else
+            {
+                return;
+            }
+
+            if (navigator.NavigateTo(onPlanet, waypoints, callBack, task))
+            {
+                shipStatus = ShipStatus.OnRoute;
             }
         }
         void OnNavigationCompleted(ExchangeTasks task)
@@ -594,8 +605,10 @@ namespace IngameScript
                 lcd.WriteText(text + Environment.NewLine, append);
             }
         }
-        internal void WriteLogLCDs(string text)
+        internal void WriteLogLCDs(string text, bool echo = false)
         {
+            if (echo) Echo(text);
+
             if (!Config.EnableLogs)
             {
                 return;
@@ -663,6 +676,12 @@ namespace IngameScript
 
         internal bool IsObstacleAhead(double collisionDetectRange, Vector3D velocity, out MyDetectedEntityInfo hit)
         {
+            if (cameraPilot == null)
+            {
+                hit = new MyDetectedEntityInfo();
+                return false;
+            }
+
             cameraPilot.EnableRaycast = true;
 
             var cameraMatrixInv = MatrixD.Invert(cameraPilot.WorldMatrix);
@@ -732,27 +751,30 @@ namespace IngameScript
             }
         }
 
-        internal Vector3D GetPosition()
+        internal bool IsNavigationEnabled()
+        {
+            return remotePilot != null;
+        }
+        internal Vector3D GetPilotPosition()
         {
             return remotePilot.GetPosition();
         }
-        internal double GetSpeed()
+        internal double GetPilotSpeed()
         {
             return remotePilot.GetShipSpeed();
         }
-        internal Vector3D GetGravity()
+        internal Vector3D GetPilotGravity()
         {
             return remotePilot.GetNaturalGravity();
         }
-        internal bool IsInAtmosphere()
+        internal bool PilotIsInAtmosphere()
         {
-            return GetGravity().Length() / 9.8 > Config.AtmNavigationGravityThr;
+            return GetPilotGravity().Length() / 9.8 > Config.AtmNavigationGravityThr;
         }
-        internal double GetMass()
+        internal double GetPilotMass()
         {
             return remotePilot.CalculateShipMass().TotalMass;
         }
-
         internal Vector3D GetPilotLinearVelocity()
         {
             return remotePilot.GetShipVelocities().LinearVelocity;
@@ -764,11 +786,11 @@ namespace IngameScript
 
         internal Vector3D GetLandingLinearVelocity()
         {
-            return remoteLanding.GetShipVelocities().LinearVelocity;
+            return remoteLanding?.GetShipVelocities().LinearVelocity ?? GetPilotLinearVelocity();
         }
         internal Vector3D GetLandingForwardDirection()
         {
-            return remoteLanding.WorldMatrix.Forward;
+            return remoteLanding?.WorldMatrix.Forward ?? GetPilotForwardDirection();
         }
 
         internal bool IsConnected()
@@ -784,6 +806,10 @@ namespace IngameScript
         {
             return connectorA.GetPosition();
         }
+        internal double GetDockingSpeed()
+        {
+            return remoteDocking.GetShipSpeed();
+        }
         internal Vector3D GetDockingForwardDirection()
         {
             return remoteDocking.WorldMatrix.Forward;
@@ -795,6 +821,10 @@ namespace IngameScript
         internal Vector3D GetDockingLinearVelocity()
         {
             return remoteDocking.GetShipVelocities().LinearVelocity;
+        }
+        internal double GetDockingMass()
+        {
+            return remoteDocking.CalculateShipMass().TotalMass;
         }
         internal string GetDockedGridName()
         {
@@ -808,6 +838,8 @@ namespace IngameScript
 
         internal void EnableSystems()
         {
+            if (antenna == null) return;
+
             if (antenna.Enabled)
             {
                 return;
@@ -816,6 +848,8 @@ namespace IngameScript
         }
         internal void DisableSystems()
         {
+            if (antenna == null) return;
+
             if (!antenna.Enabled)
             {
                 return;
@@ -943,6 +977,7 @@ namespace IngameScript
                 to = task == ExchangeTasks.StartLoad ? Config.Route.LoadBase : Config.Route.UnloadBase;
 
                 shipStatus = ShipStatus.WaitingDock;
+                lastDockRequest = DateTime.Now;
             }
             else if (task == ExchangeTasks.EndLoad || task == ExchangeTasks.EndUnload)
             {
@@ -950,6 +985,15 @@ namespace IngameScript
                 to = task == ExchangeTasks.EndLoad ? Config.Route.LoadBase : Config.Route.UnloadBase;
 
                 shipStatus = ShipStatus.WaitingUndock;
+                lastDockRequest = DateTime.Now;
+            }
+            else if (task == ExchangeTasks.Dock)
+            {
+                message = "REQUEST_DOCK";
+                to = "";
+
+                shipStatus = ShipStatus.WaitingDock;
+                lastDockRequest = DateTime.Now;
             }
             else
             {
@@ -963,6 +1007,7 @@ namespace IngameScript
                 $"To={to}",
                 $"From={shipId}",
                 $"ExchangeType={Config.ExchangeType}",
+                $"Position={Utils.VectorToStr(Me.CubeGrid.GetPosition())}",
             };
             BroadcastMessage(parts);
 
@@ -1037,6 +1082,21 @@ namespace IngameScript
             {
                 return navigator.GetShortState();
             }
+        }
+        void PrintShipStatus()
+        {
+            WriteInfoLCDs($"RogueShip v{Version}. {DateTime.Now:HH:mm:ss}", false);
+            WriteInfoLCDs($"{shipId} in channel {Config.Channel}");
+            WriteInfoLCDs($"{CalculateCargoPercentage():P1} cargo.");
+            if (Config.MinPowerOnLoad > 0 || Config.MinPowerOnUnload > 0) WriteInfoLCDs($"Battery {CalculateBatteryPercentage():P1}.");
+            if (Config.MinHydrogenOnLoad > 0 || Config.MinHydrogenOnUnload > 0) WriteInfoLCDs($"Hydrogen {CalculateHydrogenPercentage():P1}.");
+            WriteInfoLCDs($"{shipStatus}");
+            if (shipStatus == ShipStatus.WaitingDock)
+            {
+                var waitTime = DateTime.Now - lastDockRequest;
+                WriteInfoLCDs($"Waiting dock response... {waitTime.TotalSeconds:F0}s up to {Config.DockRequestTimeout.TotalSeconds}s");
+            }
+            if (Config.EnableRefreshLCDs) WriteInfoLCDs($"Next LCDs Refresh {GetNextLCDsRefresh():hh\\:mm\\:ss}");
         }
         #endregion
 
