@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "2.2";
+        const string Version = "2.3";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
@@ -198,10 +198,16 @@ namespace IngameScript
                 return;
             }
 
+            while (IGC.UnicastListener.HasPendingMessage)
+            {
+                var message = IGC.UnicastListener.AcceptMessage();
+                ParseMessage(message);
+            }
+
             while (bl.HasPendingMessage)
             {
                 var message = bl.AcceptMessage();
-                ParseMessage(message.Data.ToString());
+                ParseMessage(message);
             }
 
             if (DoPause()) return;
@@ -280,15 +286,18 @@ namespace IngameScript
         #endregion
 
         #region IGC COMMANDS
-        void ParseMessage(string signal)
+        void ParseMessage(MyIGCMessage message)
         {
+            long source = message.Source;
+            string signal = message.Data.ToString();
+
             WriteLogLCDs($"ParseMessage: {signal}");
 
             string[] lines = signal.Split('|');
             string command = Utils.ReadArgument(lines, "Command");
 
-            if (command == "REQUEST_STATUS") ProcessRequestStatus(lines);
-            if (command == "REQUEST_PLAN") ProcessRequestPlan(lines);
+            if (command == "REQUEST_STATUS") ProcessRequestStatus(source, lines);
+            if (command == "REQUEST_PLAN") ProcessRequestPlan(source, lines);
 
             if (!IsForMe(lines)) return;
 
@@ -306,7 +315,7 @@ namespace IngameScript
         /// Request:  REQUEST_STATUS
         /// Execute:  RESPONSE_STATUS
         /// </remarks>
-        void ProcessRequestStatus(string[] lines)
+        void ProcessRequestStatus(long source, string[] lines)
         {
             string from = Utils.ReadString(lines, "From");
 
@@ -321,9 +330,26 @@ namespace IngameScript
                 $"Cargo={CalculateCargoPercentage()}",
                 $"Position={Utils.VectorToStr(Me.CubeGrid.GetPosition())}",
             };
-            BroadcastMessage(parts);
+            UnicastMessage(source, parts);
         }
+        /// <summary>
+        /// The ship responds with its current flight plan
+        /// </summary>
+        void ProcessRequestPlan(long source, string[] lines)
+        {
+            string from = Utils.ReadString(lines, "From");
+            var plan = navigator.GetPlan(false);
 
+            List<string> parts = new List<string>()
+            {
+                $"Command=RESPONSE_PLAN",
+                $"To={from}",
+                $"From={shipId}",
+                $"Position={Utils.VectorToStr(Me.CubeGrid.GetPosition())}",
+                $"Plan={plan}",
+            };
+            UnicastMessage(source, parts);
+        }
         /// <summary>
         /// SHIP begins navigation to/from the specified connector and docks/undocks.
         /// </summary>
@@ -351,25 +377,6 @@ namespace IngameScript
                 navigator.ApproachToDock(landing, exchange, fw, up, wpList, "ON_APPROACHING_COMPLETED", task);
                 shipStatus = ShipStatus.Docking;
             }
-        }
-
-        /// <summary>
-        /// The ship responds with its current flight plan
-        /// </summary>
-        void ProcessRequestPlan(string[] lines)
-        {
-            string from = Utils.ReadString(lines, "From");
-            var plan = navigator.GetPlan(false);
-
-            List<string> parts = new List<string>()
-            {
-                $"Command=RESPONSE_PLAN",
-                $"To={from}",
-                $"From={shipId}",
-                $"Position={Utils.VectorToStr(Me.CubeGrid.GetPosition())}",
-                $"Plan={plan}",
-            };
-            BroadcastMessage(parts);
         }
         #endregion
 
@@ -567,6 +574,7 @@ namespace IngameScript
         #region UTILITY
         T GetBlockWithName<T>(string name) where T : class, IMyTerminalBlock
         {
+            if (string.IsNullOrEmpty(name)) return null;
             var blocks = new List<T>();
             GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && b.CustomName.Contains(name));
             return blocks.FirstOrDefault();
@@ -639,6 +647,14 @@ namespace IngameScript
 
             IGC.SendBroadcastMessage(Config.Channel, message);
         }
+        internal void UnicastMessage(long source, List<string> parts)
+        {
+            string message = string.Join("|", parts);
+
+            WriteLogLCDs($"UnicastMessage to {source}: {message}");
+
+            IGC.SendUnicastMessage(source, Config.Channel, message);
+        }
 
         TimeSpan GetNextLCDsRefresh()
         {
@@ -676,7 +692,7 @@ namespace IngameScript
 
         internal bool IsObstacleAhead(double collisionDetectRange, Vector3D velocity, out MyDetectedEntityInfo hit)
         {
-            if (cameraPilot == null)
+            if (!IsDetectionEnabled())
             {
                 hit = new MyDetectedEntityInfo();
                 return false;
@@ -831,6 +847,10 @@ namespace IngameScript
             return connectorA.OtherConnector?.CubeGrid?.CustomName;
         }
 
+        internal bool IsDetectionEnabled()
+        {
+            return cameraPilot != null;
+        }
         internal IMyCameraBlock GetCameraPilot()
         {
             return cameraPilot;
@@ -1087,6 +1107,8 @@ namespace IngameScript
         {
             WriteInfoLCDs($"RogueShip v{Version}. {DateTime.Now:HH:mm:ss}", false);
             WriteInfoLCDs($"{shipId} in channel {Config.Channel}");
+            WriteInfoLCDs($"Navigation enabled: {IsNavigationEnabled()}");
+            WriteInfoLCDs($"Detection enabled:{IsDetectionEnabled()}");
             WriteInfoLCDs($"{CalculateCargoPercentage():P1} cargo.");
             if (Config.MinPowerOnLoad > 0 || Config.MinPowerOnUnload > 0) WriteInfoLCDs($"Battery {CalculateBatteryPercentage():P1}.");
             if (Config.MinHydrogenOnLoad > 0 || Config.MinHydrogenOnUnload > 0) WriteInfoLCDs($"Hydrogen {CalculateHydrogenPercentage():P1}.");

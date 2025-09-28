@@ -86,30 +86,30 @@ namespace IngameScript
             Channel = Utils.ReadConfig(customData, "Channel");
             ExchangeType = Utils.ReadConfig(customData, "ExchangeType");
 
-            EnableLogs = ReadConfigBool(customData, "EnableLogs");
-            EnableRefreshLCDs = ReadConfigBool(customData, "EnableRefreshLCDs");
+            EnableLogs = ReadConfigBool(customData, "EnableLogs", false);
+            EnableRefreshLCDs = ReadConfigBool(customData, "EnableRefreshLCDs", false);
 
-            WildcardShipInfo = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "WildcardShipInfo")}(?:\.(\d+))?\]");
-            WildcardPlanLCDs = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "WildcardPlanLCDs")}(?:\.(\d+))?\]");
-            WildcardLogLCDs = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "WildcardLogLCDs")}(?:\.(\d+))?\]");
+            WildcardShipInfo = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "WildcardShipInfo", "SHIP_INFO")}(?:\.(\d+))?\]");
+            WildcardPlanLCDs = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "WildcardPlanLCDs", "SHIP_PLAN")}(?:\.(\d+))?\]");
+            WildcardLogLCDs = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "WildcardLogLCDs", "SHIP_LOG")}(?:\.(\d+))?\]");
 
             TimerPilot = ReadConfig(customData, "TimerPilot", "");
-            TimerWaiting = ReadConfig(customData, "TimerWaiting");
+            TimerWaiting = ReadConfig(customData, "TimerWaiting", "");
 
             TimerDock = ReadConfig(customData, "TimerDock");
-            TimerUndock = ReadConfig(customData, "TimerUndock");
+            TimerUndock = ReadConfig(customData, "TimerUndock", "");
 
             TimerLoad = ReadConfig(customData, "TimerLoad", "");
             TimerUnload = ReadConfig(customData, "TimerUnload", "");
             TimerFinalizeCargo = ReadConfig(customData, "TimerFinalizeCargo", "");
 
-            RemoteControlPilot = ReadConfig(customData, "RemoteControlPilot");
+            RemoteControlPilot = ReadConfig(customData, "RemoteControlPilot", "");
             RemoteControlDocking = ReadConfig(customData, "RemoteControlDocking");
-            RemoteControlLanding = ReadConfig(customData, "RemoteControlLanding");
+            RemoteControlLanding = ReadConfig(customData, "RemoteControlLanding", "");
 
-            Camera = ReadConfig(customData, "Camera");
+            Camera = ReadConfig(customData, "Camera", "");
             Connector = ReadConfig(customData, "Connector");
-            Antenna = ReadConfig(customData, "Antenna");
+            Antenna = ReadConfig(customData, "Antenna", "");
 
             MaxLoad = ReadConfigDouble(customData, "MaxLoad", 1);
             MinLoad = ReadConfigDouble(customData, "MinLoad", 0);
@@ -119,41 +119,42 @@ namespace IngameScript
             MinHydrogenOnUnload = ReadConfigDouble(customData, "MinHydrogenOnUnload", 0);
 
             Route = new Route(
-                ReadConfig(customData, "RouteLoadBase"),
-                ReadConfigBool(customData, "RouteLoadBaseOnPlanet"),
-                ReadConfigVectorList(customData, "RouteToLoadBaseWaypoints"),
-                ReadConfig(customData, "RouteUnloadBase"),
-                ReadConfigBool(customData, "RouteUnloadBaseOnPlanet"),
-                ReadConfigVectorList(customData, "RouteToUnloadBaseWaypoints"));
+                ReadConfig(customData, "RouteLoadBase", ""),
+                ReadConfigBool(customData, "RouteLoadBaseOnPlanet", false),
+                ReadConfigVectorList(customData, "RouteToLoadBaseWaypoints", new List<Vector3D>()),
+                ReadConfig(customData, "RouteUnloadBase", ""),
+                ReadConfigBool(customData, "RouteUnloadBaseOnPlanet", false),
+                ReadConfigVectorList(customData, "RouteToUnloadBaseWaypoints", new List<Vector3D>()));
 
             NavigationTicks = ReadConfigInt(customData, "NavigationTicks", 1);
-            DockingSpeedWaypointFirst = ReadConfigDouble(customData, "DockingSpeedWaypointFirst");
-            DockingSpeedWaypointLast = ReadConfigDouble(customData, "DockingSpeedWaypointLast");
-            DockingSpeedWaypoints = ReadConfigDouble(customData, "DockingSpeedWaypoints");
-            DockingSlowdownDistance = ReadConfigDouble(customData, "DockingSlowdownDistance");
-            DockingDistanceThrWaypoints = ReadConfigDouble(customData, "DockingDistanceThrWaypoints");
 
-            TaxiSpeed = ReadConfigDouble(customData, "TaxiSpeed");
+            DockingSpeedWaypointFirst = ReadConfigDouble(customData, "DockingSpeedWaypointFirst", 10.0);
+            DockingSpeedWaypointLast = ReadConfigDouble(customData, "DockingSpeedWaypointLast", 1.0);
+            DockingSpeedWaypoints = ReadConfigDouble(customData, "DockingSpeedWaypoints", 5.0);
+            DockingSlowdownDistance = ReadConfigDouble(customData, "DockingSlowdownDistance", 50.0);
+            DockingDistanceThrWaypoints = ReadConfigDouble(customData, "DockingDistanceThrWaypoints", 0.5);
 
-            AtmNavigationAlignThr = ReadConfigDouble(customData, "AtmNavigationAlignThr");
-            AtmNavigationMaxSpeed = ReadConfigDouble(customData, "AtmNavigationMaxSpeed");
-            AtmNavigationWaypointThr = ReadConfigDouble(customData, "AtmNavigationWaypointThr");
-            AtmNavigationDestinationThr = ReadConfigDouble(customData, "AtmNavigationDestinationThr");
+            TaxiSpeed = ReadConfigDouble(customData, "TaxiSpeed", 25);
+
+            AtmNavigationAlignThr = ReadConfigDouble(customData, "AtmNavigationAlignThr", 0.01);
+            AtmNavigationMaxSpeed = ReadConfigDouble(customData, "AtmNavigationMaxSpeed", 100.0);
+            AtmNavigationWaypointThr = ReadConfigDouble(customData, "AtmNavigationWaypointThr", 500.0);
+            AtmNavigationDestinationThr = ReadConfigDouble(customData, "AtmNavigationDestinationThr", 1000.0);
             AtmNavigationGravityThr = ReadConfigDouble(customData, "AtmNavigationGravityThr", 0.001);
 
-            CrsNavigationAlignThr = ReadConfigDouble(customData, "CrsNavigationAlignThr");
-            CrsNavigationAlignSeconds = ReadConfigDouble(customData, "CrsNavigationAlignSeconds");
-            CrsNavigationMaxSpeedThr = ReadConfigDouble(customData, "CrsNavigationMaxSpeedThr");
-            CrsNavigationMaxAccelerationSpeed = ReadConfigDouble(customData, "CrsNavigationMaxAccelerationSpeed");
-            CrsNavigationMaxCruiseSpeed = ReadConfigDouble(customData, "CrsNavigationMaxCruiseSpeed");
-            CrsNavigationMaxEvadingSpeed = ReadConfigDouble(customData, "CrsNavigationMaxEvadingSpeed");
-            CrsNavigationWaypointThr = ReadConfigDouble(customData, "CrsNavigationWaypointThr");
-            CrsNavigationDestinationThr = ReadConfigDouble(customData, "CrsNavigationDestinationThr");
-            CrsNavigationCollisionDetectRange = ReadConfigDouble(customData, "CrsNavigationCollisionDetectRange");
-            CrsNavigationEvadingWaypointThr = ReadConfigDouble(customData, "CrsNavigationEvadingWaypointThr");
+            CrsNavigationAlignThr = ReadConfigDouble(customData, "CrsNavigationAlignThr", 0.01);
+            CrsNavigationAlignSeconds = ReadConfigDouble(customData, "CrsNavigationAlignSeconds", 5.0);
+            CrsNavigationMaxSpeedThr = ReadConfigDouble(customData, "CrsNavigationMaxSpeedThr", 0.95);
+            CrsNavigationMaxAccelerationSpeed = ReadConfigDouble(customData, "CrsNavigationMaxAccelerationSpeed", 19.5);
+            CrsNavigationMaxCruiseSpeed = ReadConfigDouble(customData, "CrsNavigationMaxCruiseSpeed", 100.0);
+            CrsNavigationMaxEvadingSpeed = ReadConfigDouble(customData, "CrsNavigationMaxEvadingSpeed", 19.5);
+            CrsNavigationWaypointThr = ReadConfigDouble(customData, "CrsNavigationWaypointThr", 1000.0);
+            CrsNavigationDestinationThr = ReadConfigDouble(customData, "CrsNavigationDestinationThr", 2500.0);
+            CrsNavigationCollisionDetectRange = ReadConfigDouble(customData, "CrsNavigationCollisionDetectRange", 10000.0);
+            CrsNavigationEvadingWaypointThr = ReadConfigDouble(customData, "CrsNavigationEvadingWaypointThr", 100.0);
 
-            GyrosThr = ReadConfigDouble(customData, "GyrosThr");
-            GyrosSpeed = ReadConfigDouble(customData, "GyrosSpeed");
+            GyrosThr = ReadConfigDouble(customData, "GyrosThr", 0.001);
+            GyrosSpeed = ReadConfigDouble(customData, "GyrosSpeed", 2.0);
 
             DockRequestTimeout = TimeSpan.FromSeconds(ReadConfigInt(customData, "DockRequestTimeout", 300));
 
@@ -254,15 +255,15 @@ namespace IngameScript
         public static string GetDefault()
         {
             return
-                "Channel=name\n" +
+                "Channel=STD\n" +
                 "ExchangeType=type\n" +
                 "\n" +
                 "EnableLogs=false\n" +
                 "EnableRefreshLCDs=false\n" +
                 "\n" +
-                "WildcardShipInfo=DELIVERY_INFO\n" +
-                "WildcardPlanLCDs=DELIVERY_PLAN\n" +
-                "WildcardLogLCDs=DELIVERY_LOG\n" +
+                "WildcardShipInfo=SHIP_INFO\n" +
+                "WildcardPlanLCDs=SHIP_PLAN\n" +
+                "WildcardLogLCDs=SHIP_LOG\n" +
                 "\n" +
                 "TimerPilot=Timer Block Pilot\n" +
                 "TimerWaiting=Timer Block Waiting\n" +

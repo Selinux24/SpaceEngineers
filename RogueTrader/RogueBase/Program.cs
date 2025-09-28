@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "2.2";
+        const string Version = "2.3";
         const string Separate = "------";
 
         #region Blocks
@@ -85,10 +85,16 @@ namespace IngameScript
                 ParseTerminalMessage(argument);
             }
 
+            while (IGC.UnicastListener.HasPendingMessage)
+            {
+                var message = IGC.UnicastListener.AcceptMessage();
+                ParseMessage(message);
+            }
+
             while (bl.HasPendingMessage)
             {
                 var message = bl.AcceptMessage();
-                ParseMessage(message.Data.ToString());
+                ParseMessage(message);
             }
 
             UpdateBaseState();
@@ -211,8 +217,11 @@ namespace IngameScript
         #endregion
 
         #region IGC COMMANDS
-        void ParseMessage(string signal)
+        void ParseMessage(MyIGCMessage message)
         {
+            long source = message.Source;
+            string signal = message.Data.ToString();
+
             WriteLogLCDs($"ParseMessage: {signal}");
 
             string[] lines = signal.Split('|');
@@ -721,7 +730,7 @@ namespace IngameScript
         {
             return ships.FindAll(s =>
                 s.ExchangeType == exchangeType &&
-                s.Status == ShipStatus.WaitingDock);
+                (s.Status == ShipStatus.WaitingDock || s.Status == ShipStatus.Idle));
         }
         bool ShipIsDocked(string ship)
         {
