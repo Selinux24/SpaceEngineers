@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "2.3";
+        const string Version = "2.4";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
@@ -55,6 +55,8 @@ namespace IngameScript
         bool paused = false;
         bool monitorizeCapacity = false;
         bool monitorizePropulsion = false;
+        bool monitorizeLoadTime = false;
+        DateTime loadStart;
         ShipStatus shipStatus = ShipStatus.Idle;
         readonly Navigator navigator;
 
@@ -406,6 +408,15 @@ namespace IngameScript
                 double capacity = CalculateCargoPercentage();
                 WriteInfoLCDs($"Progress {capacity / Config.MaxLoad:P1}...");
 
+                var loadTime = DateTime.Now - loadStart;
+                if (monitorizeLoadTime && loadTime > Config.MaxLoadTime)
+                {
+                    monitorizeLoadTime = false;
+                    loadStart = DateTime.MinValue;
+                    Next();
+                    return;
+                }
+
                 if (monitorizeCapacity && capacity < Config.MaxLoad)
                 {
                     return;
@@ -682,6 +693,11 @@ namespace IngameScript
         internal void Load()
         {
             monitorizeCapacity = true;
+            if (Config.MaxLoadTime != TimeSpan.Zero)
+            {
+                monitorizeLoadTime = true;
+                loadStart = DateTime.Now;
+            }
             timerLoad?.StartCountdown();
         }
         internal void Unload()
@@ -1133,6 +1149,8 @@ namespace IngameScript
             paused = Utils.ReadInt(storageLines, "Paused", 0) == 1;
             monitorizeCapacity = Utils.ReadInt(storageLines, "MonitorizeCapacity", 0) == 1;
             monitorizePropulsion = Utils.ReadInt(storageLines, "MonitorizePropulsion", 0) == 1;
+            monitorizeLoadTime = Utils.ReadInt(storageLines, "MonitorizeLoadTime", 0) == 1;
+            loadStart = new DateTime(Utils.ReadLong(storageLines, "LoadStart", 0));
             shipStatus = (ShipStatus)Utils.ReadInt(storageLines, "ShipStatus", (int)ShipStatus.Idle);
             navigator.LoadFromStorage(Utils.ReadString(storageLines, "Navigator"));
         }
@@ -1143,6 +1161,8 @@ namespace IngameScript
                 $"Paused={(paused ? 1 : 0)}",
                 $"MonitorizeCapacity={(monitorizeCapacity ? 1 : 0)}",
                 $"MonitorizePropulsion={(monitorizePropulsion ? 1 : 0)}",
+                $"MonitorizeLoadTime={(monitorizeLoadTime ? 1 : 0)}",
+                $"LoadStart={loadStart.Ticks}",
                 $"ShipStatus={(int)shipStatus}",
                 $"Navigator={navigator.SaveToStorage()}",
             };

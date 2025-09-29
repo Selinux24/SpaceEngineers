@@ -98,6 +98,16 @@ namespace IngameScript
 
             return int.Parse(value);
         }
+        public static long ReadLong(string[] lines, string name, long defaultValue = 0)
+        {
+            string value = ReadString(lines, name);
+            if (string.IsNullOrEmpty(value))
+            {
+                return defaultValue;
+            }
+
+            return long.Parse(value);
+        }
         public static Vector3D ReadVector(string[] lines, string name)
         {
             string value = ReadString(lines, name);

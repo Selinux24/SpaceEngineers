@@ -3,7 +3,6 @@ using SpaceEngineers.Game.ModAPI.Ingame;
 using System;
 using System.Collections.Generic;
 using System.Text;
-using VRage.Game;
 using VRage.Game.ModAPI.Ingame;
 
 namespace IngameScript
@@ -41,7 +40,7 @@ namespace IngameScript
             lastQuery = DateTime.Now;
             lastQueryState.Clear();
 
-            timerOpen.StartCountdown();
+            Open();
             preparingData = items;
 
             preparing = true;
@@ -106,8 +105,7 @@ namespace IngameScript
                 lastQueryState.AppendLine("- No items moved");
             }
 
-            timerClose.StartCountdown();
-            lastQueryState.AppendLine($"  {timerClose.CustomName} started.");
+            Close();
 
             preparing = false;
             preparingData = null;
@@ -139,6 +137,21 @@ namespace IngameScript
             var items = new List<MyInventoryItem>();
             cargoInv.GetItems(items);
             return items;
+        }
+
+        void Open()
+        {
+            if (timerOpen == null) return;
+
+            timerOpen.StartCountdown();
+            lastQueryState.AppendLine($"  {timerOpen.CustomName} started.");
+        }
+        void Close()
+        {
+            if (timerClose == null) return;
+
+            timerClose.StartCountdown();
+            lastQueryState.AppendLine($"  {timerClose.CustomName} started.");
         }
 
         public string GetState()

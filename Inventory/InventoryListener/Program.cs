@@ -9,7 +9,7 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        const string Version = "1.1";
+        const string Version = "1.2";
 
         readonly List<IMyCargoContainer> warehouseCargos;
         readonly List<IMyTextPanel> infoLCDs;

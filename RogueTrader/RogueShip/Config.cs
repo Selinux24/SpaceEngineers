@@ -38,6 +38,7 @@ namespace IngameScript
 
         public readonly double MaxLoad;
         public readonly double MinLoad;
+        public readonly TimeSpan MaxLoadTime;
         public readonly double MinPowerOnLoad;
         public readonly double MinPowerOnUnload;
         public readonly double MinHydrogenOnLoad;
@@ -117,6 +118,7 @@ namespace IngameScript
             MinPowerOnUnload = ReadConfigDouble(customData, "MinPowerOnUnload", 0);
             MinHydrogenOnLoad = ReadConfigDouble(customData, "MinHydrogenOnLoad", 0);
             MinHydrogenOnUnload = ReadConfigDouble(customData, "MinHydrogenOnUnload", 0);
+            MaxLoadTime = TimeSpan.FromSeconds(ReadConfigInt(customData, "MaxLoadTime", 0));
 
             Route = new Route(
                 ReadConfig(customData, "RouteLoadBase", ""),
@@ -285,6 +287,7 @@ namespace IngameScript
                 "\n" +
                 "MaxLoad=1\n" +
                 "MinLoad=0\n" +
+                "MaxLoadTime=0\n" +
                 "MinPowerOnLoad=0.9\n" +
                 "MinPowerOnUnload=0.9\n" +
                 "MinHydrogenOnLoad=0.9\n" +
