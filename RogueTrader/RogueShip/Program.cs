@@ -408,12 +408,11 @@ namespace IngameScript
                 double capacity = CalculateCargoPercentage();
                 WriteInfoLCDs($"Progress {capacity / Config.MaxLoad:P1}...");
 
-                var loadTime = DateTime.Now - loadStart;
-                if (monitorizeLoadTime && loadTime > Config.MaxLoadTime)
+                if (monitorizeLoadTime && DateTime.Now - loadStart > Config.MaxLoadTime)
                 {
                     monitorizeLoadTime = false;
                     loadStart = DateTime.MinValue;
-                    Next();
+                    if (capacity > 0) Next();
                     return;
                 }
 
