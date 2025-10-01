@@ -9,7 +9,7 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        const string Version = "1.3";
+        const string Version = "1.4";
 
         readonly List<IMyCargoContainer> warehouseCargos;
         readonly List<IMyTextPanel> infoLCDs;
@@ -144,26 +144,10 @@ namespace IngameScript
                     {
                         IGC.SendUnicastMessage(listener.SenderId, config.Channel, "2");
 
-                        //Get the connected ship name
-                        foreach (var connector in listener.Connectors)
+                        var msgList = listener.FreeConnectors();
+                        foreach (var msg in msgList)
                         {
-                            string ship = connector.OtherConnector?.CubeGrid?.CustomName;
-                            if (ship == null) continue;
-
-                            //Set the route on the ship
-                            var parts = new List<string>()
-                            {
-                                $"Command=SET_ROUTE",
-                                $"From={listener.Name}",
-                                $"To={ship}",
-                                $"LoadBase={listener.Route.LoadBase}",
-                                $"LoadBaseOnPlanet={(listener.Route.LoadBaseOnPlanet?1:0)}",
-                                $"ToLoadBaseWaypoints={Utils.VectorListToStr(listener.Route.ToLoadBaseWaypoints)}",
-                                $"UnloadBase={listener.Route.UnloadBase}",
-                                $"UnloadBaseOnPlanet={(listener.Route.UnloadBaseOnPlanet?1:0)}",
-                                $"ToUnloadBaseWaypoints={Utils.VectorListToStr(listener.Route.ToUnloadBaseWaypoints)}",
-                            };
-                            BroadcastMessage(parts);
+                            BroadcastMessage(msg);
                         }
                     }
                     infoText.Append(listener.GetState());

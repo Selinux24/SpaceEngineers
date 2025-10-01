@@ -2,6 +2,7 @@
 using SpaceEngineers.Game.ModAPI.Ingame;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using VRage.Game.ModAPI.Ingame;
 
@@ -60,6 +61,11 @@ namespace IngameScript
             {
                 if (timerClose.IsCountingDown) return false;
                 closing = false;
+
+                lastQueryState.AppendLine($"  {timerClose.CustomName} finished.");
+
+                preparing = false;
+                preparingData = null;
 
                 return true;
             }
@@ -120,7 +126,7 @@ namespace IngameScript
                 lastQueryState.AppendLine("- No items moved");
             }
 
-            Close();
+            if (Close()) return false;
 
             preparing = false;
             preparingData = null;
@@ -161,13 +167,48 @@ namespace IngameScript
             timerOpen.StartCountdown();
             lastQueryState.AppendLine($"  {timerOpen.CustomName} started.");
         }
-        void Close()
+        bool Close()
         {
-            if (timerClose == null) return;
+            if (timerClose == null) return false;
 
             timerClose.StartCountdown();
             lastQueryState.AppendLine($"  {timerClose.CustomName} started.");
             closing = true;
+
+            return true;
+        }
+        public List<List<string>> FreeConnectors()
+        {
+            var res = new List<List<string>>();
+
+            //Get the connected ship name
+            var ships = Connectors
+                .Where(c => c.OtherConnector == null || !c.OtherConnector.IsConnected)
+                .Select(c => c.OtherConnector.CubeGrid.CustomName)
+                .Distinct()
+                .ToList();
+
+            foreach (var ship in ships)
+            {
+                lastQueryState.AppendLine($"  {Name}: {ship} route set.");
+
+                //Set the route on the ship
+                var parts = new List<string>()
+                {
+                    $"Command=SET_ROUTE",
+                    $"From={Name}",
+                    $"To={ship}",
+                    $"LoadBase={Route.LoadBase}",
+                    $"LoadBaseOnPlanet={(Route.LoadBaseOnPlanet?1:0)}",
+                    $"ToLoadBaseWaypoints={Utils.VectorListToStr(Route.ToLoadBaseWaypoints)}",
+                    $"UnloadBase={Route.UnloadBase}",
+                    $"UnloadBaseOnPlanet={(Route.UnloadBaseOnPlanet?1:0)}",
+                    $"ToUnloadBaseWaypoints={Utils.VectorListToStr(Route.ToUnloadBaseWaypoints)}",
+                };
+                res.Add(parts);
+            }
+
+            return res;
         }
 
         public string GetState()

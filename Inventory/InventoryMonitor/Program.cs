@@ -9,7 +9,7 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        const string Version = "1.2";
+        const string Version = "1.3";
         const char AttributeSep = '=';
         const string WildcardLCDs = "[INV]";
 
@@ -174,7 +174,7 @@ namespace IngameScript
                 while (IGC.UnicastListener.HasPendingMessage)
                 {
                     var msg = IGC.UnicastListener.AcceptMessage();
-                    string state = msg.Data as string;
+                    string state = msg.Data.ToString();
                     if (state == "1")
                     {
                         //Retain next query
@@ -246,11 +246,12 @@ namespace IngameScript
             {
                 //Add line only if needed quantity is major then the required quantity times the threshold
                 var reqThr = (int)(req.Value * threshold);
+                var curr = current.ContainsKey(req.Key) ? (int)current[req.Key] : 0;
 
-                int c = reqThr - (current.ContainsKey(req.Key) ? (int)current[req.Key] : 0);
+                int c = reqThr - curr;
                 if (c > 0)
                 {
-                    message.Append($"{req.Key}={c};");
+                    message.Append($"{req.Key}={req.Value - curr};");
                     anyNeeded = true;
                 }
             }
