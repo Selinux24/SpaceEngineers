@@ -44,7 +44,7 @@ namespace IngameScript
         public readonly double MinHydrogenOnLoad;
         public readonly double MinHydrogenOnUnload;
 
-        public readonly Route Route;
+        public readonly Route DefaultRoute;
 
         public readonly int NavigationTicks;
         public readonly double DockingSpeedWaypointFirst;
@@ -120,7 +120,7 @@ namespace IngameScript
             MinHydrogenOnUnload = ReadConfigDouble(customData, "MinHydrogenOnUnload", 0);
             MaxLoadTime = TimeSpan.FromSeconds(ReadConfigInt(customData, "MaxLoadTime", 0));
 
-            Route = new Route(
+            DefaultRoute = new Route(
                 ReadConfig(customData, "RouteLoadBase", ""),
                 ReadConfigBool(customData, "RouteLoadBaseOnPlanet", false),
                 ReadConfigVectorList(customData, "RouteToLoadBaseWaypoints", new List<Vector3D>()),

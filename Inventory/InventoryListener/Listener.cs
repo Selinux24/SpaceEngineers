@@ -11,22 +11,29 @@ namespace IngameScript
     {
         const string ListenerSep = "¬";
 
-        readonly string name;
         readonly IMyCargoContainer outputCargo;
         readonly IMyTimerBlock timerOpen;
         readonly IMyTimerBlock timerClose;
         DateTime lastQuery = DateTime.MinValue;
         bool preparing = false;
         string preparingData = null;
+        bool closing = false;
 
         readonly StringBuilder lastQueryState = new StringBuilder();
         readonly StringBuilder state = new StringBuilder();
 
+        public readonly string Name;
+        public readonly Route Route;
+        public readonly List<IMyShipConnector> Connectors;
+
         public long SenderId { get; private set; } = 0;
 
-        public Listener(string name, IMyCargoContainer outputCargo, IMyTimerBlock timerOpen, IMyTimerBlock timerClose)
+        public Listener(string name, Route route, List<IMyShipConnector> connectors, IMyCargoContainer outputCargo, IMyTimerBlock timerOpen, IMyTimerBlock timerClose)
         {
-            this.name = name;
+            Name = name;
+            Route = route;
+            Connectors = connectors;
+
             this.outputCargo = outputCargo;
             this.timerOpen = timerOpen;
             this.timerClose = timerClose;
@@ -47,9 +54,17 @@ namespace IngameScript
         }
         public bool Preparing(List<IMyCargoContainer> warehouseCargos)
         {
-            if (!preparing) return false;
-
             if (timerOpen.IsCountingDown) return false;
+
+            if (closing)
+            {
+                if (timerClose.IsCountingDown) return false;
+                closing = false;
+
+                return true;
+            }
+
+            if (!preparing) return false;
 
             var requestedItems = ReadItems(preparingData);
             var outputInv = outputCargo.GetInventory();
@@ -152,12 +167,13 @@ namespace IngameScript
 
             timerClose.StartCountdown();
             lastQueryState.AppendLine($"  {timerClose.CustomName} started.");
+            closing = true;
         }
 
         public string GetState()
         {
             state.Clear();
-            state.Append($"+ {name} ");
+            state.Append($"+ {Name} ");
 
             string error;
             if (!IsValid(out error))
@@ -187,17 +203,22 @@ namespace IngameScript
             errorMsg = null;
             if (outputCargo == null)
             {
-                errorMsg = $"No output cargo found with name {name}";
+                errorMsg = $"No output cargo found with name {Name}";
                 return false;
             }
             if (timerOpen == null)
             {
-                errorMsg = $"No open timer found with name {name}";
+                errorMsg = $"No open timer found with name {Name}";
                 return false;
             }
             if (timerClose == null)
             {
-                errorMsg = $"No close timer found with name {name}";
+                errorMsg = $"No close timer found with name {Name}";
+                return false;
+            }
+            if (Connectors.Count == 0)
+            {
+                errorMsg = $"No connectors found with name {Name}";
                 return false;
             }
             return true;
@@ -212,6 +233,7 @@ namespace IngameScript
             lastQuery = new DateTime(Utils.ReadLong(storageLines, "lastQuery", 0));
             preparing = Utils.ReadInt(storageLines, "preparing", 0) == 1;
             preparingData = Utils.ReadString(storageLines, "preparingData", null);
+            closing = Utils.ReadInt(storageLines, "closing", 0) == 1;
         }
         public string SaveToStorage()
         {
@@ -220,7 +242,8 @@ namespace IngameScript
                 $"senderId={SenderId}",
                 $"lastQuery={lastQuery.Ticks}",
                 $"preparing={(preparing ? 1 : 0)}",
-                $"preparingData={preparingData}"
+                $"preparingData={preparingData}",
+                $"closing={(closing ? 1 : 0)}",
             };
 
             return string.Join(ListenerSep, parts);

@@ -9,7 +9,7 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        const string Version = "1.2";
+        const string Version = "1.3";
 
         readonly List<IMyCargoContainer> warehouseCargos;
         readonly List<IMyTextPanel> infoLCDs;
@@ -52,22 +52,49 @@ namespace IngameScript
                 if (outputCargo == null)
                 {
                     Echo($"No output cargo found with name {listener} {config.OutputCargo}");
-                    return;
+                    continue;
                 }
 
                 var timerOpen = GetBlockWithNames<IMyTimerBlock>(listener, config.TimerOpen);
                 if (timerOpen == null)
                 {
                     Echo($"No timer found with name {listener} {config.TimerOpen}");
+                    continue;
                 }
 
                 var timerClose = GetBlockWithNames<IMyTimerBlock>(listener, config.TimerClose);
                 if (timerClose == null)
                 {
                     Echo($"No timer found with name {listener} {config.TimerClose}");
+                    continue;
                 }
 
-                listeners.Add(listener, new Listener(listener, outputCargo, timerOpen, timerClose));
+                var connectors = GetBlocksWithNames<IMyShipConnector>(listener, config.Connector);
+                if (connectors.Count == 0)
+                {
+                    connectors = GetBlocksWithName<IMyShipConnector>(config.Connector);
+                    if (connectors.Count == 0)
+                    {
+                        Echo($"No connectors found with name {listener} {config.Connector}");
+                        continue;
+                    }
+                }
+
+                //Find the route for this listener
+                var route = config.Routes.Find(r => r.Name == listener);
+                if (route == null || !route.IsValid())
+                {
+                    Echo($"No valid route found for {listener}");
+                    continue;
+                }
+
+                listeners.Add(listener, new Listener(listener, route, connectors, outputCargo, timerOpen, timerClose));
+            }
+
+            if (listeners.Count == 0)
+            {
+                Echo("No valid listeners found.");
+                return;
             }
 
             infoLCDs = GetBlocksOfType<IMyTextPanel>(config.WildcardLCDs);
@@ -88,8 +115,6 @@ namespace IngameScript
 
         public void Main(string argument, UpdateType updateSource)
         {
-            infoText.Clear();
-
             if ((updateSource & UpdateType.IGC) != 0)
             {
                 while (bl.HasPendingMessage)
@@ -110,18 +135,42 @@ namespace IngameScript
 
             if ((updateSource & UpdateType.Update100) != 0)
             {
+                infoText.Clear();
+
                 infoText.AppendLine($"Inventory Listener v{Version} - {config.Channel}. {DateTime.Now:HH:mm:ss}");
                 foreach (var listener in listeners.Values)
                 {
                     if (listener.Preparing(warehouseCargos))
                     {
                         IGC.SendUnicastMessage(listener.SenderId, config.Channel, "2");
+
+                        //Get the connected ship name
+                        foreach (var connector in listener.Connectors)
+                        {
+                            string ship = connector.OtherConnector?.CubeGrid?.CustomName;
+                            if (ship == null) continue;
+
+                            //Set the route on the ship
+                            var parts = new List<string>()
+                            {
+                                $"Command=SET_ROUTE",
+                                $"From={listener.Name}",
+                                $"To={ship}",
+                                $"LoadBase={listener.Route.LoadBase}",
+                                $"LoadBaseOnPlanet={(listener.Route.LoadBaseOnPlanet?1:0)}",
+                                $"ToLoadBaseWaypoints={Utils.VectorListToStr(listener.Route.ToLoadBaseWaypoints)}",
+                                $"UnloadBase={listener.Route.UnloadBase}",
+                                $"UnloadBaseOnPlanet={(listener.Route.UnloadBaseOnPlanet?1:0)}",
+                                $"ToUnloadBaseWaypoints={Utils.VectorListToStr(listener.Route.ToUnloadBaseWaypoints)}",
+                            };
+                            BroadcastMessage(parts);
+                        }
                     }
                     infoText.Append(listener.GetState());
                 }
-            }
 
-            WriteInfo();
+                WriteInfo();
+            }
         }
         bool ParseMessage(string data, out string name, out string items)
         {
@@ -134,9 +183,19 @@ namespace IngameScript
 
         T GetBlockWithNames<T>(string name1, string name2) where T : class, IMyTerminalBlock
         {
+            return GetBlocksWithNames<T>(name1, name2).FirstOrDefault();
+        }
+        List<T> GetBlocksWithNames<T>(string name1, string name2) where T : class, IMyTerminalBlock
+        {
             var blocks = new List<T>();
             GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && b.CustomName.Contains(name1) && b.CustomName.Contains(name2));
-            return blocks.FirstOrDefault();
+            return blocks;
+        }
+        List<T> GetBlocksWithName<T>(string name) where T : class, IMyTerminalBlock
+        {
+            var blocks = new List<T>();
+            GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && b.CustomName.Contains(name));
+            return blocks;
         }
         List<T> GetBlocksOfType<T>(string filter) where T : class, IMyTerminalBlock
         {
@@ -153,6 +212,12 @@ namespace IngameScript
                 lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
                 lcd.WriteText(infoText);
             }
+        }
+        void BroadcastMessage(List<string> parts)
+        {
+            string message = string.Join("|", parts);
+
+            IGC.SendBroadcastMessage(config.Channel, message);
         }
 
         void LoadFromStorage()

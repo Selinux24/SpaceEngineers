@@ -9,20 +9,72 @@ namespace IngameScript
         public string UnloadBase;
         public bool LoadBaseOnPlanet;
         public bool UnloadBaseOnPlanet;
-        public readonly List<Vector3D> ToLoadBaseWaypoints = new List<Vector3D>();
-        public readonly List<Vector3D> ToUnloadBaseWaypoints = new List<Vector3D>();
+        public readonly List<Vector3D> ToLoadBaseWaypoints;
+        public readonly List<Vector3D> ToUnloadBaseWaypoints;
 
-        public Route(string loadBase, bool loadBaseOnPlanet, List<Vector3D> toLoadBaseWaypoints, string unloadBase, bool unloadBaseOnPlanet, List<Vector3D> toUnloadBaseWaypoints)
+        public Route(string loadBase, bool loadBaseOnPlanet, List<Vector3D> toLoadBase, string unloadBase, bool unloadBaseOnPlanet, List<Vector3D> toUnloadBase)
         {
             LoadBase = loadBase;
             LoadBaseOnPlanet = loadBaseOnPlanet;
             ToLoadBaseWaypoints = new List<Vector3D>();
-            if (toLoadBaseWaypoints != null) ToLoadBaseWaypoints.AddRange(toLoadBaseWaypoints);
+            if (toLoadBase != null) ToLoadBaseWaypoints.AddRange(toLoadBase);
 
             UnloadBase = unloadBase;
             UnloadBaseOnPlanet = unloadBaseOnPlanet;
             ToUnloadBaseWaypoints = new List<Vector3D>();
-            if (toUnloadBaseWaypoints != null) ToUnloadBaseWaypoints.AddRange(toUnloadBaseWaypoints);
+            if (toUnloadBase != null) ToUnloadBaseWaypoints.AddRange(toUnloadBase);
+        }
+
+        public bool IsValid()
+        {
+            return
+                !string.IsNullOrWhiteSpace(LoadBase) &&
+                ToLoadBaseWaypoints.Count > 0 &&
+                !string.IsNullOrWhiteSpace(UnloadBase) &&
+                ToUnloadBaseWaypoints.Count > 0;
+        }
+
+        public void LoadFromStorage(string storageLine)
+        {
+            var parts = storageLine.Split('¬');
+
+            var loadBase = Utils.ReadString(parts, "LoadBase");
+            var unloadBase = Utils.ReadString(parts, "UnloadBase");
+
+            if (!IsValid())
+            {
+                return;
+            }
+
+            LoadBase = loadBase;
+            LoadBaseOnPlanet = Utils.ReadInt(parts, "LoadBaseOnPlanet") == 1;
+            ToLoadBaseWaypoints.Clear();
+            ToLoadBaseWaypoints.AddRange(Utils.ReadVectorList(parts, "ToLoadBaseWaypoints"));
+
+            UnloadBase = unloadBase;
+            UnloadBaseOnPlanet = Utils.ReadInt(parts, "UnloadBaseOnPlanet") == 1;
+            ToUnloadBaseWaypoints.Clear();
+            ToUnloadBaseWaypoints.AddRange(Utils.ReadVectorList(parts, "ToUnloadBaseWaypoints"));
+        }
+        public string SaveToStorage()
+        {
+            if (!IsValid())
+            {
+                return "";
+            }
+
+            var parts = new List<string>
+            {
+                $"LoadBase={LoadBase}",
+                $"LoadBaseOnPlanet={(LoadBaseOnPlanet ? 1 : 0)}",
+                $"ToLoadBaseWaypoints={Utils.VectorListToStr(ToLoadBaseWaypoints)}",
+
+                $"UnloadBase={UnloadBase}",
+                $"UnloadBaseOnPlanet={(UnloadBaseOnPlanet ? 1 : 0)}",
+                $"ToUnloadBaseWaypoints={Utils.VectorListToStr(ToUnloadBaseWaypoints)}"
+            };
+
+            return string.Join("¬", parts);
         }
     }
 }

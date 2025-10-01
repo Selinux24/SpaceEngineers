@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "2.4";
+        const string Version = "2.5";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
@@ -59,6 +59,7 @@ namespace IngameScript
         DateTime loadStart;
         ShipStatus shipStatus = ShipStatus.Idle;
         readonly Navigator navigator;
+        readonly Route route;
 
         DateTime lastDockRequest = DateTime.MinValue;
         DateTime lastRefreshLCDs = DateTime.MinValue;
@@ -82,6 +83,7 @@ namespace IngameScript
             }
 
             navigator = new Navigator(this);
+            route = Config.DefaultRoute;
 
             //Must have
             remoteDocking = GetBlockWithName<IMyRemoteControl>(Config.RemoteControlDocking);
@@ -308,6 +310,8 @@ namespace IngameScript
             if (command == "COME_TO_DOCK") ProcessDocking(lines, ExchangeTasks.Dock);
             if (command == "UNDOCK_TO_LOAD") ProcessDocking(lines, ExchangeTasks.EndLoad);
             if (command == "UNDOCK_TO_UNLOAD") ProcessDocking(lines, ExchangeTasks.EndUnload);
+
+            if (command == "SET_ROUTE") ProcessSetRoute(lines);
         }
 
         /// <summary>
@@ -379,6 +383,26 @@ namespace IngameScript
                 navigator.ApproachToDock(landing, exchange, fw, up, wpList, "ON_APPROACHING_COMPLETED", task);
                 shipStatus = ShipStatus.Docking;
             }
+        }
+        /// <summary>
+        /// Updates the ship's route
+        /// </summary>
+        void ProcessSetRoute(string[] lines)
+        {
+            route.LoadBase = Utils.ReadString(lines, "LoadBase");
+            route.LoadBaseOnPlanet = Utils.ReadInt(lines, "LoadBaseOnPlanet") == 1;
+            route.ToLoadBaseWaypoints.Clear();
+            route.ToLoadBaseWaypoints.AddRange(Utils.ReadVectorList(lines, "ToLoadBaseWaypoints"));
+
+            route.UnloadBase = Utils.ReadString(lines, "UnloadBase");
+            route.UnloadBaseOnPlanet = Utils.ReadInt(lines, "UnloadBaseOnPlanet") == 1;
+            route.ToUnloadBaseWaypoints.Clear();
+            route.ToUnloadBaseWaypoints.AddRange(Utils.ReadVectorList(lines, "ToUnloadBaseWaypoints"));
+
+            Plan();
+
+            monitorizeLoadTime = true;
+            loadStart = DateTime.Now;
         }
         #endregion
 
@@ -546,14 +570,14 @@ namespace IngameScript
             string callBack;
             if (task == ExchangeTasks.EndLoad)
             {
-                onPlanet = Config.Route.UnloadBaseOnPlanet;
-                waypoints = Config.Route.ToUnloadBaseWaypoints;
+                onPlanet = route.UnloadBaseOnPlanet;
+                waypoints = route.ToUnloadBaseWaypoints;
                 callBack = "ON_NAVIGATION_COMPLETED";
             }
             else if (task == ExchangeTasks.EndUnload)
             {
-                onPlanet = Config.Route.LoadBaseOnPlanet;
-                waypoints = Config.Route.ToLoadBaseWaypoints;
+                onPlanet = route.LoadBaseOnPlanet;
+                waypoints = route.ToLoadBaseWaypoints;
                 callBack = "ON_NAVIGATION_COMPLETED";
             }
             else
@@ -692,11 +716,6 @@ namespace IngameScript
         internal void Load()
         {
             monitorizeCapacity = true;
-            if (Config.MaxLoadTime != TimeSpan.Zero)
-            {
-                monitorizeLoadTime = true;
-                loadStart = DateTime.Now;
-            }
             timerLoad?.StartCountdown();
         }
         internal void Unload()
@@ -1009,7 +1028,7 @@ namespace IngameScript
             if (task == ExchangeTasks.StartLoad || task == ExchangeTasks.StartUnload)
             {
                 message = task == ExchangeTasks.StartLoad ? "WAITING_LOAD" : "WAITING_UNLOAD";
-                to = task == ExchangeTasks.StartLoad ? Config.Route.LoadBase : Config.Route.UnloadBase;
+                to = task == ExchangeTasks.StartLoad ? route.LoadBase : route.UnloadBase;
 
                 shipStatus = ShipStatus.WaitingDock;
                 lastDockRequest = DateTime.Now;
@@ -1017,7 +1036,7 @@ namespace IngameScript
             else if (task == ExchangeTasks.EndLoad || task == ExchangeTasks.EndUnload)
             {
                 message = task == ExchangeTasks.EndLoad ? "WAITING_UNDOCK_LOAD" : "WAITING_UNDOCK_UNLOAD";
-                to = task == ExchangeTasks.EndLoad ? Config.Route.LoadBase : Config.Route.UnloadBase;
+                to = task == ExchangeTasks.EndLoad ? route.LoadBase : route.UnloadBase;
 
                 shipStatus = ShipStatus.WaitingUndock;
                 lastDockRequest = DateTime.Now;
@@ -1122,11 +1141,10 @@ namespace IngameScript
         {
             WriteInfoLCDs($"RogueShip v{Version}. {DateTime.Now:HH:mm:ss}", false);
             WriteInfoLCDs($"{shipId} in channel {Config.Channel}");
-            WriteInfoLCDs($"Navigation enabled: {IsNavigationEnabled()}");
-            WriteInfoLCDs($"Detection enabled:{IsDetectionEnabled()}");
-            WriteInfoLCDs($"{CalculateCargoPercentage():P1} cargo.");
-            if (Config.MinPowerOnLoad > 0 || Config.MinPowerOnUnload > 0) WriteInfoLCDs($"Battery {CalculateBatteryPercentage():P1}.");
-            if (Config.MinHydrogenOnLoad > 0 || Config.MinHydrogenOnUnload > 0) WriteInfoLCDs($"Hydrogen {CalculateHydrogenPercentage():P1}.");
+            WriteInfoLCDs($"{(IsNavigationEnabled() ? "NAV" : "NO-NAV")}/{(IsDetectionEnabled() ? "DTC" : "NO-DTC")}. {CalculateCargoPercentage():P1} cargo.");
+            bool showBattery = Config.MinPowerOnLoad > 0 || Config.MinPowerOnUnload > 0;
+            bool showHydrogen = Config.MinHydrogenOnLoad > 0 || Config.MinHydrogenOnUnload > 0;
+            WriteInfoLCDs($"BAT {(showBattery ? $"{CalculateBatteryPercentage():P1}" : "--")} | H2 {(showHydrogen ? $"{CalculateHydrogenPercentage():P1}" : "--")}");
             WriteInfoLCDs($"{shipStatus}");
             if (shipStatus == ShipStatus.WaitingDock)
             {
@@ -1152,10 +1170,11 @@ namespace IngameScript
             loadStart = new DateTime(Utils.ReadLong(storageLines, "LoadStart", 0));
             shipStatus = (ShipStatus)Utils.ReadInt(storageLines, "ShipStatus", (int)ShipStatus.Idle);
             navigator.LoadFromStorage(Utils.ReadString(storageLines, "Navigator"));
+            route.LoadFromStorage(Utils.ReadString(storageLines, "Route"));
         }
         void SaveToStorage()
         {
-            List<string> parts = new List<string>
+            var parts = new List<string>
             {
                 $"Paused={(paused ? 1 : 0)}",
                 $"MonitorizeCapacity={(monitorizeCapacity ? 1 : 0)}",
@@ -1164,6 +1183,7 @@ namespace IngameScript
                 $"LoadStart={loadStart.Ticks}",
                 $"ShipStatus={(int)shipStatus}",
                 $"Navigator={navigator.SaveToStorage()}",
+                $"Route={route.SaveToStorage()}",
             };
 
             Storage = string.Join(Environment.NewLine, parts);
