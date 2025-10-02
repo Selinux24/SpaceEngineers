@@ -267,6 +267,7 @@ namespace Sandbox.ModAPI.Ingame
     }
     public interface IMyShipConnector : IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity
     {
+        bool IsConnected { get; }
         MyShipConnectorStatus Status { get; set; }
         IMyShipConnector OtherConnector { get; }
     }
