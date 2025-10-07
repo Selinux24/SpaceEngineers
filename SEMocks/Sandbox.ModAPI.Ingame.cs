@@ -287,12 +287,6 @@ namespace Sandbox.ModAPI.Ingame
         float OpenRatio { get; }
         void CloseDoor();
     }
-    public interface IMySoundBlock : IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity 
-    {
-        float LoopPeriod { get; set; }
-        void Play();
-        void Stop();
-    }
     public interface IMyLightingBlock : IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity
     {
         Color Color { get; set; }

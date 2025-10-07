@@ -22,6 +22,13 @@ namespace VRage.Game.ModAPI.Ingame
         IMyCubeGrid CubeGrid { get; set; }
     }
 
+    public interface IMySoundBlock : IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity
+    {
+        float LoopPeriod { get; set; }
+        void Play();
+        void Stop();
+    }
+
     public struct MyItemType
     {
         public string SubtypeId { get; set; }
