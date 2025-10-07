@@ -11,6 +11,21 @@ namespace VRageMath
         }
     }
 
+    public struct Color : IEquatable<Color>
+    {
+        public uint PackedValue;
+
+        public bool Equals(Color other)
+        {
+            return true;
+        }
+
+        public Color(int r, int g, int b)
+        {
+            PackedValue = 0;
+        }
+    }
+
     public struct Vector3D : IEquatable<Vector3D>
     {
         public Vector3D(double x, double y, double z) : this()

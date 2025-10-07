@@ -23,6 +23,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CargoMonitor", "Utils\Cargo
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LaserEmitter", "Utils\LaserEmitter\LaserEmitter.csproj", "{ABA43349-4E72-0673-8F73-6519D4608942}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AutoDoors", "Utils\AutoDoors\AutoDoors.csproj", "{F1B0832D-A66A-5980-B70A-2AEABC8B3140}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -57,6 +59,10 @@ Global
 		{ABA43349-4E72-0673-8F73-6519D4608942}.Debug|x64.Build.0 = Debug|x64
 		{ABA43349-4E72-0673-8F73-6519D4608942}.Release|x64.ActiveCfg = Release|x64
 		{ABA43349-4E72-0673-8F73-6519D4608942}.Release|x64.Build.0 = Release|x64
+		{F1B0832D-A66A-5980-B70A-2AEABC8B3140}.Debug|x64.ActiveCfg = Debug|x64
+		{F1B0832D-A66A-5980-B70A-2AEABC8B3140}.Debug|x64.Build.0 = Debug|x64
+		{F1B0832D-A66A-5980-B70A-2AEABC8B3140}.Release|x64.ActiveCfg = Release|x64
+		{F1B0832D-A66A-5980-B70A-2AEABC8B3140}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -68,6 +74,7 @@ Global
 		{6D642FE8-A025-0FEB-315B-454477CFD4ED} = {FF5422DF-34A5-4C82-8312-AC3BCC41202F}
 		{9F79B22E-77FC-7A87-B2DD-27F930DE359B} = {7279C55B-63F4-4C0F-A19B-156521F27E56}
 		{ABA43349-4E72-0673-8F73-6519D4608942} = {7279C55B-63F4-4C0F-A19B-156521F27E56}
+		{F1B0832D-A66A-5980-B70A-2AEABC8B3140} = {7279C55B-63F4-4C0F-A19B-156521F27E56}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {271CF823-5D34-427E-8578-F9C0AD612EC6}

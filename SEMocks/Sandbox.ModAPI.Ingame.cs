@@ -115,9 +115,11 @@ namespace Sandbox.ModAPI.Ingame
     }
     public enum UpdateFrequency
     {
-        Update1,
-        Update100,
         None,
+        Once,
+        Update1,
+        Update10,
+        Update100,
     }
     public enum FlightMode
     {
@@ -138,6 +140,8 @@ namespace Sandbox.ModAPI.Ingame
 
     public interface IMyGridProgramRuntimeInfo
     {
+        int CurrentInstructionCount { get; }
+        int MaxInstructionCount { get; }
         UpdateFrequency UpdateFrequency { get; set; }
         TimeSpan TimeSinceLastRun { get; }
     }
@@ -156,7 +160,8 @@ namespace Sandbox.ModAPI.Ingame
     }
     public interface IMyGridTerminalSystem
     {
-        void GetBlocksOfType<T>(List<T> blocks, Func<IMyTerminalBlock, bool> collect = null) where T : class, IMyTerminalBlock;
+        void GetBlocksOfType<T>(List<IMyTerminalBlock> blocks, Func<IMyTerminalBlock, bool> collect = null);
+        void GetBlocksOfType<T>(List<T> blocks, Func<T, bool> collect = null) where T : class, IMyTerminalBlock;
         IMyTerminalBlock GetBlockWithName(string name);
     }
 
@@ -170,19 +175,6 @@ namespace Sandbox.ModAPI.Ingame
     {
     }
 
-    public interface IMyEntity
-    {
-        long EntityId { get; }
-        string Name { get; set; }
-        Vector3D GetPosition();
-        MatrixD WorldMatrix { get; }
-        IMyInventory GetInventory();
-    }
-    public interface IMyCubeBlock : IMyEntity
-    {
-        SerializableDefinitionId BlockDefinition { get; }
-        IMyTerminalBlock CubeGrid { get; set; }
-    }
     public interface IMyTerminalBlock : IMyCubeBlock, IMyEntity
     {
         string CustomData { get; set; }
@@ -289,5 +281,32 @@ namespace Sandbox.ModAPI.Ingame
     }
     public interface IMyCockpit : IMyShipController, IMyTerminalBlock, IMyCubeBlock, IMyEntity, IMyTextSurfaceProvider
     {
+    }
+    public interface IMyDoor : IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity
+    {
+        float OpenRatio { get; }
+        void CloseDoor();
+    }
+    public interface IMySoundBlock : IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity 
+    {
+        float LoopPeriod { get; set; }
+        void Play();
+        void Stop();
+    }
+    public interface IMyLightingBlock : IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity
+    {
+        Color Color { get; set; }
+        float BlinkIntervalSeconds { get; set; }
+        float BlinkLength { get; set; }
+    }
+    public interface IMyAirtightDoorBase : IMyDoor, IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity
+    {
+    }
+    public interface IMyAirtightHangarDoor : IMyAirtightDoorBase, IMyDoor, IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity
+    {
+    }
+    public interface IMyMechanicalConnectionBlock : IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity
+    {
+        IMyCubeGrid TopGrid { get; }
     }
 }
