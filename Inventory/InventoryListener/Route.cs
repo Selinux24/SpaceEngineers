@@ -65,5 +65,10 @@ namespace IngameScript
             route = new Route(name, loadBase, loadBaseOnPlanet, toLoadBase, unloadBase, unloadBaseOnPlanet, toUnloadBase);
             return true;
         }
+
+        public string GetState()
+        {
+            return $"From {LoadBase}({ToLoadBaseWaypoints.Count}wp) To {UnloadBase}({ToUnloadBaseWaypoints.Count}wp)";
+        }
     }
 }

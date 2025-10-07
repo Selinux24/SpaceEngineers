@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "2.5";
+        const string Version = "2.6";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
@@ -399,8 +399,6 @@ namespace IngameScript
             route.ToUnloadBaseWaypoints.Clear();
             route.ToUnloadBaseWaypoints.AddRange(Utils.ReadVectorList(lines, "ToUnloadBaseWaypoints"));
 
-            Plan();
-
             monitorizeLoadTime = true;
             loadStart = DateTime.Now;
         }
@@ -588,6 +586,7 @@ namespace IngameScript
             if (navigator.NavigateTo(onPlanet, waypoints, callBack, task))
             {
                 shipStatus = ShipStatus.OnRoute;
+                Plan();
             }
         }
         void OnNavigationCompleted(ExchangeTasks task)
@@ -717,6 +716,9 @@ namespace IngameScript
         {
             monitorizeCapacity = true;
             timerLoad?.StartCountdown();
+
+            monitorizeLoadTime = true;
+            loadStart = DateTime.Now;
         }
         internal void Unload()
         {

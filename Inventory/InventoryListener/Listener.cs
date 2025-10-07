@@ -48,6 +48,12 @@ namespace IngameScript
             lastQuery = DateTime.Now;
             lastQueryState.Clear();
 
+            if (!HasShipsConnected())
+            {
+                lastQueryState.AppendLine("  No ships connected. Waiting for next query.");
+                return;
+            }
+
             Open();
             preparingData = items;
 
@@ -177,20 +183,27 @@ namespace IngameScript
 
             return true;
         }
+        public List<string> GetConnectedShips()
+        {
+            var connected = Connectors.FindAll(c => c?.OtherConnector?.IsConnected == true);
+
+            return connected
+                .Select(c => c.OtherConnector.CubeGrid.CustomName)
+                .Distinct()
+                .ToList();
+        }
+        public bool HasShipsConnected()
+        {
+            return Connectors.Any(c => c.OtherConnector != null && c.OtherConnector.IsConnected);
+        }
         public List<List<string>> FreeConnectors()
         {
             var res = new List<List<string>>();
 
-            //Get the connected ship name
-            var ships = Connectors
-                .Where(c => c.OtherConnector == null || !c.OtherConnector.IsConnected)
-                .Select(c => c.OtherConnector.CubeGrid.CustomName)
-                .Distinct()
-                .ToList();
-
+            var ships = GetConnectedShips();
             foreach (var ship in ships)
             {
-                lastQueryState.AppendLine($"  {Name}: {ship} route set.");
+                lastQueryState.AppendLine($"  {Name}: {ship} route sent.");
 
                 //Set the route on the ship
                 var parts = new List<string>()
@@ -214,7 +227,7 @@ namespace IngameScript
         public string GetState()
         {
             state.Clear();
-            state.Append($"+ {Name} ");
+            state.AppendLine($"+ {Name} {Route?.GetState() ?? "No route defined. Using ship's default."}");
 
             string error;
             if (!IsValid(out error))
@@ -225,11 +238,11 @@ namespace IngameScript
 
             if (lastQuery.Ticks > 0)
             {
-                state.AppendLine($"Last message received {(int)(DateTime.Now - lastQuery).TotalMinutes} minutes ago.");
+                state.AppendLine($"  Last message received {(int)(DateTime.Now - lastQuery).TotalMinutes} minutes ago.");
             }
             else if (!preparing)
             {
-                state.AppendLine("Idle.");
+                state.AppendLine("  Idle.");
             }
 
             if (lastQueryState.Length > 0)

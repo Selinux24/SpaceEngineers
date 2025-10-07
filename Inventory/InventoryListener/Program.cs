@@ -9,7 +9,8 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        const string Version = "1.4";
+        const string Version = "1.5";
+        const string Separate = "------";
 
         readonly List<IMyCargoContainer> warehouseCargos;
         readonly List<IMyTextPanel> infoLCDs;
@@ -129,6 +130,7 @@ namespace IngameScript
 
                     if (!listeners.ContainsKey(name)) continue;
                     listeners[name].Prepare(msg.Source, items);
+
                     IGC.SendUnicastMessage(msg.Source, config.Channel, "1");
                 }
             }
@@ -151,6 +153,7 @@ namespace IngameScript
                         }
                     }
                     infoText.Append(listener.GetState());
+                    infoText.AppendLine(Separate);
                 }
 
                 WriteInfo();
