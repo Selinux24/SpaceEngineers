@@ -9,7 +9,7 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        const string Version = "1.5";
+        const string Version = "1.6";
         const string Separate = "------";
 
         readonly List<IMyCargoContainer> warehouseCargos;
@@ -49,10 +49,10 @@ namespace IngameScript
             foreach (var listener in config.Listeners)
             {
                 //Get the output container
-                var outputCargo = GetBlockWithNames<IMyCargoContainer>(listener, config.OutputCargo);
-                if (outputCargo == null)
+                var outputCargos = GetBlocksWithNames<IMyCargoContainer>(listener, config.OutputCargo);
+                if (outputCargos.Count == 0)
                 {
-                    Echo($"No output cargo found with name {listener} {config.OutputCargo}");
+                    Echo($"No output cargos found with name {listener} {config.OutputCargo}");
                     continue;
                 }
 
@@ -89,7 +89,7 @@ namespace IngameScript
                     continue;
                 }
 
-                listeners.Add(listener, new Listener(listener, route, connectors, outputCargo, timerOpen, timerClose));
+                listeners.Add(listener, new Listener(listener, route, connectors, outputCargos, timerOpen, timerClose));
             }
 
             if (listeners.Count == 0)
@@ -129,6 +129,7 @@ namespace IngameScript
                     if (!ParseMessage(msg.Data.ToString(), out name, out items)) continue;
 
                     if (!listeners.ContainsKey(name)) continue;
+
                     listeners[name].Prepare(msg.Source, items);
 
                     IGC.SendUnicastMessage(msg.Source, config.Channel, "1");

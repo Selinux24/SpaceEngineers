@@ -12,7 +12,7 @@ namespace IngameScript
     {
         const string ListenerSep = "¬";
 
-        readonly IMyCargoContainer outputCargo;
+        readonly List<IMyCargoContainer> outputCargos;
         readonly IMyTimerBlock timerOpen;
         readonly IMyTimerBlock timerClose;
         DateTime lastQuery = DateTime.MinValue;
@@ -29,13 +29,13 @@ namespace IngameScript
 
         public long SenderId { get; private set; } = 0;
 
-        public Listener(string name, Route route, List<IMyShipConnector> connectors, IMyCargoContainer outputCargo, IMyTimerBlock timerOpen, IMyTimerBlock timerClose)
+        public Listener(string name, Route route, List<IMyShipConnector> connectors, List<IMyCargoContainer> outputCargos, IMyTimerBlock timerOpen, IMyTimerBlock timerClose)
         {
             Name = name;
             Route = route;
             Connectors = connectors;
 
-            this.outputCargo = outputCargo;
+            this.outputCargos = outputCargos;
             this.timerOpen = timerOpen;
             this.timerClose = timerClose;
         }
@@ -47,6 +47,12 @@ namespace IngameScript
             SenderId = senderId;
             lastQuery = DateTime.Now;
             lastQueryState.Clear();
+
+            if (!InventoryEmpty())
+            {
+                lastQueryState.AppendLine("  Output inventory not empty. Waiting for next query.");
+                return;
+            }
 
             if (!HasShipsConnected())
             {
@@ -79,47 +85,50 @@ namespace IngameScript
             if (!preparing) return false;
 
             var requestedItems = ReadItems(preparingData);
-            var outputInv = outputCargo.GetInventory();
-            var orderItems = GetItemsFromCargo(outputInv);
 
-            //Go through each requested item
             bool anyMoved = false;
             foreach (var reqItem in requestedItems)
             {
                 string itemType = reqItem.Key;
                 int itemRemaining = reqItem.Value;
 
-                int index = orderItems.FindIndex(i => i.Type.ToString().Contains(itemType));
-                if (index >= 0)
+                foreach (var outputCargo in outputCargos)
                 {
-                    int c = (int)orderItems[index].Amount;
-                    itemRemaining -= c;
-                }
+                    var outputInv = outputCargo.GetInventory();
+                    var orderItems = GetItemsFromCargo(outputInv);
 
-                lastQueryState.AppendLine($"- {itemType}: remaining {itemRemaining}");
+                    int index = orderItems.FindIndex(i => i.Type.ToString().Contains(itemType));
+                    if (index >= 0)
+                    {
+                        int c = (int)orderItems[index].Amount;
+                        itemRemaining -= c;
+                    }
 
-                //Search for that item in the containers
-                foreach (var cargo in warehouseCargos)
-                {
-                    if (itemRemaining <= 0) break;
+                    lastQueryState.AppendLine($"- {itemType}: remaining {itemRemaining}");
 
-                    var inv = cargo.GetInventory();
-                    var items = GetItemsFromCargo(inv);
-
-                    foreach (var item in items)
+                    //Search for that item in the containers
+                    foreach (var cargo in warehouseCargos)
                     {
                         if (itemRemaining <= 0) break;
 
-                        if (!item.Type.ToString().Contains(itemType)) continue;
+                        var inv = cargo.GetInventory();
+                        var items = GetItemsFromCargo(inv);
 
-                        var toTransfer = VRage.MyFixedPoint.Min(item.Amount, itemRemaining);
-
-                        bool moved = inv.TransferItemTo(outputInv, item, toTransfer);
-                        if (moved)
+                        foreach (var item in items)
                         {
-                            anyMoved = true;
-                            itemRemaining -= (int)toTransfer;
-                            lastQueryState.AppendLine($"  Transfered {(int)toTransfer}");
+                            if (itemRemaining <= 0) break;
+
+                            if (!item.Type.ToString().Contains(itemType)) continue;
+
+                            var toTransfer = VRage.MyFixedPoint.Min(item.Amount, itemRemaining);
+
+                            bool moved = inv.TransferItemTo(outputInv, item, toTransfer);
+                            if (moved)
+                            {
+                                anyMoved = true;
+                                itemRemaining -= (int)toTransfer;
+                                lastQueryState.AppendLine($"  Transfered {(int)toTransfer}");
+                            }
                         }
                     }
                 }
@@ -224,6 +233,19 @@ namespace IngameScript
             return res;
         }
 
+        public bool InventoryEmpty()
+        {
+            foreach (var cargo in outputCargos)
+            {
+                var inv = cargo.GetInventory();
+                if (inv.CurrentVolume > 0)
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
         public string GetState()
         {
             state.Clear();
@@ -255,9 +277,9 @@ namespace IngameScript
         bool IsValid(out string errorMsg)
         {
             errorMsg = null;
-            if (outputCargo == null)
+            if (outputCargos.Count == 0)
             {
-                errorMsg = $"No output cargo found with name {Name}";
+                errorMsg = $"No output cargos found with name {Name}";
                 return false;
             }
             if (timerOpen == null)

@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "2.6";
+        const string Version = "2.61";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
@@ -57,6 +57,7 @@ namespace IngameScript
         bool monitorizePropulsion = false;
         bool monitorizeLoadTime = false;
         DateTime loadStart;
+        double lastCapacity = -1;
         ShipStatus shipStatus = ShipStatus.Idle;
         readonly Navigator navigator;
         readonly Route route;
@@ -428,9 +429,11 @@ namespace IngameScript
             if (shipStatus == ShipStatus.Loading)
             {
                 double capacity = CalculateCargoPercentage();
+                bool capacityChanged = lastCapacity != capacity;
+                lastCapacity = capacity;
                 WriteInfoLCDs($"Progress {capacity / Config.MaxLoad:P1}...");
 
-                if (monitorizeLoadTime && DateTime.Now - loadStart > Config.MaxLoadTime)
+                if (monitorizeLoadTime && !capacityChanged && DateTime.Now - loadStart > Config.MaxLoadTime)
                 {
                     monitorizeLoadTime = false;
                     loadStart = DateTime.MinValue;
@@ -1143,6 +1146,7 @@ namespace IngameScript
         {
             WriteInfoLCDs($"RogueShip v{Version}. {DateTime.Now:HH:mm:ss}", false);
             WriteInfoLCDs($"{shipId} in channel {Config.Channel}");
+            WriteInfoLCDs($"{route.GetState()}");
             WriteInfoLCDs($"{(IsNavigationEnabled() ? "NAV" : "NO-NAV")}/{(IsDetectionEnabled() ? "DTC" : "NO-DTC")}. {CalculateCargoPercentage():P1} cargo.");
             bool showBattery = Config.MinPowerOnLoad > 0 || Config.MinPowerOnUnload > 0;
             bool showHydrogen = Config.MinHydrogenOnLoad > 0 || Config.MinHydrogenOnUnload > 0;
@@ -1170,6 +1174,7 @@ namespace IngameScript
             monitorizePropulsion = Utils.ReadInt(storageLines, "MonitorizePropulsion", 0) == 1;
             monitorizeLoadTime = Utils.ReadInt(storageLines, "MonitorizeLoadTime", 0) == 1;
             loadStart = new DateTime(Utils.ReadLong(storageLines, "LoadStart", 0));
+            lastCapacity = Utils.ReadDouble(storageLines, "LastCapacity");
             shipStatus = (ShipStatus)Utils.ReadInt(storageLines, "ShipStatus", (int)ShipStatus.Idle);
             navigator.LoadFromStorage(Utils.ReadString(storageLines, "Navigator"));
             route.LoadFromStorage(Utils.ReadString(storageLines, "Route"));
@@ -1183,6 +1188,7 @@ namespace IngameScript
                 $"MonitorizePropulsion={(monitorizePropulsion ? 1 : 0)}",
                 $"MonitorizeLoadTime={(monitorizeLoadTime ? 1 : 0)}",
                 $"LoadStart={loadStart.Ticks}",
+                $"LastCapacity={lastCapacity}",
                 $"ShipStatus={(int)shipStatus}",
                 $"Navigator={navigator.SaveToStorage()}",
                 $"Route={route.SaveToStorage()}",

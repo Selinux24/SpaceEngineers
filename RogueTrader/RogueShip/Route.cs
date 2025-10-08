@@ -34,6 +34,13 @@ namespace IngameScript
                 ToUnloadBaseWaypoints.Count > 0;
         }
 
+        public string GetState()
+        {
+            return IsValid() ?
+                $"From {LoadBase}({ToLoadBaseWaypoints.Count}wp) To {UnloadBase}({ToUnloadBaseWaypoints.Count}wp)" :
+                "No route defined.";
+        }
+
         public void LoadFromStorage(string storageLine)
         {
             var parts = storageLine.Split('¬');
@@ -41,7 +48,7 @@ namespace IngameScript
             var loadBase = Utils.ReadString(parts, "LoadBase");
             var unloadBase = Utils.ReadString(parts, "UnloadBase");
 
-            if (!IsValid())
+            if (string.IsNullOrWhiteSpace(loadBase) || string.IsNullOrWhiteSpace(unloadBase))
             {
                 return;
             }
