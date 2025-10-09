@@ -1,5 +1,4 @@
-﻿using Sandbox.ModAPI.Ingame;
-using System;
+﻿using System;
 
 namespace VRageMath
 {
@@ -11,6 +10,27 @@ namespace VRageMath
         }
     }
 
+    public struct BoundingBoxD
+    {
+        public Vector3D Extents { get; set; }
+        public Vector3D Center { get; set; }
+        public double Perimeter { get; set; }
+    }
+    public struct MatrixD
+    {
+        public Vector3D Forward { get; }
+        public Vector3D Backward { get; set; }
+        public Vector3D Up { get; set; }
+
+        public static MatrixD Invert(MatrixD worldMatrix)
+        {
+            throw new NotImplementedException();
+        }
+        public static MatrixD Transpose(MatrixD worldMatrix)
+        {
+            throw new NotImplementedException();
+        }
+    }
     public struct Color : IEquatable<Color>
     {
         public uint PackedValue;
@@ -25,7 +45,6 @@ namespace VRageMath
             PackedValue = 0;
         }
     }
-
     public struct Vector3D : IEquatable<Vector3D>
     {
         public Vector3D(double x, double y, double z) : this()

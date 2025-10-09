@@ -1,4 +1,5 @@
-﻿namespace VRage
+﻿
+namespace VRage
 {
     public struct MyFixedPoint
     {

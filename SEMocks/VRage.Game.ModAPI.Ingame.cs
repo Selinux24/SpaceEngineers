@@ -1,5 +1,5 @@
-﻿using Sandbox.ModAPI.Ingame;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+using VRage.ObjectBuilder;
 using VRageMath;
 
 namespace VRage.Game.ModAPI.Ingame
@@ -20,13 +20,6 @@ namespace VRage.Game.ModAPI.Ingame
     {
         SerializableDefinitionId BlockDefinition { get; }
         IMyCubeGrid CubeGrid { get; set; }
-    }
-
-    public interface IMySoundBlock : IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity
-    {
-        float LoopPeriod { get; set; }
-        void Play();
-        void Stop();
     }
 
     public struct MyItemType

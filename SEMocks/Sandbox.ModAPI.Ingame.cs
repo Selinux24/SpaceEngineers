@@ -18,12 +18,6 @@ namespace Sandbox.ModAPI.Ingame
         public Action<string> Echo { get; protected set; }
     }
 
-    public struct BoundingBoxD
-    {
-        public Vector3D Extents { get; set; }
-        public Vector3D Center { get; set; }
-        public double Perimeter { get; set; }
-    }
     public struct MyDetectedEntityInfo
     {
         public BoundingBoxD BoundingBox;
@@ -35,21 +29,6 @@ namespace Sandbox.ModAPI.Ingame
         public Vector3D Position { get; private set; }
 
         public bool IsEmpty()
-        {
-            throw new NotImplementedException();
-        }
-    }
-    public struct MatrixD
-    {
-        public Vector3D Forward { get; }
-        public Vector3D Backward { get; set; }
-        public Vector3D Up { get; set; }
-
-        public static MatrixD Invert(MatrixD worldMatrix)
-        {
-            throw new NotImplementedException();
-        }
-        public static MatrixD Transpose(MatrixD worldMatrix)
         {
             throw new NotImplementedException();
         }
@@ -80,10 +59,6 @@ namespace Sandbox.ModAPI.Ingame
         {
             return (TData)Data;
         }
-    }
-    public struct SerializableDefinitionId
-    {
-        public string SubtypeId { get; set; }
     }
 
     public enum MyDetectedEntityType
