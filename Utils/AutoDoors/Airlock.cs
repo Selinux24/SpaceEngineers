@@ -8,13 +8,13 @@ namespace IngameScript
     public class Airlock
     {
         const string soundBlockPlayingString = "%Playing sound...%";
-        
+
         readonly List<IMyDoor> airlockInteriorList = new List<IMyDoor>();
         readonly List<IMyDoor> airlockExteriorList = new List<IMyDoor>();
         readonly List<IMyLightingBlock> airlockLightList = new List<IMyLightingBlock>();
         readonly List<IMySoundBlock> airlockSoundList = new List<IMySoundBlock>();
-        Color alarmColor = new Color(255, 40, 40);
-        Color regularColor = new Color(80, 160, 255);
+        readonly Color alarmColor = new Color(255, 40, 40);
+        readonly Color regularColor = new Color(80, 160, 255);
         readonly float alarmBlinkLength = 50f;
         readonly float regularBlinkLength = 100f;
         readonly float blinkInterval = .8f;
@@ -43,51 +43,46 @@ namespace IngameScript
             GetBlocks(Name, airlockDoors, allLights, allSounds);
             Info = $" Interior Doors: {airlockInteriorList.Count}\n Exterior Doors: {airlockExteriorList.Count}\n Lights: {airlockLightList.Count}\n Sound Blocks: {airlockSoundList.Count}";
         }
-
-        public void Update(List<IMyDoor> airlockDoors, List<IMyLightingBlock> allLights, List<IMySoundBlock> allSounds)
-        {
-            GetBlocks(Name, airlockDoors, allLights, allSounds);
-        }
-
         private void GetBlocks(string airlockName, List<IMyDoor> airlockDoors, List<IMyLightingBlock> allLights, List<IMySoundBlock> allSounds)
         {
-            //sort through all doors
+            //Sort through all doors
             airlockInteriorList.Clear();
             airlockExteriorList.Clear();
+            foreach (var door in airlockDoors)
+            {
+                string name = door.CustomName.Replace(" ", "").ToLower();
+                if (!name.Contains(airlockName))
+                {
+                    continue;
+                }
+
+                if (name.Contains(Program.AirlockInteriorTag))
+                {
+                    airlockInteriorList.Add(door);
+                }
+                else if (name.Contains(Program.AirlockExteriorTag))
+                {
+                    airlockExteriorList.Add(door);
+                }
+            }
+
+            //Sort through all lights 
             airlockLightList.Clear();
+            foreach (var light in allLights)
+            {
+                if (light.CustomName.Replace(" ", "").ToLower().Contains(airlockName))
+                {
+                    airlockLightList.Add(light);
+                }
+            }
+
+            //Sort through all lights 
             airlockSoundList.Clear();
-
-            foreach (var thisDoor in airlockDoors)
+            foreach (var sound in allSounds)
             {
-                string thisDoorName = thisDoor.CustomName.Replace(" ", "").ToLower();
-                if (thisDoorName.Contains(airlockName))
+                if (sound.CustomName.Replace(" ", "").ToLower().Contains(airlockName))
                 {
-                    if (thisDoorName.Contains("airlockinterior"))
-                    {
-                        airlockInteriorList.Add(thisDoor);
-                    }
-                    else if (thisDoorName.Contains("airlockexterior"))
-                    {
-                        airlockExteriorList.Add(thisDoor);
-                    }
-                }
-            }
-
-            //sort through all lights 
-            foreach (var thisLight in allLights)
-            {
-                if (thisLight.CustomName.Replace(" ", "").ToLower().Contains(airlockName))
-                {
-                    airlockLightList.Add(thisLight);
-                }
-            }
-
-            //sort through all lights 
-            foreach (var thisSound in allSounds)
-            {
-                if (thisSound.CustomName.Replace(" ", "").ToLower().Contains(airlockName))
-                {
-                    airlockSoundList.Add(thisSound);
+                    airlockSoundList.Add(sound);
                 }
             }
 
@@ -96,17 +91,12 @@ namespace IngameScript
 
         public void DoLogic()
         {
-            //Start checking airlock status   
-            if (airlockInteriorList.Count == 0 || airlockExteriorList.Count == 0) //if we have both door types    
-            {
-                return;
-            }
+            if (airlockInteriorList.Count == 0 || airlockExteriorList.Count == 0) return;
 
-            //we assume the airlocks are closed until proven otherwise        
+            //We assume the airlocks are closed until proven otherwise
+
+            //Door Interior Check
             bool isInteriorClosed = true;
-            bool isExteriorClosed = true;
-
-            //Door Interior Check          
             foreach (var airlockInterior in airlockInteriorList)
             {
                 if (airlockInterior.OpenRatio > 0)
@@ -114,11 +104,12 @@ namespace IngameScript
                     Lock(airlockExteriorList);
                     isInteriorClosed = false;
                     break;
-                    //if any doors yield false, bool will persist until comparison    
+                    //If any doors yield false, bool will persist until comparison
                 }
             }
 
-            //Door Exterior Check           
+            //Door Exterior Check
+            bool isExteriorClosed = true;
             foreach (var airlockExterior in airlockExteriorList)
             {
                 if (airlockExterior.OpenRatio > 0)
@@ -129,7 +120,7 @@ namespace IngameScript
                 }
             }
 
-            //if all Interior & Exterior doors closed 
+            //If all Interior & Exterior doors closed 
             if (isInteriorClosed && isExteriorClosed)
             {
                 LightColorChanger(false, airlockLightList);
@@ -141,31 +132,24 @@ namespace IngameScript
                 PlaySound(true, airlockSoundList);
             }
 
-            //if all Interior doors closed 
-            if (isInteriorClosed)
-            {
-                Unlock(airlockExteriorList);
-            }
+            //If all Interior doors closed 
+            if (isInteriorClosed) Unlock(airlockExteriorList);
 
-            //if all Exterior doors closed     
-            if (isExteriorClosed)
-            {
-                Unlock(airlockInteriorList);
-            }
+            //If all Exterior doors closed     
+            if (isExteriorClosed) Unlock(airlockInteriorList);
         }
 
         private void Lock(List<IMyDoor> doorList)
         {
-            //locks all doors with the input list
             foreach (var lockDoor in doorList)
             {
-                //if door is open, then close
+                //If door is open, then close
                 if (lockDoor.OpenRatio > 0)
                 {
                     lockDoor.CloseDoor();
                 }
 
-                //if door is fully closed, then lock
+                //If door is fully closed, then lock
                 if (lockDoor.OpenRatio == 0 && lockDoor.Enabled)
                 {
                     lockDoor.Enabled = false;
@@ -175,7 +159,6 @@ namespace IngameScript
 
         private void Unlock(List<IMyDoor> doorList)
         {
-            //unlocks all doors with input list
             foreach (var unlockDoor in doorList)
             {
                 unlockDoor.Enabled = true;
@@ -204,10 +187,9 @@ namespace IngameScript
 
         private void LightColorChanger(bool alarm, List<IMyLightingBlock> listLights)
         {
+            //Applies our status colors to the airlock lights        
             Color lightColor;
             float lightBlinkLength;
-
-            //applies our status colors to the airlock lights        
             if (alarm)
             {
                 lightColor = alarmColor;

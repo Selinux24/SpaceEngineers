@@ -4,8 +4,9 @@ namespace IngameScript
 {
     public class AutoDoor
     {
+        readonly double autoCloseTime = 0;
+
         double doorOpenTime = 0;
-        double autoCloseTime = 0;
         bool wasOpen = false;
 
         public IMyDoor Door { get; private set; } = null;
@@ -35,13 +36,13 @@ namespace IngameScript
 
             if (!wasOpen)
             {
-                //begin new count
+                //Begin new count
                 wasOpen = true;
                 doorOpenTime = 0;
                 return;
             }
 
-            //if wasOpen
+            //Was open
             doorOpenTime += time;
 
             if (autoCloseTime <= doorOpenTime)
