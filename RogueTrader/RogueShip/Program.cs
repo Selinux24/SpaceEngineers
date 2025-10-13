@@ -13,10 +13,11 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "2.61";
+        const string Version = "2.62";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
+        readonly IMyUnicastListener ul;
 
         readonly IMyTimerBlock timerPilot;
         readonly IMyTimerBlock timerWaiting;
@@ -56,13 +57,15 @@ namespace IngameScript
         bool monitorizeCapacity = false;
         bool monitorizePropulsion = false;
         bool monitorizeLoadTime = false;
-        DateTime loadStart;
+        DateTime loadStart = DateTime.MinValue;
         double lastCapacity = -1;
         ShipStatus shipStatus = ShipStatus.Idle;
         readonly Navigator navigator;
         readonly Route route;
 
         DateTime lastDockRequest = DateTime.MinValue;
+        bool dockUpdating = false;
+        DateTime lastDockUpdate = DateTime.MinValue;
         DateTime lastRefreshLCDs = DateTime.MinValue;
 
         public Program()
@@ -180,6 +183,7 @@ namespace IngameScript
             RefreshLCDs();
 
             bl = IGC.RegisterBroadcastListener(Config.Channel);
+            ul = IGC.UnicastListener;
 
             LoadFromStorage();
 
@@ -203,16 +207,16 @@ namespace IngameScript
                 return;
             }
 
-            while (IGC.UnicastListener.HasPendingMessage)
+            while (ul.HasPendingMessage)
             {
-                var message = IGC.UnicastListener.AcceptMessage();
-                ParseMessage(message);
+                var message = ul.AcceptMessage();
+                ParseMessage(message, true);
             }
 
             while (bl.HasPendingMessage)
             {
                 var message = bl.AcceptMessage();
-                ParseMessage(message);
+                ParseMessage(message, false);
             }
 
             if (DoPause()) return;
@@ -250,15 +254,27 @@ namespace IngameScript
         /// </summary>
         void Reset()
         {
-            Storage = "";
-
             ResetGyros();
             ResetThrust();
 
+            paused = false;
+            monitorizeCapacity = false;
+            monitorizePropulsion = false;
+            monitorizeLoadTime = false;
+            loadStart = DateTime.MinValue;
+            lastCapacity = -1;
             shipStatus = ShipStatus.Idle;
             navigator.Clear();
+            route.Clear();
+
+            lastDockRequest = DateTime.MinValue;
+            dockUpdating = false;
+            lastDockUpdate = DateTime.MinValue;
+            lastRefreshLCDs = DateTime.MinValue;
 
             WriteInfoLCDs("Stopped.");
+
+            SaveToStorage();
         }
         /// <summary>
         /// Pause all tasks
@@ -291,7 +307,7 @@ namespace IngameScript
         #endregion
 
         #region IGC COMMANDS
-        void ParseMessage(MyIGCMessage message)
+        void ParseMessage(MyIGCMessage message, bool direct)
         {
             long source = message.Source;
             string signal = message.Data.ToString();
@@ -302,17 +318,19 @@ namespace IngameScript
             string command = Utils.ReadArgument(lines, "Command");
 
             if (command == "REQUEST_STATUS") ProcessRequestStatus(source, lines);
-            if (command == "REQUEST_PLAN") ProcessRequestPlan(source, lines);
 
-            if (!IsForMe(lines)) return;
+            if (!direct && !IsForMe(lines)) return;
 
-            if (command == "COME_TO_LOAD") ProcessDocking(lines, ExchangeTasks.StartLoad);
-            if (command == "COME_TO_UNLOAD") ProcessDocking(lines, ExchangeTasks.StartUnload);
-            if (command == "COME_TO_DOCK") ProcessDocking(lines, ExchangeTasks.Dock);
-            if (command == "UNDOCK_TO_LOAD") ProcessDocking(lines, ExchangeTasks.EndLoad);
-            if (command == "UNDOCK_TO_UNLOAD") ProcessDocking(lines, ExchangeTasks.EndUnload);
+            if (command == "COME_TO_LOAD") ProcessDocking(source, lines, ExchangeTasks.StartLoad);
+            if (command == "COME_TO_UNLOAD") ProcessDocking(source, lines, ExchangeTasks.StartUnload);
+            if (command == "COME_TO_DOCK") ProcessDocking(source, lines, ExchangeTasks.Dock);
+            if (command == "UNDOCK_TO_LOAD") ProcessDocking(source, lines, ExchangeTasks.EndLoad);
+            if (command == "UNDOCK_TO_UNLOAD") ProcessDocking(source, lines, ExchangeTasks.EndUnload);
 
             if (command == "SET_ROUTE") ProcessSetRoute(lines);
+
+            if (command == "REQUEST_PLAN") ProcessRequestPlan(source, lines);
+            if (command == "DOCK_UPDATE") ProcessDockUpdate(source, lines);
         }
 
         /// <summary>
@@ -360,7 +378,7 @@ namespace IngameScript
         /// <summary>
         /// SHIP begins navigation to/from the specified connector and docks/undocks.
         /// </summary>
-        void ProcessDocking(string[] lines, ExchangeTasks task)
+        void ProcessDocking(long source, string[] lines, ExchangeTasks task)
         {
             var landing = Utils.ReadInt(lines, "Landing") == 1;
 
@@ -371,18 +389,24 @@ namespace IngameScript
 
             if (task == ExchangeTasks.StartLoad || task == ExchangeTasks.StartUnload)
             {
-                navigator.ApproachToDock(landing, exchange, fw, up, wpList, "ON_APPROACHING_COMPLETED", task);
+                navigator.ApproachToDock(source, landing, exchange, fw, up, wpList, "ON_APPROACHING_COMPLETED", task);
                 shipStatus = ShipStatus.Docking;
+                lastDockRequest = DateTime.MinValue;
+                dockUpdating = false;
             }
             else if (task == ExchangeTasks.EndLoad || task == ExchangeTasks.EndUnload)
             {
-                navigator.SeparateFromDock(landing, exchange, fw, up, wpList, "ON_SEPARATION_COMPLETED", task);
+                navigator.SeparateFromDock(source, landing, exchange, fw, up, wpList, "ON_SEPARATION_COMPLETED", task);
                 shipStatus = ShipStatus.Undocking;
+                lastDockRequest = DateTime.MinValue;
+                dockUpdating = false;
             }
             else if (task == ExchangeTasks.Dock)
             {
-                navigator.ApproachToDock(landing, exchange, fw, up, wpList, "ON_APPROACHING_COMPLETED", task);
+                navigator.ApproachToDock(source, landing, exchange, fw, up, wpList, "ON_APPROACHING_COMPLETED", task);
                 shipStatus = ShipStatus.Docking;
+                lastDockRequest = DateTime.MinValue;
+                dockUpdating = false;
             }
         }
         /// <summary>
@@ -402,6 +426,23 @@ namespace IngameScript
 
             monitorizeLoadTime = true;
             loadStart = DateTime.Now;
+        }
+
+        /// <summary>
+        /// Updates the ship's docking information
+        /// </summary>
+        void ProcessDockUpdate(long source, string[] lines)
+        {
+            bool landing = Utils.ReadInt(lines, "Landing") == 1;
+
+            string exchange = Utils.ReadString(lines, "Exchange");
+            var fw = Utils.ReadVector(lines, "Forward");
+            var up = Utils.ReadVector(lines, "Up");
+            var wpList = Utils.ReadVectorList(lines, "Waypoints");
+
+            navigator.UpdateDocking(source, landing, exchange, fw, up, wpList);
+
+            dockUpdating = false;
         }
         #endregion
 
@@ -494,9 +535,31 @@ namespace IngameScript
         {
             navigator.Update();
 
+            RequestDockUpdate();
+
             UpdateDockStatus();
 
             DoRefreshLCDs();
+        }
+        void RequestDockUpdate()
+        {
+            if (!navigator.IsDocking) return;
+
+            if (dockUpdating) return;
+
+            if ((DateTime.Now - lastDockUpdate) <= Config.DockUpdateInterval) return;
+            lastDockUpdate = DateTime.Now;
+
+            WriteLogLCDs($"Dock Update requested to {navigator.Source}");
+
+            dockUpdating = true;
+            List<string> parts = new List<string>()
+            {
+                $"Command=REQUEST_DOCK_UPDATE",
+                $"From={shipId}",
+                $"Exchange={navigator.Exchange}",
+            };
+            UnicastMessage(navigator.Source, parts);
         }
         void UpdateDockStatus()
         {

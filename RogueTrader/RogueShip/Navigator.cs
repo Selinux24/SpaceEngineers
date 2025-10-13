@@ -16,6 +16,7 @@ namespace IngameScript
         MyDetectedEntityInfo lastHit;
         readonly List<Vector3D> evadingPoints = new List<Vector3D>();
 
+        public long Source = -1;
         public bool Landing = false;
         public string Exchange = null;
         public Vector3D Forward = new Vector3D(1, 0, 0);
@@ -40,6 +41,7 @@ namespace IngameScript
         public TimeSpan NavigationETA => NavigationSpeed > 0.01 ? TimeSpan.FromSeconds(NavigationDistanceToDestination / NavigationSpeed) : TimeSpan.Zero;
         public double NavigationProgress => NavigationDistanceToDestination > 0 ? 1 - (NavigationDistanceToDestination / NavigationTotalDistance) : 1;
 
+        public bool IsDocking => Task == NavigatorTasks.Approach;
         public double DockingSpeed => ship.GetDockingSpeed();
         public Vector3D DockingToWaypoint => GetCurrentDockingWaypoint() - ship.GetDockingPosition();
         public double DockingDistanceToNextWaypoint => DockingToWaypoint.Length();
@@ -51,10 +53,11 @@ namespace IngameScript
             this.ship = ship;
         }
 
-        public void ApproachToDock(bool landing, string exchange, Vector3D fw, Vector3D up, List<Vector3D> wpList, string onAproximationCompleted = null, ExchangeTasks exchangeTask = ExchangeTasks.None)
+        public void ApproachToDock(long source, bool landing, string exchange, Vector3D fw, Vector3D up, List<Vector3D> wpList, string onAproximationCompleted = null, ExchangeTasks exchangeTask = ExchangeTasks.None)
         {
-            ship.WriteLogLCDs($"Approaching to dock {exchange} with {wpList.Count} waypoints.");
+            ship.WriteLogLCDs($"Approaching to dock {exchange} with {wpList.Count} waypoints. ({source})");
 
+            Source = source;
             Landing = landing;
 
             Exchange = exchange;
@@ -72,10 +75,11 @@ namespace IngameScript
 
             ship.Pilot();
         }
-        public void SeparateFromDock(bool landing, string exchange, Vector3D fw, Vector3D up, List<Vector3D> wpList, string onSeparationCompleted = null, ExchangeTasks exchangeTask = ExchangeTasks.None)
+        public void SeparateFromDock(long source, bool landing, string exchange, Vector3D fw, Vector3D up, List<Vector3D> wpList, string onSeparationCompleted = null, ExchangeTasks exchangeTask = ExchangeTasks.None)
         {
-            ship.WriteLogLCDs($"Separating from dock {exchange} with {wpList.Count} waypoints.");
+            ship.WriteLogLCDs($"Separating from dock {exchange} with {wpList.Count} waypoints. ({source})");
 
+            Source = source;
             Landing = landing;
 
             Exchange = exchange;
@@ -95,10 +99,24 @@ namespace IngameScript
             ship.Pilot();
             ship.Undock();
         }
+        public void UpdateDocking(long source, bool landing, string exchange, Vector3D fw, Vector3D up, List<Vector3D> wpList)
+        {
+            ship.WriteLogLCDs($"Updated dock {exchange} with {wpList.Count} waypoints. ({source})");
+
+            Source = source;
+            Landing = landing;
+
+            Exchange = exchange;
+            Forward = -Vector3D.Normalize(fw);
+            Up = Vector3D.Normalize(up);
+            Waypoints.Clear();
+            Waypoints.AddRange(wpList);
+        }
         public bool NavigateTo(bool landing, List<Vector3D> wpList, string onNavigationCompleted = null, ExchangeTasks exchangeTask = ExchangeTasks.None)
         {
             if (!ship.IsNavigationEnabled()) return false;
 
+            Source = -1;
             Landing = landing;
 
             Exchange = null;
@@ -122,6 +140,7 @@ namespace IngameScript
         }
         public void Clear()
         {
+            Source = -1;
             Landing = false;
 
             Exchange = null;
@@ -371,14 +390,12 @@ namespace IngameScript
                 //Waypoint reached.
                 ship.WriteLogLCDs($"Next Waypoint: {CurrentWpIdx}/{Waypoints.Count}");
                 CurrentWpIdx++;
-
                 return;
             }
 
             if (!AlignToDirection(false, NavigationDirectionToWaypoint, Config.CrsNavigationAlignThr))
             {
                 CrsStatus = NavigatorCrsStatus.Accelerating;
-
                 return;
             }
 
@@ -778,7 +795,7 @@ namespace IngameScript
             {
                 return
                     $"Trip: {Utils.DistanceToStr(DockingTotalDistance)}" + Environment.NewLine +
-                    $"To TGT: {Utils.DistanceToStr(DockingDistanceToNextWaypoint)}" + Environment.NewLine +
+                    $"To {Exchange}: {Utils.DistanceToStr(DockingDistanceToNextWaypoint)}" + Environment.NewLine +
                     $"Speed: {DockingSpeed:F2}" + Environment.NewLine +
                     $"ETA: {DockingETA:dd\\:hh\\:mm\\:ss}" + Environment.NewLine +
                     $"Progress: {CurrentWpIdx}/{Waypoints.Count}." + Environment.NewLine;
@@ -833,6 +850,7 @@ namespace IngameScript
         {
             var parts = storageLine.Split('¬');
 
+            Source = Utils.ReadLong(parts, "Source");
             Landing = Utils.ReadInt(parts, "Landing") == 1;
 
             Exchange = Utils.ReadString(parts, "Exchange");
@@ -857,6 +875,7 @@ namespace IngameScript
         {
             List<string> parts = new List<string>()
             {
+                $"Source={Source}",
                 $"Landing={(Landing ? 1 : 0)}",
 
                 $"Exchange={Exchange}",

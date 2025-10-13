@@ -41,6 +41,16 @@ namespace IngameScript
                 "No route defined.";
         }
 
+        public void Clear()
+        {
+            LoadBase = "";
+            LoadBaseOnPlanet = false;
+            ToLoadBaseWaypoints.Clear();
+            UnloadBase = "";
+            UnloadBaseOnPlanet = false;
+            ToUnloadBaseWaypoints.Clear();
+        }
+
         public void LoadFromStorage(string storageLine)
         {
             var parts = storageLine.Split('¬');

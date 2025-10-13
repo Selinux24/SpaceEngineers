@@ -52,6 +52,7 @@ namespace IngameScript
         public readonly double DockingSpeedWaypoints;
         public readonly double DockingSlowdownDistance;
         public readonly double DockingDistanceThrWaypoints;
+        public readonly TimeSpan DockUpdateInterval;
 
         public readonly double TaxiSpeed;
 
@@ -135,6 +136,7 @@ namespace IngameScript
             DockingSpeedWaypoints = ReadConfigDouble(customData, "DockingSpeedWaypoints", 5.0);
             DockingSlowdownDistance = ReadConfigDouble(customData, "DockingSlowdownDistance", 50.0);
             DockingDistanceThrWaypoints = ReadConfigDouble(customData, "DockingDistanceThrWaypoints", 0.5);
+            DockUpdateInterval = TimeSpan.FromSeconds(ReadConfigDouble(customData, "DockUpdateInterval", 0.5));
 
             TaxiSpeed = ReadConfigDouble(customData, "TaxiSpeed", 25);
 
@@ -306,6 +308,7 @@ namespace IngameScript
                 "DockingSpeedWaypoints=5.0\n" +
                 "DockingSlowdownDistance=50.0\n" +
                 "DockingDistanceThrWaypoints=0.5\n" +
+                "DockUpdateInterval=0.5\n" +
                 "\n" +
                 "TaxiSpeed=25\n" +
                 "\n" +

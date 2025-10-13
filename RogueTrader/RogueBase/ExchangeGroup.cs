@@ -50,18 +50,11 @@ namespace IngameScript
         }
         public bool IsFree()
         {
-            if (!string.IsNullOrWhiteSpace(DockedShipName) &&
-                MainConnector.Status != MyShipConnectorStatus.Unconnected)
-            {
-                return false;
-            }
+            if (MainConnector.Status != MyShipConnectorStatus.Unconnected) return false;
 
             foreach (var connector in Connectors)
             {
-                if (connector.Status != MyShipConnectorStatus.Unconnected)
-                {
-                    return false;
-                }
+                if (connector.Status != MyShipConnectorStatus.Unconnected) return false;
             }
 
             return true;
@@ -160,8 +153,11 @@ namespace IngameScript
 
         public string GetState()
         {
-            bool isFree = IsFree();
-            return isFree ? "Free" : string.IsNullOrWhiteSpace(ReservedShipName) ? string.Join(", ", DockedShips()) : ReservedShipName;
+            if (!string.IsNullOrWhiteSpace(ReservedShipName)) return $"Reserved - {ReservedShipName}";
+
+            if (IsFree()) return "Free";
+
+            return string.Join(", ", DockedShips());
         }
 
         public static string SaveListToStorage(List<ExchangeGroup> exchanges)

@@ -13,11 +13,12 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "2.3";
+        const string Version = "2.31";
         const string Separate = "------";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
+        readonly IMyUnicastListener ul;
         readonly List<IMyTextSurface> dataLCDs = new List<IMyTextSurface>();
         readonly List<TextPanelDesc> logLCDs = new List<TextPanelDesc>();
         #endregion
@@ -60,6 +61,7 @@ namespace IngameScript
             InitializeExchanges();
 
             bl = IGC.RegisterBroadcastListener(config.Channel);
+            ul = IGC.UnicastListener;
 
             LoadFromStorage();
 
@@ -85,16 +87,16 @@ namespace IngameScript
                 ParseTerminalMessage(argument);
             }
 
-            while (IGC.UnicastListener.HasPendingMessage)
+            while (ul.HasPendingMessage)
             {
-                var message = IGC.UnicastListener.AcceptMessage();
-                ParseMessage(message);
+                var message = ul.AcceptMessage();
+                ParseMessage(message, true);
             }
 
             while (bl.HasPendingMessage)
             {
                 var message = bl.AcceptMessage();
-                ParseMessage(message);
+                ParseMessage(message, false);
             }
 
             UpdateBaseState();
@@ -217,7 +219,7 @@ namespace IngameScript
         #endregion
 
         #region IGC COMMANDS
-        void ParseMessage(MyIGCMessage message)
+        void ParseMessage(MyIGCMessage message, bool direct)
         {
             long source = message.Source;
             string signal = message.Data.ToString();
@@ -229,7 +231,7 @@ namespace IngameScript
 
             if (command == "REQUEST_DOCK") ProcessRequestDock(lines);
 
-            if (!IsForMe(lines)) return;
+            if (!direct && !IsForMe(lines)) return;
 
             if (command == "RESPONSE_STATUS") ProcessResponseStatus(lines);
             if (command == "RESPONSE_PLAN") ProcessResponsePlan(lines);
@@ -238,6 +240,8 @@ namespace IngameScript
             else if (command == "WAITING_UNLOAD") ProcessWaiting(lines, ExchangeTasks.StartUnload);
             else if (command == "WAITING_UNDOCK_LOAD") ProcessWaiting(lines, ExchangeTasks.EndLoad);
             else if (command == "WAITING_UNDOCK_UNLOAD") ProcessWaiting(lines, ExchangeTasks.EndUnload);
+
+            else if (command == "REQUEST_DOCK_UPDATE") ProcessDockUpdate(source, lines);
         }
 
         /// <summary>
@@ -313,6 +317,41 @@ namespace IngameScript
             string exchangeType = Utils.ReadString(lines, "ExchangeType");
 
             EnqueueExchangeRequest(exchangeType, from, task);
+        }
+
+        /// <summary>
+        /// A ship requests an update of the dock information, for movile bases.
+        /// </summary>
+        void ProcessDockUpdate(long source, string[] lines)
+        {
+            //Get the exchange group from the ship name
+            string shipName = Utils.ReadString(lines, "From");
+            string exchangeName = Utils.ReadString(lines, "Exchange");
+
+            WriteLogLCDs($"Dock update request from {shipName} on exchange {exchangeName}");
+
+            var exchange = FindExchange(exchangeName);
+            if (exchange == null)
+            {
+                WriteLogLCDs($"Dock update request from {shipName} rejected. Exchange {exchangeName} not found.");
+                return;
+            }
+
+            var parts = new List<string>()
+            {
+                $"Command=DOCK_UPDATE",
+                $"From={baseId}",
+
+                $"Landing={(config.InGravity?1:0)}",
+
+                $"Exchange={exchange.Name}",
+                $"Forward={Utils.VectorToStr(exchange.Forward)}",
+                $"Up={Utils.VectorToStr(exchange.Up)}",
+                $"Waypoints={Utils.VectorListToStr(exchange.CalculateRouteToConnector())}",
+            };
+            UnicastMessage(source, parts);
+
+            WriteLogLCDs($"Dock update sent to {source} on exchange {exchangeName}");
         }
         #endregion
 
@@ -613,6 +652,14 @@ namespace IngameScript
 
             IGC.SendBroadcastMessage(config.Channel, message);
         }
+        void UnicastMessage(long source, List<string> parts)
+        {
+            string message = string.Join("|", parts);
+
+            WriteLogLCDs($"SendIGCMessage: {message}");
+
+            IGC.SendUnicastMessage(source, config.Channel, message);
+        }
 
         bool IsForMe(string[] lines)
         {
@@ -776,6 +823,21 @@ namespace IngameScript
                 foreach (var ex in exchange)
                 {
                     if (ex.DockedShips().Any(d => d == ship))
+                    {
+                        return ex;
+                    }
+                }
+            }
+
+            return null;
+        }
+        ExchangeGroup FindExchange(string name)
+        {
+            foreach (var exchange in exchanges.Values)
+            {
+                foreach (var ex in exchange)
+                {
+                    if (ex.Name == name)
                     {
                         return ex;
                     }
