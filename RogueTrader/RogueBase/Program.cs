@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "2.31";
+        const string Version = "2.32";
         const string Separate = "------";
 
         #region Blocks
@@ -25,6 +25,7 @@ namespace IngameScript
 
         readonly string baseId;
         readonly Config config;
+        readonly bool isStatic;
 
         readonly StringBuilder sbData = new StringBuilder();
         readonly StringBuilder sbLog = new StringBuilder();
@@ -55,6 +56,7 @@ namespace IngameScript
                 Echo(config.GetErrors());
                 return;
             }
+            isStatic = Me.CubeGrid.IsStatic;
 
             RefreshLCDs();
 
@@ -342,6 +344,7 @@ namespace IngameScript
                 $"Command=DOCK_UPDATE",
                 $"From={baseId}",
 
+                $"IsStatic={(isStatic?1:0)}",
                 $"Landing={(config.InGravity?1:0)}",
 
                 $"Exchange={exchange.Name}",
@@ -466,6 +469,7 @@ namespace IngameScript
                         $"To={request.Ship}",
                         $"From={baseId}",
 
+                        $"IsStatic={(isStatic?1:0)}",
                         $"Landing={(config.InGravity?1:0)}",
 
                         $"Exchange={exchange.Name}",
@@ -518,6 +522,7 @@ namespace IngameScript
                         $"To={request.Ship}",
                         $"From={baseId}",
 
+                        $"IsStatic={(isStatic?1:0)}",
                         $"Landing={(config.InGravity?1:0)}",
 
                         $"Exchange={exchange.Name}",

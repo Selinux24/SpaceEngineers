@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "2.62";
+        const string Version = "2.63";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
@@ -380,6 +380,7 @@ namespace IngameScript
         /// </summary>
         void ProcessDocking(long source, string[] lines, ExchangeTasks task)
         {
+            var isStatic = Utils.ReadInt(lines, "IsStatic") == 1;
             var landing = Utils.ReadInt(lines, "Landing") == 1;
 
             string exchange = Utils.ReadString(lines, "Exchange");
@@ -389,7 +390,7 @@ namespace IngameScript
 
             if (task == ExchangeTasks.StartLoad || task == ExchangeTasks.StartUnload)
             {
-                navigator.ApproachToDock(source, landing, exchange, fw, up, wpList, "ON_APPROACHING_COMPLETED", task);
+                navigator.ApproachToDock(source, isStatic, landing, exchange, fw, up, wpList, "ON_APPROACHING_COMPLETED", task);
                 shipStatus = ShipStatus.Docking;
                 lastDockRequest = DateTime.MinValue;
                 dockUpdating = false;
@@ -403,7 +404,7 @@ namespace IngameScript
             }
             else if (task == ExchangeTasks.Dock)
             {
-                navigator.ApproachToDock(source, landing, exchange, fw, up, wpList, "ON_APPROACHING_COMPLETED", task);
+                navigator.ApproachToDock(source, isStatic, landing, exchange, fw, up, wpList, "ON_APPROACHING_COMPLETED", task);
                 shipStatus = ShipStatus.Docking;
                 lastDockRequest = DateTime.MinValue;
                 dockUpdating = false;
@@ -433,6 +434,7 @@ namespace IngameScript
         /// </summary>
         void ProcessDockUpdate(long source, string[] lines)
         {
+            var isStatic = Utils.ReadInt(lines, "IsStatic") == 1;
             bool landing = Utils.ReadInt(lines, "Landing") == 1;
 
             string exchange = Utils.ReadString(lines, "Exchange");
@@ -440,7 +442,7 @@ namespace IngameScript
             var up = Utils.ReadVector(lines, "Up");
             var wpList = Utils.ReadVectorList(lines, "Waypoints");
 
-            navigator.UpdateDocking(source, landing, exchange, fw, up, wpList);
+            navigator.UpdateDocking(source, isStatic, landing, exchange, fw, up, wpList);
 
             dockUpdating = false;
         }
@@ -544,6 +546,8 @@ namespace IngameScript
         void RequestDockUpdate()
         {
             if (!navigator.IsDocking) return;
+
+            if (navigator.DockIsStatic) return;
 
             if (dockUpdating) return;
 

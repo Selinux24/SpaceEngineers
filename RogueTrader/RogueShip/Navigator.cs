@@ -17,18 +17,19 @@ namespace IngameScript
         readonly List<Vector3D> evadingPoints = new List<Vector3D>();
 
         public long Source = -1;
-        public bool Landing = false;
-        public string Exchange = null;
-        public Vector3D Forward = new Vector3D(1, 0, 0);
-        public Vector3D Up = new Vector3D(0, 1, 0);
-        public readonly List<Vector3D> Waypoints = new List<Vector3D>();
-        public int CurrentWpIdx = 0;
-        public string Callback = null;
-        public ExchangeTasks ExchangeTask = ExchangeTasks.None;
+        public bool DockIsStatic { get; private set; } = true;
+        public bool Landing { get; private set; } = false;
+        public string Exchange { get; private set; } = null;
+        public Vector3D Forward { get; private set; } = new Vector3D(1, 0, 0);
+        public Vector3D Up { get; private set; } = new Vector3D(0, 1, 0);
+        public List<Vector3D> Waypoints  { get; private set; } = new List<Vector3D>();
+        public int CurrentWpIdx { get; private set; } = 0;
+        public string Callback { get; private set; } = null;
+        public ExchangeTasks ExchangeTask { get; private set; } = ExchangeTasks.None;
 
-        public NavigatorTasks Task = NavigatorTasks.None;
-        public NavigatorAtmStatus AtmStatus = NavigatorAtmStatus.None;
-        public NavigatorCrsStatus CrsStatus = NavigatorCrsStatus.None;
+        public NavigatorTasks Task { get; private set; } = NavigatorTasks.None;
+        public NavigatorAtmStatus AtmStatus { get; private set; } = NavigatorAtmStatus.None;
+        public NavigatorCrsStatus CrsStatus { get; private set; } = NavigatorCrsStatus.None;
 
         public Config Config => ship.Config;
 
@@ -53,11 +54,12 @@ namespace IngameScript
             this.ship = ship;
         }
 
-        public void ApproachToDock(long source, bool landing, string exchange, Vector3D fw, Vector3D up, List<Vector3D> wpList, string onAproximationCompleted = null, ExchangeTasks exchangeTask = ExchangeTasks.None)
+        public void ApproachToDock(long source, bool isStatic, bool landing, string exchange, Vector3D fw, Vector3D up, List<Vector3D> wpList, string onAproximationCompleted = null, ExchangeTasks exchangeTask = ExchangeTasks.None)
         {
             ship.WriteLogLCDs($"Approaching to dock {exchange} with {wpList.Count} waypoints. ({source})");
 
             Source = source;
+            DockIsStatic = isStatic;
             Landing = landing;
 
             Exchange = exchange;
@@ -80,6 +82,7 @@ namespace IngameScript
             ship.WriteLogLCDs($"Separating from dock {exchange} with {wpList.Count} waypoints. ({source})");
 
             Source = source;
+            DockIsStatic = true;
             Landing = landing;
 
             Exchange = exchange;
@@ -99,11 +102,12 @@ namespace IngameScript
             ship.Pilot();
             ship.Undock();
         }
-        public void UpdateDocking(long source, bool landing, string exchange, Vector3D fw, Vector3D up, List<Vector3D> wpList)
+        public void UpdateDocking(long source, bool isStatic, bool landing, string exchange, Vector3D fw, Vector3D up, List<Vector3D> wpList)
         {
             ship.WriteLogLCDs($"Updated dock {exchange} with {wpList.Count} waypoints. ({source})");
 
             Source = source;
+            DockIsStatic = isStatic;
             Landing = landing;
 
             Exchange = exchange;
@@ -117,6 +121,7 @@ namespace IngameScript
             if (!ship.IsNavigationEnabled()) return false;
 
             Source = -1;
+            DockIsStatic = true;
             Landing = landing;
 
             Exchange = null;
@@ -141,6 +146,7 @@ namespace IngameScript
         public void Clear()
         {
             Source = -1;
+            DockIsStatic = true;
             Landing = false;
 
             Exchange = null;
