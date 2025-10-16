@@ -158,7 +158,7 @@ namespace IngameScript
         }
         void RunLcd()
         {
-            blocks.List.ForEach(delegate (IMyTerminalBlock block)
+            blocks.List.ForEach(block =>
             {
                 if (block.CustomData != null && !block.CustomData.Equals(""))
                 {

@@ -15,8 +15,9 @@ namespace IngameScript
 
         readonly float topPadding = 10f;
         readonly float cellSpacing = 2f;
-        readonly Dictionary<string, Item> item_list = new Dictionary<string, Item>();
-        readonly Dictionary<string, double> last_amount = new Dictionary<string, double>();
+        readonly Dictionary<string, Item> itemList = new Dictionary<string, Item>();
+        readonly Dictionary<string, double> lastAmount = new Dictionary<string, double>();
+        readonly List<string> types = new List<string>();
 
         int panel = 0;
         bool enable = false;
@@ -29,6 +30,7 @@ namespace IngameScript
         float gaugeWidth = 80f;
         float gaugeHeight = 40f;
         bool item = true;
+        bool itemGauge = true;
         float itemSize = 80f;
         bool itemOre = true;
         bool itemIngot = true;
@@ -56,6 +58,7 @@ namespace IngameScript
             gaugeHeight = MyIni.Get("Inventory", "gauge_height").ToSingle(40f);
 
             item = MyIni.Get("Inventory", "item_on").ToBoolean(true);
+            itemGauge = MyIni.Get("Inventory", "item_gauge_on").ToBoolean(true);
             itemSize = MyIni.Get("Inventory", "item_size").ToSingle(80f);
             itemOre = MyIni.Get("Inventory", "item_ore").ToBoolean(true);
             itemIngot = MyIni.Get("Inventory", "item_ingot").ToBoolean(true);
@@ -76,6 +79,7 @@ namespace IngameScript
             MyIni.Set("Inventory", "gauge_height", gaugeHeight);
 
             MyIni.Set("Inventory", "item_on", item);
+            MyIni.Set("Inventory", "item_gauge_on", itemGauge);
             MyIni.Set("Inventory", "item_size", itemSize);
             MyIni.Set("Inventory", "item_ore", itemOre);
             MyIni.Set("Inventory", "item_ingot", itemIngot);
@@ -83,11 +87,11 @@ namespace IngameScript
             MyIni.Set("Inventory", "item_ammo", itemAmmo);
         }
 
-        private void Search()
+        void Search()
         {
-            var block_filter = BlockFilter<IMyTerminalBlock>.Create(displayLcd.Block, filter);
-            block_filter.HasInventory = true;
-            inventories = BlockSystem<IMyTerminalBlock>.SearchByFilter(program, block_filter);
+            var blockFilter = BlockFilter<IMyTerminalBlock>.Create(displayLcd.Block, filter);
+            blockFilter.HasInventory = true;
+            inventories = BlockSystem<IMyTerminalBlock>.SearchByFilter(program, blockFilter);
             search = false;
         }
 
@@ -98,7 +102,7 @@ namespace IngameScript
             surface.Initialize();
             Draw(surface);
         }
-        public void Draw(SurfaceDrawing surface)
+        void Draw(SurfaceDrawing surface)
         {
             if (!enable) return;
             if (search) Search();
@@ -112,26 +116,62 @@ namespace IngameScript
                 surface.Position += new Vector2(0, topPadding);
             }
 
-            if (item)
+            if (!item) return;
+
+            types.Clear();
+            if (itemOre) types.Add(Item.TYPE_ORE);
+            if (itemIngot) types.Add(Item.TYPE_INGOT);
+            if (itemComponent) types.Add(Item.TYPE_COMPONENT);
+            if (itemAmmo) types.Add(Item.TYPE_AMMO);
+
+            lastAmount.Clear();
+            foreach (var entry in itemList)
             {
-                var types = new List<string>();
-                if (itemOre) types.Add(Item.TYPE_ORE);
-                if (itemIngot) types.Add(Item.TYPE_INGOT);
-                if (itemComponent) types.Add(Item.TYPE_COMPONENT);
-                if (itemAmmo) types.Add(Item.TYPE_AMMO);
+                lastAmount.Add(entry.Key, entry.Value.Amount);
+            }
 
-                last_amount.Clear();
-                foreach (var entry in item_list)
+            InventoryCount();
+            DisplayByType(surface, types);
+        }
+        void InventoryCount()
+        {
+            itemList.Clear();
+            foreach (var block in inventories.List)
+            {
+                for (int i = 0; i < block.InventoryCount; i++)
                 {
-                    last_amount.Add(entry.Key, entry.Value.Amount);
-                }
+                    var inv = block.GetInventory(i);
+                    var items = new List<MyInventoryItem>();
+                    inv.GetItems(items);
 
-                InventoryCount();
-                DisplayByType(surface, types);
+                    foreach (var item in items)
+                    {
+                        string type = Util.GetType(item);
+                        string name = Util.GetName(item);
+                        string data = item.Type.SubtypeId;
+                        double amount = 0;
+                        double.TryParse(item.Amount.ToString(), out amount);
+
+                        string key = $"{type}_{name}";
+                        if (itemList.ContainsKey(key))
+                        {
+                            itemList[key].Amount += amount;
+                        }
+                        else
+                        {
+                            itemList.Add(key, new Item()
+                            {
+                                Type = type,
+                                Name = name,
+                                Data = data,
+                                Amount = amount
+                            });
+                        }
+                    }
+                }
             }
         }
-
-        private void DisplayGauge(SurfaceDrawing drawing)
+        void DisplayGauge(SurfaceDrawing drawing)
         {
             long volumes = 0;
             long maxVolumes = 1;
@@ -139,9 +179,9 @@ namespace IngameScript
             {
                 for (int i = 0; i < block.InventoryCount; i++)
                 {
-                    var block_inventory = block.GetInventory(i);
-                    volumes += block_inventory.CurrentVolume.RawValue;
-                    maxVolumes += block_inventory.MaxVolume.RawValue;
+                    var inv = block.GetInventory(i);
+                    volumes += inv.CurrentVolume.RawValue;
+                    maxVolumes += inv.MaxVolume.RawValue;
                 }
             });
 
@@ -162,7 +202,66 @@ namespace IngameScript
                 drawing.Position += new Vector2(0, 2 * cellSpacing * scale);
             }
         }
-        private int GetLimit(SurfaceDrawing drawing, float itemSize, float cellSpacing)
+        void DisplayByType(SurfaceDrawing drawing, List<string> types)
+        {
+            int count = 0;
+            float height = itemSize;
+            float width = 2.5f * itemSize;
+            float deltaWidth = width * scale;
+            float deltaHeight = height * scale;
+            int limit = GetLimit(drawing, deltaHeight, cellSpacing);
+            string colorDefault = program.MyProperty.Get("color", "default");
+            int limitDefault = program.MyProperty.GetInt("Limit", "default");
+
+            foreach (string type in types)
+            {
+                foreach (KeyValuePair<string, Item> entry in itemList.OrderByDescending(entry => entry.Value.Amount).Where(entry => entry.Value.Type == type))
+                {
+                    var item = entry.Value;
+
+                    int limitBar = 0;
+                    int variance = 2;
+                    if (itemGauge)
+                    {
+                        limitBar = program.MyProperty.GetInt("Limit", item.Name, limitDefault);
+
+                        if (lastAmount.ContainsKey(entry.Key))
+                        {
+                            if (lastAmount[entry.Key] < item.Amount) variance = 1;
+                            if (lastAmount[entry.Key] > item.Amount) variance = 3;
+                        }
+                        else
+                        {
+                            variance = 1;
+                        }
+                    }
+
+                    // Icon
+                    var style = new StyleIcon()
+                    {
+                        Path = item.Icon,
+                        Width = width,
+                        Height = height,
+                        Color = program.MyProperty.GetColor("color", item.Name, item.Data, colorDefault),
+                        Thresholds = program.MyProperty.ItemThresholds,
+                        ColorSoftening = .6f
+                    };
+                    style.Scale(scale);
+
+                    var p = drawing.Position + new Vector2((cellSpacing + deltaWidth) * (count / limit), (cellSpacing + deltaHeight) * (count - (count / limit) * limit));
+                    drawing.DrawGaugeIcon(p, item.Name, item.Amount, limitBar, style, itemGauge, variance);
+
+                    count++;
+                }
+            }
+
+            if (itemList.Count > limit)
+            {
+                drawing.Position += new Vector2(0, (cellSpacing * scale + height) * limit);
+            }
+            drawing.Position += new Vector2(0, (cellSpacing * scale + height) * itemList.Count);
+        }
+        int GetLimit(SurfaceDrawing drawing, float itemSize, float cellSpacing)
         {
             int limit;
             if (gauge && gaugeHorizontal)
@@ -174,100 +273,6 @@ namespace IngameScript
                 limit = (int)Math.Floor((drawing.Viewport.Height - topPadding * scale) / (itemSize + cellSpacing));
             }
             return Math.Max(limit, 1);
-        }
-        private void DisplayByType(SurfaceDrawing drawing, List<string> types)
-        {
-            int count = 0;
-            float height = itemSize;
-            float width = 2.5f * itemSize;
-            float delta_width = width * scale;
-            float delta_height = height * scale;
-            int limit = GetLimit(drawing, delta_height, cellSpacing);
-            string colorDefault = program.MyProperty.Get("color", "default");
-            int limitDefault = program.MyProperty.GetInt("Limit", "default");
-
-            foreach (string type in types)
-            {
-                foreach (KeyValuePair<string, Item> entry in item_list.OrderByDescending(entry => entry.Value.Amount).Where(entry => entry.Value.Type == type))
-                {
-                    var item = entry.Value;
-                    var p = drawing.Position + new Vector2((cellSpacing + delta_width) * (count / limit), (cellSpacing + delta_height) * (count - (count / limit) * limit));
-
-                    // Icon
-                    var color = program.MyProperty.GetColor("color", item.Name, item.Data, colorDefault);
-                    int limitBar = program.MyProperty.GetInt("Limit", item.Name, limitDefault);
-                    var style = new StyleIcon()
-                    {
-                        Path = item.Icon,
-                        Width = width,
-                        Height = height,
-                        Color = color,
-                        Thresholds = program.MyProperty.ItemThresholds,
-                        ColorSoftening = .6f
-                    };
-                    style.Scale(scale);
-
-                    int variance = 2;
-                    if (last_amount.ContainsKey(entry.Key))
-                    {
-                        if (last_amount[entry.Key] < item.Amount) variance = 1;
-                        if (last_amount[entry.Key] > item.Amount) variance = 3;
-                    }
-                    else
-                    {
-                        variance = 1;
-                    }
-                    drawing.DrawGaugeIcon(p, item.Name, item.Amount, limitBar, style, variance);
-
-                    count++;
-                }
-            }
-
-            if (item_list.Count > limit)
-            {
-                drawing.Position += new Vector2(0, (cellSpacing * scale + height) * limit);
-            }
-            drawing.Position += new Vector2(0, (cellSpacing * scale + height) * item_list.Count);
-        }
-        private void InventoryCount()
-        {
-            item_list.Clear();
-            foreach (var block in inventories.List)
-            {
-                for (int i = 0; i < block.InventoryCount; i++)
-                {
-                    var block_inventory = block.GetInventory(i);
-                    var items = new List<MyInventoryItem>();
-                    block_inventory.GetItems(items);
-
-                    foreach (var block_item in items)
-                    {
-                        string type = Util.GetType(block_item);
-                        string name = Util.GetName(block_item);
-                        string data = block_item.Type.SubtypeId;
-                        double amount = 0;
-                        double.TryParse(block_item.Amount.ToString(), out amount);
-
-                        var item = new Item()
-                        {
-                            Type = type,
-                            Name = name,
-                            Data = data,
-                            Amount = amount
-                        };
-
-                        string key = $"{type}_{name}";
-                        if (item_list.ContainsKey(key))
-                        {
-                            item_list[key].Amount += amount;
-                        }
-                        else
-                        {
-                            item_list.Add(key, item);
-                        }
-                    }
-                }
-            }
         }
     }
 }
