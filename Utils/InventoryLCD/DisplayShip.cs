@@ -11,6 +11,7 @@ namespace IngameScript
     class DisplayShip
     {
         readonly Program program;
+        readonly Dictionary<string, List<IMyThrust>> forces = new Dictionary<string, List<IMyThrust>>();
 
         int panel = 0;
         bool enable = false;
@@ -18,7 +19,6 @@ namespace IngameScript
         bool oneLine = false;
         BlockSystem<IMyThrust> thrusts = null;
         BlockSystem<IMyCockpit> cockpit = null;
-        bool search = true;
 
         public DisplayShip(Program program)
         {
@@ -31,6 +31,9 @@ namespace IngameScript
             enable = MyIni.Get("Ship", "on").ToBoolean(false);
             scale = MyIni.Get("Ship", "scale").ToDouble(1d);
             oneLine = MyIni.Get("Ship", "one_line").ToBoolean(false);
+
+            cockpit = BlockSystem<IMyCockpit>.SearchBlocks(program);
+            thrusts = BlockSystem<IMyThrust>.SearchBlocks(program);
         }
         public void Save(MyIni MyIni)
         {
@@ -39,31 +42,26 @@ namespace IngameScript
             MyIni.Set("Ship", "scale", scale);
             MyIni.Set("Ship", "one_line", oneLine);
         }
-        private void Search()
-        {
-            cockpit = BlockSystem<IMyCockpit>.SearchBlocks(program);
-            thrusts = BlockSystem<IMyThrust>.SearchBlocks(program);
-            search = false;
-        }
+
         public void Draw(Drawing drawing)
         {
             if (!enable) return;
+
             var surface = drawing.GetSurfaceDrawing(panel);
             surface.Initialize();
+
             Draw(surface);
         }
-        public void Draw(SurfaceDrawing surface)
+        void Draw(SurfaceDrawing surface)
         {
-            if (!enable) return;
-            if (search) Search();
-
             float mass = 0f;
             if (!cockpit.IsEmpty)
             {
-                MyShipMass shipMass = cockpit.First.CalculateShipMass();
+                var shipMass = cockpit.First.CalculateShipMass();
                 mass = shipMass.TotalMass;
             }
-            var forces = new Dictionary<string, List<IMyThrust>>();
+
+            forces.Clear();
 
             var valueUp = thrusts.List.Where(x => x.GridThrustDirection == Vector3I.Down).ToList();
             forces.Add("Up", valueUp);
@@ -91,7 +89,7 @@ namespace IngameScript
                 FontId = EnumFont.Monospace,
                 Alignment = TextAlignment.LEFT,
             };
-            float offset_y = 35f * (float)scale;
+            float offsetY = 35f * (float)scale;
 
             if (oneLine == true)
             {
@@ -99,22 +97,22 @@ namespace IngameScript
                 text.Color = Color.LightGreen;
                 text.Position = surface.Position;
                 surface.AddSprite(text);
-                surface.Position += new Vector2(0, offset_y);
+                surface.Position += new Vector2(0, offsetY);
             }
 
             foreach (var item in forces)
             {
                 if (oneLine)
                 {
-                    Draw1Line(surface, item, text, mass, offset_y);
+                    Draw1Line(surface, item, text, mass, offsetY);
                 }
                 else
                 {
-                    Draw2Line(surface, item, text, mass, offset_y);
+                    Draw2Line(surface, item, text, mass, offsetY);
                 }
             }
         }
-        private void Draw2Line(SurfaceDrawing surface, KeyValuePair<string, List<IMyThrust>> item, MySprite text, float mass, float offset_y)
+        void Draw2Line(SurfaceDrawing surface, KeyValuePair<string, List<IMyThrust>> item, MySprite text, float mass, float offsetY)
         {
             var force = item.Value.Select(x => x.MaxThrust).Sum();
             var speed = Math.Round(force / mass, 1);
@@ -123,15 +121,15 @@ namespace IngameScript
             text.Color = Color.DimGray;
             text.Position = surface.Position;
             surface.AddSprite(text);
-            surface.Position += new Vector2(0, offset_y);
+            surface.Position += new Vector2(0, offsetY);
 
             text.Data = $"{force / 1000,8}kN {speed,8}m/s²";
             text.Color = Color.LightGreen;
             text.Position = surface.Position;
             surface.AddSprite(text);
-            surface.Position += new Vector2(0, offset_y);
+            surface.Position += new Vector2(0, offsetY);
         }
-        private void Draw1Line(SurfaceDrawing surface, KeyValuePair<string, List<IMyThrust>> item, MySprite text, float mass, float offset_y)
+        void Draw1Line(SurfaceDrawing surface, KeyValuePair<string, List<IMyThrust>> item, MySprite text, float mass, float offsetY)
         {
             var force = item.Value.Select(x => x.MaxThrust).Sum();
             var speed = Math.Round(force / mass, 1);
@@ -140,7 +138,7 @@ namespace IngameScript
             text.Color = Color.LightGreen;
             text.Position = surface.Position;
             surface.AddSprite(text);
-            surface.Position += new Vector2(0, offset_y);
+            surface.Position += new Vector2(0, offsetY);
         }
     }
 }
