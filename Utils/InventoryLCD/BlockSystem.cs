@@ -45,9 +45,6 @@ namespace IngameScript
             blockSystem.List.Clear();
 
             program.GridTerminalSystem.GetBlocksOfType(blockSystem.List, collect);
-
-            if (info == null) program.Echo($"List <{typeof(T).Name}> count: {blockSystem.List.Count}");
-            else program.Echo($"List <{info}> count: {blockSystem.List.Count}");
         }
         public static void SearchByFilter(Program program, BlockSystem<T> blockSystem, BlockFilter<T> filter)
         {

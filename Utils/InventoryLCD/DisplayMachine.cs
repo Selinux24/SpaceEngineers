@@ -20,6 +20,8 @@ namespace IngameScript
         readonly List<string> types = new List<string>();
         readonly BlockSystem<IMyProductionBlock> producers = new BlockSystem<IMyProductionBlock>();
         readonly List<Item> items = new List<Item>();
+        readonly List<MyProductionItem> productionItems = new List<MyProductionItem>();
+        readonly List<MyInventoryItem> inventoryItems = new List<MyInventoryItem>();
 
         int panel = 0;
         bool enable = false;
@@ -64,14 +66,14 @@ namespace IngameScript
             style = new Style()
             {
                 Width = 250,
-                Height = 80,
+                Height = 120,
                 Padding = new StylePadding(0),
             };
             style.Scale(scale);
 
             var blockFilter = BlockFilter<IMyProductionBlock>.Create(displayLcd.Block, filter);
             BlockSystem<IMyProductionBlock>.SearchByFilter(program, producers, blockFilter);
-            producers.List.Sort((a,b) => a.CustomName.CompareTo(b.CustomName));
+            producers.List.Sort((a, b) => a.CustomName.CompareTo(b.CustomName));
         }
         public void Save(MyIni ini)
         {
@@ -114,7 +116,7 @@ namespace IngameScript
             float sizeIcon = style.Height - (10 * scale);
             Color colorTitle = new Color(100, 100, 100, 128);
             Color colorText = new Color(100, 100, 100, 255);
-            float RotationOrScale = 0.5f * scale;
+            float rotationOrScale = 0.5f * scale;
             float cellSpacing = 10f * scale;
 
             float formWidth = style.Width - (5 * scale);
@@ -141,14 +143,13 @@ namespace IngameScript
                 {
                     // symbol
                     var positionSymbol = position + new Vector2(x, 20);
-                    surface.DrawForm(positionSymbol, SpriteForm.SquareSimple, sizeIcon, 15f, new Color(10, 10, 10, 200));
                     surface.AddSprite(new MySprite()
                     {
                         Type = SpriteType.TEXT,
                         Data = surface.Parent.Symbol[item.Data],
                         Color = colorText,
                         Position = positionSymbol,
-                        RotationOrScale = RotationOrScale,
+                        RotationOrScale = rotationOrScale,
                         FontId = SurfaceDrawing.Font,
                         Alignment = TextAlignment.LEFT
                     });
@@ -166,7 +167,7 @@ namespace IngameScript
                     Data = Util.GetKiloFormat(item.Amount),
                     Color = colorText,
                     Position = positionQuantity,
-                    RotationOrScale = RotationOrScale,
+                    RotationOrScale = rotationOrScale,
                     FontId = SurfaceDrawing.Font,
                     Alignment = TextAlignment.LEFT
                 });
@@ -187,7 +188,6 @@ namespace IngameScript
         }
         void TraversalMachine(IMyProductionBlock block)
         {
-            int loop = 0;
             items.Clear();
 
             Dictionary<string, double> lastAmount;
@@ -203,88 +203,90 @@ namespace IngameScript
 
             if (block is IMyAssembler)
             {
-                var productionItems = new List<MyProductionItem>();
-                block.GetQueue(productionItems);
-                if (productionItems.Count > 0)
-                {
-                    loop = 0;
-                    foreach (var productionItem in productionItems)
-                    {
-                        if (loop >= maxLoop) break;
-                        string iName = Util.GetName(productionItem);
-                        string iType = Util.GetType(productionItem);
-                        string key = string.Format("{0}_{1}", iType, iName);
-                        var itemDefinitionId = productionItem.BlueprintId;
-                        double amount = 0;
-                        double.TryParse(productionItem.Amount.ToString(), out amount);
-
-                        int variance = 2;
-                        if (lastAmount.ContainsKey(key))
-                        {
-                            if (lastAmount[key] < amount) variance = 1;
-                            if (lastAmount[key] > amount) variance = 3;
-                            lastAmount[key] = amount;
-                        }
-                        else
-                        {
-                            variance = 1;
-                            lastAmount.Add(key, amount);
-                        }
-
-                        items.Add(new Item()
-                        {
-                            Name = iName,
-                            Data = iName,
-                            Type = iType,
-                            Amount = amount,
-                            Variance = variance
-                        });
-                        loop++;
-                    }
-                }
+                ProcessAssembler(block, lastAmount);
             }
             else
             {
-                var inventoryItems = new List<MyInventoryItem>();
-                block.InputInventory.GetItems(inventoryItems);
-                if (inventoryItems.Count > 0)
-                {
-                    loop = 0;
-                    foreach (var inventoryItem in inventoryItems)
-                    {
-                        if (loop >= maxLoop) break;
-                        string iName = Util.GetName(inventoryItem);
-                        string iType = Util.GetType(inventoryItem);
-                        string key = string.Format("{0}_{1}", iType, iName);
-                        double amount = 0;
-                        double.TryParse(inventoryItem.Amount.ToString(), out amount);
-
-                        int variance = 2;
-                        if (lastAmount.ContainsKey(key))
-                        {
-                            if (lastAmount[key] < amount) variance = 1;
-                            if (lastAmount[key] > amount) variance = 3;
-                            lastAmount[key] = amount;
-                        }
-                        else
-                        {
-                            variance = 1;
-                            lastAmount.Add(key, amount);
-                        }
-
-                        items.Add(new Item()
-                        {
-                            Name = iName,
-                            Data = iName,
-                            Type = iType,
-                            Amount = amount,
-                            Variance = variance
-                        });
-                        loop++;
-                    }
-                }
+                ProcessRefinery(block, lastAmount);
             }
             lastMachineAmount[block.EntityId] = lastAmount;
+        }
+        void ProcessAssembler(IMyProductionBlock block, Dictionary<string, double> lastAmount)
+        {
+            productionItems.Clear();
+            block.GetQueue(productionItems);
+            if (productionItems.Count == 0) return;
+
+            int loop = 0;
+            foreach (var item in productionItems)
+            {
+                if (loop >= maxLoop) break;
+
+                string type = Util.GetType(item);
+                string name = Util.GetName(item);
+                string data = item.BlueprintId.SubtypeName;
+                string key = $"{type}_{name}";
+                double amount = 0;
+                double.TryParse(item.Amount.ToString(), out amount);
+                int variance = CalculateVariance(lastAmount, key, amount);
+
+                items.Add(new Item()
+                {
+                    Name = name,
+                    Data = data,
+                    Type = type,
+                    Amount = amount,
+                    Variance = variance
+                });
+                loop++;
+            }
+        }
+        void ProcessRefinery(IMyProductionBlock block, Dictionary<string, double> lastAmount)
+        {
+            inventoryItems.Clear();
+            block.InputInventory.GetItems(inventoryItems);
+            if (inventoryItems.Count == 0) return;
+
+            int loop = 0;
+            foreach (var item in inventoryItems)
+            {
+                if (loop >= maxLoop) break;
+
+                string type = Util.GetType(item);
+                string name = Util.GetName(item);
+                string data = item.Type.SubtypeId;
+                string key = $"{type}_{name}";
+                double amount = 0;
+                double.TryParse(item.Amount.ToString(), out amount);
+                int variance = CalculateVariance(lastAmount, key, amount);
+
+                items.Add(new Item()
+                {
+                    Type = type,
+                    Name = name,
+                    Data = data,
+                    Amount = amount,
+                    Variance = variance
+                });
+                loop++;
+            }
+        }
+        static int CalculateVariance(Dictionary<string, double> lastAmount, string key, double amount)
+        {
+            int variance = 2;
+            if (lastAmount.ContainsKey(key))
+            {
+                if (lastAmount[key] < amount) variance = 1;
+                if (lastAmount[key] > amount) variance = 3;
+                lastAmount[key] = amount;
+            }
+            else
+            {
+                variance = 1;
+                lastAmount.Add(key, amount);
+            }
+
+            return variance;
         }
     }
 }

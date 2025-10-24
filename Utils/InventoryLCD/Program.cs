@@ -8,7 +8,7 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        const string Version = "1.3";
+        const string Version = "1.31";
         const UpdateType CommandUpdate = UpdateType.Trigger | UpdateType.Terminal;
 
         readonly MyCommandLine commandLine = new MyCommandLine();
@@ -17,6 +17,9 @@ namespace IngameScript
         readonly BlockSystem<IMyTextPanel> lcds = new BlockSystem<IMyTextPanel>();
         readonly BlockSystem<IMyCockpit> cockpits = new BlockSystem<IMyCockpit>();
         readonly IMyTextSurface pbScreen;
+
+        int maxBlocks = 0;
+        int currBlock = 0;
 
         internal Config Config { get; }
 
@@ -68,29 +71,44 @@ namespace IngameScript
         void RunContinuousLogic()
         {
             Display();
-            RunLcd();
+
+            if (blocks.List.Count == 0) return;
+
+            int i;
+            for (i = 0; i < maxBlocks; i++)
+            {
+                if (!RunLcd()) break;
+            }
+
+            Echo($"Blocks Processed: {i}");
         }
         void Display()
         {
+            Echo($"Version {Version}");
+            Echo($"Managed LCDs: {blocks.List.Count}");
+
             pbScreen.WriteText($"*** Inventory {Version} ***\n", false);
             pbScreen.WriteText($"---------------------------\n", true);
             pbScreen.WriteText($"Managed LCDs:{blocks.List.Count}\n", true);
         }
-        void RunLcd()
+        bool RunLcd()
         {
-            blocks.List.ForEach(block =>
-            {
-                if (string.IsNullOrWhiteSpace(block.MyBlock.CustomData)) return;
+            var block = blocks.List[currBlock];
+            currBlock++;
+            currBlock %= maxBlocks;
 
-                block.Update();
+            if (string.IsNullOrWhiteSpace(block.MyBlock.CustomData)) return true;
 
-                if (!block.Ini.ContainsSection("Inventory") && !block.MyBlock.CustomData.Trim().Equals("prepare")) return;
+            block.Update();
 
-                var displayLcd = GetDisplayLcd(block.MyBlock);
+            if (!block.Ini.ContainsSection("Inventory") && !block.MyBlock.CustomData.Trim().Equals("prepare")) return true;
 
-                if (block.Changed) displayLcd.Load(block.Ini);
-                else displayLcd.Draw();
-            });
+            var displayLcd = GetDisplayLcd(block.MyBlock);
+
+            if (block.Changed) displayLcd.Load(block.Ini);
+            else displayLcd.Draw();
+
+            return Runtime.CurrentInstructionCount < 25000;
         }
         DisplayLcd GetDisplayLcd(IMyTerminalBlock block)
         {
@@ -103,8 +121,6 @@ namespace IngameScript
 
         void Search()
         {
-            Echo($"Version {Version}");
-
             blocks.List.Clear();
 
             BlockSystem<IMyTextPanel>.SearchByFilter(this, lcds, Config.TextPanelFilter);
@@ -118,6 +134,8 @@ namespace IngameScript
             {
                 blocks.List.AddRange(cockpits.List.Select(bl => new Block(bl)));
             }
+
+            maxBlocks = blocks.List.Count;
         }
     }
 }
