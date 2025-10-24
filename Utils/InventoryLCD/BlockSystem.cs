@@ -40,19 +40,19 @@ namespace IngameScript
             List = list;
         }
 
-        public static BlockSystem<T> SearchBlocks(Program program, Func<T, bool> collect = null, string info = null)
+        public static void SearchBlocks(Program program, BlockSystem<T> blockSystem, Func<T, bool> collect = null, string info = null)
         {
-            List<T> list = new List<T>();
-            program.GridTerminalSystem.GetBlocksOfType(list, collect);
+            blockSystem.List.Clear();
 
-            if (info == null) program.Echo($"List <{typeof(T).Name}> count: {list.Count}");
-            else program.Echo($"List <{info}> count: {list.Count}");
+            program.GridTerminalSystem.GetBlocksOfType(blockSystem.List, collect);
 
-            return new BlockSystem<T>(list);
+            if (info == null) program.Echo($"List <{typeof(T).Name}> count: {blockSystem.List.Count}");
+            else program.Echo($"List <{info}> count: {blockSystem.List.Count}");
         }
-        public static BlockSystem<T> SearchByFilter(Program program, BlockFilter<T> filter)
+        public static void SearchByFilter(Program program, BlockSystem<T> blockSystem, BlockFilter<T> filter)
         {
-            List<T> list = new List<T>();
+            blockSystem.List.Clear();
+
             if (filter.ByGroup)
             {
                 var groups = new List<IMyBlockGroup>();
@@ -62,24 +62,18 @@ namespace IngameScript
                 groups.ForEach(group =>
                 {
                     groupList.Clear();
-                    group.GetBlocksOfType(list, filter.BlockVisitor());
-                    list.AddList(groupList);
+                    group.GetBlocksOfType(blockSystem.List, filter.BlockVisitor());
+                    blockSystem.List.AddList(groupList);
                 });
             }
             else
             {
-                program.GridTerminalSystem.GetBlocksOfType(list, filter.BlockVisitor());
+                program.GridTerminalSystem.GetBlocksOfType(blockSystem.List, filter.BlockVisitor());
             }
 
-            program.Echo($"{typeof(T).Name}({filter.Value}):{list.Count}");
-
-            return new BlockSystem<T>(list);
+            program.Echo($"{typeof(T).Name}({filter.Value}):{blockSystem.List.Count}");
         }
 
-        public void Clear()
-        {
-            List.Clear();
-        }
         public void ForEach(Action<T> action)
         {
             if (IsEmpty) return;

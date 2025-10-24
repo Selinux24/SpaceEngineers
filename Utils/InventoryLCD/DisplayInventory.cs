@@ -18,6 +18,7 @@ namespace IngameScript
         readonly Dictionary<string, Item> itemList = new Dictionary<string, Item>();
         readonly Dictionary<string, double> lastAmount = new Dictionary<string, double>();
         readonly List<string> types = new List<string>();
+        readonly BlockSystem<IMyTerminalBlock> inventories = new BlockSystem<IMyTerminalBlock>();
 
         int panel = 0;
         bool enable = false;
@@ -30,12 +31,12 @@ namespace IngameScript
         float gaugeHeight = 40f;
         bool item = true;
         bool itemGauge = true;
+        bool itemSymbol = true;
         float itemSize = 80f;
         bool itemOre = true;
         bool itemIngot = true;
         bool itemComponent = true;
         bool itemAmmo = true;
-        BlockSystem<IMyTerminalBlock> inventories = null;
 
         public DisplayInventory(Program program, DisplayLcd displayLcd)
         {
@@ -58,6 +59,7 @@ namespace IngameScript
 
             item = ini.Get("Inventory", "item_on").ToBoolean(true);
             itemGauge = ini.Get("Inventory", "item_gauge_on").ToBoolean(true);
+            itemSymbol = ini.Get("Inventory", "item_symbol_on").ToBoolean(true);
             itemSize = ini.Get("Inventory", "item_size").ToSingle(80f);
             itemOre = ini.Get("Inventory", "item_ore").ToBoolean(true);
             itemIngot = ini.Get("Inventory", "item_ingot").ToBoolean(true);
@@ -87,6 +89,7 @@ namespace IngameScript
 
             ini.Set("Inventory", "item_on", item);
             ini.Set("Inventory", "item_gauge_on", itemGauge);
+            ini.Set("Inventory", "item_symbol_on", itemSymbol);
             ini.Set("Inventory", "item_size", itemSize);
             ini.Set("Inventory", "item_ore", itemOre);
             ini.Set("Inventory", "item_ingot", itemIngot);
@@ -98,7 +101,7 @@ namespace IngameScript
         {
             var blockFilter = BlockFilter<IMyTerminalBlock>.Create(displayLcd.Block, filter);
             blockFilter.HasInventory = true;
-            inventories = BlockSystem<IMyTerminalBlock>.SearchByFilter(program, blockFilter);
+            BlockSystem<IMyTerminalBlock>.SearchByFilter(program, inventories, blockFilter);
         }
 
         public void Draw(Drawing drawing)
@@ -143,7 +146,7 @@ namespace IngameScript
                 Fullscreen = gaugeFullscreen,
                 Width = gaugeWidth,
                 Height = gaugeHeight,
-                Thresholds = program.MyProperty.ChestThresholds,
+                Thresholds = program.Config.ChestThresholds,
                 ColorSoftening = .6f
             };
 
@@ -206,8 +209,8 @@ namespace IngameScript
             float deltaWidth = width * scale;
             float deltaHeight = height * scale;
             int limit = GetLimit(drawing, deltaHeight, cellSpacing);
-            string colorDefault = program.MyProperty.Get("color", "default");
-            int limitDefault = program.MyProperty.GetInt("Limit", "default");
+            string colorDefault = program.Config.Get("color", "default");
+            int limitDefault = program.Config.GetInt("Limit", "default");
 
             foreach (string type in types)
             {
@@ -221,7 +224,7 @@ namespace IngameScript
                     int variance = 2;
                     if (itemGauge)
                     {
-                        limitBar = program.MyProperty.GetInt("Limit", item.Name, limitDefault);
+                        limitBar = program.Config.GetInt("Limit", item.Name, limitDefault);
 
                         if (lastAmount.ContainsKey(entry.Key))
                         {
@@ -240,14 +243,14 @@ namespace IngameScript
                         Path = item.Icon,
                         Width = width,
                         Height = height,
-                        Color = program.MyProperty.GetColor("color", item.Name, item.Data, colorDefault),
-                        Thresholds = program.MyProperty.ItemThresholds,
+                        Color = program.Config.GetColor("color", item.Name, item.Data, colorDefault),
+                        Thresholds = program.Config.ItemThresholds,
                         ColorSoftening = .6f
                     };
                     style.Scale(scale);
 
                     var p = drawing.Position + new Vector2((cellSpacing + deltaWidth) * (count / limit), (cellSpacing + deltaHeight) * (count - (count / limit) * limit));
-                    drawing.DrawGaugeIcon(p, item.Name, item.Amount, limitBar, style, itemGauge, variance);
+                    drawing.DrawGaugeIcon(p, item.Name, item.Amount, limitBar, style, itemGauge, itemSymbol, variance);
 
                     count++;
                 }
@@ -264,11 +267,11 @@ namespace IngameScript
             int limit;
             if (gauge && gaugeHorizontal)
             {
-                limit = (int)Math.Floor((drawing.Viewport.Height - (gaugeHeight + topPadding) * scale) / (itemSize + cellSpacing));
+                limit = (int)Math.Floor((drawing.Height - (gaugeHeight + topPadding) * scale) / (itemSize + cellSpacing));
             }
             else
             {
-                limit = (int)Math.Floor((drawing.Viewport.Height - topPadding * scale) / (itemSize + cellSpacing));
+                limit = (int)Math.Floor((drawing.Height - topPadding * scale) / (itemSize + cellSpacing));
             }
             return Math.Max(limit, 1);
         }

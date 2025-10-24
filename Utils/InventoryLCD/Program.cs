@@ -8,23 +8,25 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        const string Version = "1.2";
+        const string Version = "1.3";
         const UpdateType CommandUpdate = UpdateType.Trigger | UpdateType.Terminal;
 
         readonly MyCommandLine commandLine = new MyCommandLine();
         readonly Dictionary<long, DisplayLcd> displayLcds = new Dictionary<long, DisplayLcd>();
         readonly BlockSystem<Block> blocks = new BlockSystem<Block>();
+        readonly BlockSystem<IMyTextPanel> lcds = new BlockSystem<IMyTextPanel>();
+        readonly BlockSystem<IMyCockpit> cockpits = new BlockSystem<IMyCockpit>();
+        readonly IMyTextSurface pbScreen;
 
-        internal KProperty MyProperty { get; private set; }
-        internal IMyTextSurface DrawingSurface { get; }
+        internal Config Config { get; }
 
         public Program()
         {
-            MyProperty = new KProperty(this);
-            MyProperty.Load();
+            Config = new Config(this);
+            Config.Load();
 
-            DrawingSurface = Me.GetSurface(0);
-            DrawingSurface.ContentType = ContentType.TEXT_AND_IMAGE;
+            pbScreen = Me.GetSurface(0);
+            pbScreen.ContentType = ContentType.TEXT_AND_IMAGE;
 
             Search();
 
@@ -33,7 +35,7 @@ namespace IngameScript
 
         public void Save()
         {
-            MyProperty.Save();
+            Config.Save();
         }
 
         public void Main(string argument, UpdateType updateType)
@@ -45,7 +47,7 @@ namespace IngameScript
 
         void RunCommand(string argument)
         {
-            MyProperty.Load();
+            Config.Load();
 
             if (argument == null) return;
 
@@ -55,7 +57,7 @@ namespace IngameScript
             switch (command)
             {
                 case "default":
-                    MyProperty.Reset();
+                    Config.Reset();
                     break;
                 default:
                     Search();
@@ -70,9 +72,9 @@ namespace IngameScript
         }
         void Display()
         {
-            DrawingSurface.WriteText($"*** LCDInventory {Version} ***\n", false);
-            DrawingSurface.WriteText($"------------------------------\n", true);
-            DrawingSurface.WriteText($"LCD list size:{blocks.List.Count}\n", true);
+            pbScreen.WriteText($"*** Inventory {Version} ***\n", false);
+            pbScreen.WriteText($"---------------------------\n", true);
+            pbScreen.WriteText($"Managed LCDs:{blocks.List.Count}\n", true);
         }
         void RunLcd()
         {
@@ -92,16 +94,10 @@ namespace IngameScript
         }
         DisplayLcd GetDisplayLcd(IMyTerminalBlock block)
         {
-            DisplayLcd displayLcd;
-            if (displayLcds.ContainsKey(block.EntityId))
-            {
-                displayLcd = displayLcds[block.EntityId];
-            }
-            else
-            {
-                displayLcd = new DisplayLcd(this, block);
-                displayLcds.Add(block.EntityId, displayLcd);
-            }
+            if (displayLcds.ContainsKey(block.EntityId)) return displayLcds[block.EntityId];
+
+            var displayLcd = new DisplayLcd(this, block);
+            displayLcds.Add(block.EntityId, displayLcd);
             return displayLcd;
         }
 
@@ -109,15 +105,15 @@ namespace IngameScript
         {
             Echo($"Version {Version}");
 
-            blocks.Clear();
+            blocks.List.Clear();
 
-            var lcds = BlockSystem<IMyTextPanel>.SearchByFilter(this, MyProperty.TextPanelFilter);
+            BlockSystem<IMyTextPanel>.SearchByFilter(this, lcds, Config.TextPanelFilter);
             if (!lcds.IsEmpty)
             {
                 blocks.List.AddRange(lcds.List.Select(bl => new Block(bl)));
             }
 
-            var cockpits = BlockSystem<IMyCockpit>.SearchByFilter(this, MyProperty.CockpitFilter);
+            BlockSystem<IMyCockpit>.SearchByFilter(this, cockpits, Config.CockpitFilter);
             if (!cockpits.IsEmpty)
             {
                 blocks.List.AddRange(cockpits.List.Select(bl => new Block(bl)));

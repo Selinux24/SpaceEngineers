@@ -12,13 +12,13 @@ namespace IngameScript
     {
         readonly Program program;
         readonly Dictionary<string, List<IMyThrust>> forces = new Dictionary<string, List<IMyThrust>>();
+        readonly BlockSystem<IMyThrust> thrusts = new BlockSystem<IMyThrust>();
+        readonly BlockSystem<IMyCockpit> cockpit = new BlockSystem<IMyCockpit>();
 
         int panel = 0;
         bool enable = false;
         double scale = 1d;
         bool oneLine = false;
-        BlockSystem<IMyThrust> thrusts = null;
-        BlockSystem<IMyCockpit> cockpit = null;
 
         public DisplayShip(Program program)
         {
@@ -32,8 +32,8 @@ namespace IngameScript
             scale = MyIni.Get("Ship", "scale").ToDouble(1d);
             oneLine = MyIni.Get("Ship", "one_line").ToBoolean(false);
 
-            cockpit = BlockSystem<IMyCockpit>.SearchBlocks(program);
-            thrusts = BlockSystem<IMyThrust>.SearchBlocks(program);
+            BlockSystem<IMyCockpit>.SearchBlocks(program, cockpit);
+            BlockSystem<IMyThrust>.SearchBlocks(program, thrusts);
         }
         public void Save(MyIni MyIni)
         {

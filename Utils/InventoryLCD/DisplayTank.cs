@@ -11,6 +11,7 @@ namespace IngameScript
     {
         readonly Program program;
         readonly List<string> types = new List<string>();
+        readonly BlockSystem<IMyGasTank> tanks = new BlockSystem<IMyGasTank>();
 
         int panel = 0;
         bool enable = false;
@@ -68,13 +69,13 @@ namespace IngameScript
                 Padding = new StylePadding(0),
                 Round = false,
                 RotationOrScale = scale,
-                Thresholds = program.MyProperty.TankThresholds
+                Thresholds = program.Config.TankThresholds
             };
 
             var deltaPosition = new Vector2(0, 45) * scale;
             foreach (string type in types)
             {
-                var tanks = BlockSystem<IMyGasTank>.SearchBlocks(program, block => string.IsNullOrEmpty(block.BlockDefinition.SubtypeName) ? block.BlockDefinition.TypeIdString.Contains(type) : block.BlockDefinition.SubtypeName.Contains(type));
+                BlockSystem<IMyGasTank>.SearchBlocks(program, tanks, block => string.IsNullOrEmpty(block.BlockDefinition.SubtypeName) ? block.BlockDefinition.TypeIdString.Contains(type) : block.BlockDefinition.SubtypeName.Contains(type));
                 if (tanks.List.Count == 0) continue;
 
                 float volumes = 0f;
@@ -93,11 +94,11 @@ namespace IngameScript
                 string data;
                 if (type.Equals("Hydrogen"))
                 {
-                    data = $"H2: {Math.Round(volumes, 2):0,000.00}M³/{Math.Round(capacity, 2):0,000.00}M³";
+                    data = $"H2: {Math.Round(volumes, 2):#,000.00}M³/{Math.Round(capacity, 2):#,000.00}M³";
                 }
                 else if (type.Equals("Oxygen"))
                 {
-                    data = $"O2: {Math.Round(volumes, 2):0,000.00}M³/{Math.Round(capacity, 2):0,000.00}M³";
+                    data = $"O2: {Math.Round(volumes, 2):#,000.00}M³/{Math.Round(capacity, 2):#,000.00}M³";
                 }
                 else
                 {
@@ -111,7 +112,7 @@ namespace IngameScript
                     Position = surface.Position,
                     Data = data,
                     RotationOrScale = 0.75f * scale,
-                    FontId = surface.Font,
+                    FontId = SurfaceDrawing.Font,
                     Alignment = TextAlignment.LEFT
                 });
 

@@ -16,8 +16,8 @@ namespace IngameScript
         readonly Program program;
         readonly MyDefinitionId powerDefinitionId = new MyDefinitionId(typeof(MyObjectBuilder_GasProperties), "Electricity");
         readonly Dictionary<string, Power> outputs = new Dictionary<string, Power>();
-        BlockSystem<IMyTerminalBlock> producers;
-        BlockSystem<IMyTerminalBlock> consummers;
+        readonly BlockSystem<IMyTerminalBlock> producers = new BlockSystem<IMyTerminalBlock>();
+        readonly BlockSystem<IMyTerminalBlock> consummers = new BlockSystem<IMyTerminalBlock>();
         Power batteriesStore;
         float currentInput = 0f;
         float maxInput = 0f;
@@ -43,8 +43,8 @@ namespace IngameScript
             showBatteries = ini.Get("Power", "show_batteries").ToBoolean(true);
             showInput = ini.Get("Power", "show_input").ToBoolean(true);
 
-            producers = BlockSystem<IMyTerminalBlock>.SearchBlocks(program, block => block.Components.Has<MyResourceSourceComponent>());
-            consummers = BlockSystem<IMyTerminalBlock>.SearchBlocks(program, block => block.Components.Has<MyResourceSinkComponent>());
+            BlockSystem<IMyTerminalBlock>.SearchBlocks(program, producers, block => block.Components.Has<MyResourceSourceComponent>());
+            BlockSystem<IMyTerminalBlock>.SearchBlocks(program, consummers, block => block.Components.Has<MyResourceSinkComponent>());
         }
         public void Save(MyIni ini)
         {
@@ -81,7 +81,7 @@ namespace IngameScript
                 Padding = new StylePadding(0),
                 Round = false,
                 RotationOrScale = scale,
-                Thresholds = program.MyProperty.PowerThresholds
+                Thresholds = program.Config.PowerThresholds
             };
 
             surface.DrawGauge(surface.Position, outputs["all"].Current, outputs["all"].Max, style);
@@ -116,7 +116,7 @@ namespace IngameScript
                     Position = surface.Position,
                     Data = data,
                     RotationOrScale = 0.75f * scale,
-                    FontId = surface.Font,
+                    FontId = SurfaceDrawing.Font,
                     Alignment = TextAlignment.LEFT
                 });
 
@@ -135,7 +135,7 @@ namespace IngameScript
                     Position = surface.Position,
                     Data = $"Battery Store (n={batteriesStore.Count})\n Store: {Math.Round(batteriesStore.Current, 2)}MW / {Math.Round(batteriesStore.Max, 2)}MW",
                     RotationOrScale = 0.75f * scale,
-                    FontId = surface.Font,
+                    FontId = SurfaceDrawing.Font,
                     Alignment = TextAlignment.LEFT
                 });
                 surface.Position += deltaPosition;
@@ -152,7 +152,7 @@ namespace IngameScript
                     Position = surface.Position,
                     Data = $"Power In: {Math.Round(currentInput, 2)}MW / {Math.Round(maxInput, 2)}MW",
                     RotationOrScale = 0.75f * scale,
-                    FontId = surface.Font,
+                    FontId = SurfaceDrawing.Font,
                     Alignment = TextAlignment.LEFT
                 });
                 surface.Position += deltaPosition;

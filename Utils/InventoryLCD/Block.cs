@@ -1,5 +1,4 @@
 ﻿using Sandbox.ModAPI.Ingame;
-using System;
 using VRage.Game.ModAPI.Ingame.Utilities;
 
 namespace IngameScript

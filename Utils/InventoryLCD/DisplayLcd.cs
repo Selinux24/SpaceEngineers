@@ -41,8 +41,6 @@ namespace IngameScript
 
             if (!Block.CustomData.Trim().Equals("prepare")) return;
 
-            program.DrawingSurface.WriteText($"Prepare:{Block.CustomName}\n", true);
-
             DisplayInventory.Save(ini);
             DisplayDrill.Save(ini);
             DisplayMachine.Save(ini);

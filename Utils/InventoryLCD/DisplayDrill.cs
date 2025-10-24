@@ -11,6 +11,7 @@ namespace IngameScript
     {
         readonly Program program;
         readonly DisplayLcd displayLcd;
+        readonly BlockSystem<IMyShipDrill> drillInventories = new BlockSystem<IMyShipDrill>();
 
         int panel = 0;
         bool enable = false;
@@ -23,7 +24,6 @@ namespace IngameScript
         float drillsSize = 50f;
         float drillsPaddingX = 0f;
         float drillsPaddingY = 0f;
-        BlockSystem<IMyShipDrill> drillInventories;
 
         public DisplayDrill(Program program, DisplayLcd displayLcd)
         {
@@ -46,7 +46,7 @@ namespace IngameScript
             drillsPaddingY = MyIni.Get("Drills", "padding_y").ToSingle(0f);
 
             var blockFilter = BlockFilter<IMyShipDrill>.Create(displayLcd.Block, filter);
-            drillInventories = BlockSystem<IMyShipDrill>.SearchByFilter(program, blockFilter);
+            BlockSystem<IMyShipDrill>.SearchByFilter(program, drillInventories, blockFilter);
         }
         public void Save(MyIni MyIni)
         {
@@ -85,7 +85,7 @@ namespace IngameScript
                 Round = false,
                 RotationOrScale = 0.5f,
                 Percent = drillsSize > 49,
-                Thresholds = program.MyProperty.ChestThresholds
+                Thresholds = program.Config.ChestThresholds
             };
 
             if (drillsInfo)
@@ -98,7 +98,7 @@ namespace IngameScript
                     Color = Color.DimGray,
                     Position = surface.Position + new Vector2(0, 0),
                     RotationOrScale = 0.5f,
-                    FontId = surface.Font,
+                    FontId = SurfaceDrawing.Font,
                     Alignment = TextAlignment.LEFT
 
                 });

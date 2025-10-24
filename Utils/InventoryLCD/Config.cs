@@ -5,7 +5,7 @@ using VRageMath;
 
 namespace IngameScript
 {
-    internal class KProperty
+    class Config
     {
         readonly Program program;
         readonly MyIni ini = new MyIni();
@@ -15,14 +15,14 @@ namespace IngameScript
         string lastCustomData;
 
         public string LCDFilter { get; private set; } = "*";
-        public GaugeThresholds ItemThresholds { get; set; }
-        public GaugeThresholds ChestThresholds { get; set; }
-        public GaugeThresholds TankThresholds { get; set; }
-        public GaugeThresholds PowerThresholds { get; set; }
+        public GaugeThresholds ItemThresholds { get; private set; }
+        public GaugeThresholds ChestThresholds { get; private set; }
+        public GaugeThresholds TankThresholds { get; private set; }
+        public GaugeThresholds PowerThresholds { get; private set; }
         public BlockFilter<IMyTextPanel> TextPanelFilter { get; private set; }
         public BlockFilter<IMyCockpit> CockpitFilter { get; private set; }
 
-        public KProperty(Program program)
+        public Config(Program program)
         {
             this.program = program;
             lastCustomData = null;
@@ -54,13 +54,12 @@ namespace IngameScript
 
             lastCustomData = program.Me.CustomData;
         }
-
         void LoadThresholds()
         {
-            ItemThresholds = LoadThresholds("ItemThresholds", true);
-            ChestThresholds = LoadThresholds("ChestThresholds", false);
-            TankThresholds = LoadThresholds("TankThresholds", false);
-            PowerThresholds = LoadThresholds("PowerThresholds", false);
+            ItemThresholds = LoadThresholds("ItemThresholds");
+            ChestThresholds = LoadThresholds("ChestThresholds");
+            TankThresholds = LoadThresholds("TankThresholds");
+            PowerThresholds = LoadThresholds("PowerThresholds");
 
             if (ItemThresholds == null)
             {
@@ -94,7 +93,7 @@ namespace IngameScript
                 PowerThresholds.Thresholds.Add(new GaugeThreshold(1f, new Color(0, 0, 180, 128)));
             }
         }
-        GaugeThresholds LoadThresholds(string section, bool overflowDefault)
+        GaugeThresholds LoadThresholds(string section)
         {
             if (!ini.ContainsSection(section)) return null;
 
@@ -103,15 +102,12 @@ namespace IngameScript
             var index = 1;
             while (found)
             {
-                var thresholdName = $"threshold_{index}";
-                var threshold = ini.Get(section, thresholdName);
-                if (threshold.IsEmpty == false)
+                var thrName = $"threshold_{index}";
+                var thr = ini.Get(section, thrName);
+                if (thr.IsEmpty == false)
                 {
-                    var value = threshold.ToString();
-                    var values = value.Split(':');
-                    var gaugeThreshold = new GaugeThreshold();
-                    gaugeThreshold.Value = float.Parse(values[0]);
-                    gaugeThreshold.Color = ParseColor(values[1]);
+                    var v = thr.ToString().Split(':');
+                    var gaugeThreshold = new GaugeThreshold(float.Parse(v[0]), ParseColor(v[1]));
                     thresholds.Thresholds.Add(gaugeThreshold);
                 }
                 else
@@ -122,6 +118,13 @@ namespace IngameScript
             }
 
             return null;
+        }
+        static Color ParseColor(string colorValue)
+        {
+            if (string.IsNullOrEmpty(colorValue)) return Color.Gray;
+
+            string[] colorSplit = colorValue.Split(',');
+            return new Color(int.Parse(colorSplit[0]), int.Parse(colorSplit[1]), int.Parse(colorSplit[2]), int.Parse(colorSplit[3]));
         }
 
         public string Get(string section, string key, string defaultValue = "")
@@ -146,14 +149,6 @@ namespace IngameScript
                 color = new Color(int.Parse(colorSplit[0]), int.Parse(colorSplit[1]), int.Parse(colorSplit[2]), int.Parse(colorSplit[3]));
             }
             return color;
-        }
-
-        static Color ParseColor(string colorValue)
-        {
-            if (string.IsNullOrEmpty(colorValue)) return Color.Gray;
-
-            string[] colorSplit = colorValue.Split(',');
-            return new Color(int.Parse(colorSplit[0]), int.Parse(colorSplit[1]), int.Parse(colorSplit[2]), int.Parse(colorSplit[3]));
         }
 
         public void Save(bool prepare = false)

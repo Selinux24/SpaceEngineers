@@ -18,9 +18,7 @@ namespace IngameScript
         readonly int stringLen = 20;
         readonly Dictionary<long, Dictionary<string, double>> lastMachineAmount = new Dictionary<long, Dictionary<string, double>>();
         readonly List<string> types = new List<string>();
-        readonly BlockComparer blockComparer = new BlockComparer();
-        Style style = new Style();
-        int columns = 0;
+        readonly BlockSystem<IMyProductionBlock> producers = new BlockSystem<IMyProductionBlock>();
         readonly List<Item> items = new List<Item>();
 
         int panel = 0;
@@ -29,8 +27,9 @@ namespace IngameScript
         string filter = "*";
         bool machineRefinery = false;
         bool machineAssembler = false;
-        BlockSystem<IMyProductionBlock> producers;
         int rows = 6;
+        int columns = 0;
+        Style style = new Style();
 
         public DisplayMachine(Program program, DisplayLcd displayLcd)
         {
@@ -71,8 +70,8 @@ namespace IngameScript
             style.Scale(scale);
 
             var blockFilter = BlockFilter<IMyProductionBlock>.Create(displayLcd.Block, filter);
-            producers = BlockSystem<IMyProductionBlock>.SearchByFilter(program, blockFilter);
-            producers.List.Sort(blockComparer);
+            BlockSystem<IMyProductionBlock>.SearchByFilter(program, producers, blockFilter);
+            producers.List.Sort((a,b) => a.CustomName.CompareTo(b.CustomName));
         }
         public void Save(MyIni ini)
         {
@@ -121,9 +120,9 @@ namespace IngameScript
             float formWidth = style.Width - (5 * scale);
             float formHeight = style.Height - (5 * scale);
 
-            string colorDefault = program.MyProperty.Get("color", "default");
+            string colorDefault = program.Config.Get("color", "default");
 
-            surface.AddForm(position, SpriteForm.SquareSimple, formWidth, formHeight, new Color(5, 5, 5, 125));
+            surface.DrawForm(position, SpriteForm.SquareSimple, formWidth, formHeight, new Color(5, 5, 5, 125));
 
             float x = 0f;
             foreach (var item in items)
@@ -134,7 +133,7 @@ namespace IngameScript
                     Type = SpriteType.TEXTURE,
                     Data = item.Icon,
                     Size = new Vector2(sizeIcon, sizeIcon),
-                    Color = program.MyProperty.GetColor("color", item.Name, item.Data, colorDefault),
+                    Color = program.Config.GetColor("color", item.Name, item.Data, colorDefault),
                     Position = position + new Vector2(x, sizeIcon / 2 + cellSpacing),
                 });
 
@@ -142,7 +141,7 @@ namespace IngameScript
                 {
                     // symbol
                     var positionSymbol = position + new Vector2(x, 20);
-                    surface.AddForm(positionSymbol, SpriteForm.SquareSimple, sizeIcon, 15f, new Color(10, 10, 10, 200));
+                    surface.DrawForm(positionSymbol, SpriteForm.SquareSimple, sizeIcon, 15f, new Color(10, 10, 10, 200));
                     surface.AddSprite(new MySprite()
                     {
                         Type = SpriteType.TEXT,
@@ -150,7 +149,7 @@ namespace IngameScript
                         Color = colorText,
                         Position = positionSymbol,
                         RotationOrScale = RotationOrScale,
-                        FontId = surface.Font,
+                        FontId = SurfaceDrawing.Font,
                         Alignment = TextAlignment.LEFT
                     });
                 }
@@ -160,7 +159,7 @@ namespace IngameScript
                 Color maskColor = new Color(0, 0, 20, 200);
                 if (item.Variance == 2) maskColor = new Color(20, 0, 0, 200);
                 if (item.Variance == 3) maskColor = new Color(0, 20, 0, 200);
-                surface.AddForm(positionQuantity, SpriteForm.SquareSimple, sizeIcon, 15f, maskColor);
+                surface.DrawForm(positionQuantity, SpriteForm.SquareSimple, sizeIcon, 15f, maskColor);
                 surface.AddSprite(new MySprite()
                 {
                     Type = SpriteType.TEXT,
@@ -168,7 +167,7 @@ namespace IngameScript
                     Color = colorText,
                     Position = positionQuantity,
                     RotationOrScale = RotationOrScale,
-                    FontId = surface.Font,
+                    FontId = SurfaceDrawing.Font,
                     Alignment = TextAlignment.LEFT
                 });
                 x += style.Height;
@@ -182,7 +181,7 @@ namespace IngameScript
                 Color = colorTitle,
                 Position = position + new Vector2(style.Margin.X, 0),
                 RotationOrScale = 0.6f * scale,
-                FontId = surface.Font,
+                FontId = SurfaceDrawing.Font,
                 Alignment = TextAlignment.LEFT
             });
         }

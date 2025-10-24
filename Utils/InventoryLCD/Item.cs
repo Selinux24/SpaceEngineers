@@ -14,13 +14,7 @@ namespace IngameScript
         public string Type { get; set; }
         public double Amount { get; set; }
         public int Variance { get; set; }
-        public string Icon
-        {
-            get
-            {
-                return $"{Type}/{Data}";
-            }
-        }
+        public string Icon => $"{Type}/{Data}";
 
         public int CompareTo(Item other)
         {
