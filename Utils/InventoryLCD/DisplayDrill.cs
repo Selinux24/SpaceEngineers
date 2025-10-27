@@ -11,20 +11,19 @@ namespace IngameScript
     {
         readonly Program program;
         readonly DisplayLcd displayLcd;
+        readonly BlockSystem<IMyShipDrill> drillInventories = new BlockSystem<IMyShipDrill>();
 
         int panel = 0;
         bool enable = false;
-        bool search = true;
         string filter = "*";
-        string drills_orientation = "y";
-        bool drills_rotate = false;
-        bool drills_flip_x = false;
-        bool drills_flip_y = false;
-        bool drills_info = false;
-        float drills_size = 50f;
-        float drills_padding_x = 0f;
-        float drills_padding_y = 0f;
-        BlockSystem<IMyShipDrill> drill_inventories;
+        string drillsOrientation = "y";
+        bool drillsRotate = false;
+        bool drillsFlipX = false;
+        bool drillsFlipY = false;
+        bool drillsInfo = false;
+        float drillsSize = 50f;
+        float drillsPaddingX = 0f;
+        float drillsPaddingY = 0f;
 
         public DisplayDrill(Program program, DisplayLcd displayLcd)
         {
@@ -37,56 +36,45 @@ namespace IngameScript
             panel = MyIni.Get("Drills", "panel").ToInt32(0);
             enable = MyIni.Get("Drills", "on").ToBoolean(false);
             filter = MyIni.Get("Drills", "filter").ToString("GM:Drills");
-            drills_orientation = MyIni.Get("Drills", "orientation").ToString("y");
-            drills_rotate = MyIni.Get("Drills", "rotate").ToBoolean(false);
-            drills_flip_x = MyIni.Get("Drills", "flip_x").ToBoolean(false);
-            drills_flip_y = MyIni.Get("Drills", "flip_y").ToBoolean(false);
-            drills_size = MyIni.Get("Drills", "size").ToSingle(50f);
-            drills_info = MyIni.Get("Drills", "info").ToBoolean(false);
-            drills_padding_x = MyIni.Get("Drills", "padding_x").ToSingle(0f);
-            drills_padding_y = MyIni.Get("Drills", "padding_y").ToSingle(0f);
+            drillsOrientation = MyIni.Get("Drills", "orientation").ToString("y");
+            drillsRotate = MyIni.Get("Drills", "rotate").ToBoolean(false);
+            drillsFlipX = MyIni.Get("Drills", "flip_x").ToBoolean(false);
+            drillsFlipY = MyIni.Get("Drills", "flip_y").ToBoolean(false);
+            drillsSize = MyIni.Get("Drills", "size").ToSingle(50f);
+            drillsInfo = MyIni.Get("Drills", "info").ToBoolean(false);
+            drillsPaddingX = MyIni.Get("Drills", "padding_x").ToSingle(0f);
+            drillsPaddingY = MyIni.Get("Drills", "padding_y").ToSingle(0f);
+
+            var blockFilter = BlockFilter<IMyShipDrill>.Create(displayLcd.Block, filter);
+            BlockSystem<IMyShipDrill>.SearchByFilter(program, drillInventories, blockFilter);
         }
         public void Save(MyIni MyIni)
         {
             MyIni.Set("Drills", "panel", panel);
             MyIni.Set("Drills", "on", enable);
             MyIni.Set("Drills", "filter", filter);
-            MyIni.Set("Drills", "orientation", drills_orientation);
-            MyIni.Set("Drills", "rotate", drills_rotate);
-            MyIni.Set("Drills", "flip_x", drills_flip_x);
-            MyIni.Set("Drills", "flip_y", drills_flip_y);
-            MyIni.Set("Drills", "size", drills_size);
-            MyIni.Set("Drills", "info", drills_info);
-            MyIni.Set("Drills", "padding_x", drills_padding_x);
-            MyIni.Set("Drills", "padding_y", drills_padding_y);
+            MyIni.Set("Drills", "orientation", drillsOrientation);
+            MyIni.Set("Drills", "rotate", drillsRotate);
+            MyIni.Set("Drills", "flip_x", drillsFlipX);
+            MyIni.Set("Drills", "flip_y", drillsFlipY);
+            MyIni.Set("Drills", "size", drillsSize);
+            MyIni.Set("Drills", "info", drillsInfo);
+            MyIni.Set("Drills", "padding_x", drillsPaddingX);
+            MyIni.Set("Drills", "padding_y", drillsPaddingY);
         }
-        private void Search()
-        {
-            var block_filter = BlockFilter<IMyShipDrill>.Create(displayLcd.Block, filter);
-            drill_inventories = BlockSystem<IMyShipDrill>.SearchByFilter(program, block_filter);
 
-            search = false;
-        }
         public void Draw(Drawing drawing)
         {
             if (!enable) return;
+
             var surface = drawing.GetSurfaceDrawing(panel);
             surface.Initialize();
+
             Draw(surface);
         }
-        public void Draw(SurfaceDrawing surface)
+        void Draw(SurfaceDrawing surface)
         {
-            if (!enable) return;
-            if (search) Search();
-
-            float width = drills_size;
-            float padding = 4f;
-            float x_min = 0f;
-            float x_max = 0f;
-            float y_min = 0f;
-            float y_max = 0f;
-            bool first = true;
-            var padding_screen = new Vector2(drills_padding_x, drills_padding_y);
+            float width = drillsSize;
             var style = new StyleGauge()
             {
                 Orientation = SpriteOrientation.Horizontal,
@@ -96,82 +84,89 @@ namespace IngameScript
                 Padding = new StylePadding(0),
                 Round = false,
                 RotationOrScale = 0.5f,
-                Percent = drills_size > 49,
-                Thresholds = program.MyProperty.ChestThresholds
+                Percent = drillsSize > 49,
+                Thresholds = program.Config.ChestThresholds
             };
 
-            if (drills_info)
+            if (drillsInfo)
             {
                 surface.AddSprite(new MySprite()
                 {
                     Type = SpriteType.TEXT,
-                    Data = $"Drill Number:{drill_inventories.List.Count} ({filter})",
+                    Data = $"Drill Number:{drillInventories.List.Count} ({filter})",
                     Size = new Vector2(width, width),
                     Color = Color.DimGray,
                     Position = surface.Position + new Vector2(0, 0),
                     RotationOrScale = 0.5f,
-                    FontId = surface.Font,
+                    FontId = SurfaceDrawing.Font,
                     Alignment = TextAlignment.LEFT
 
                 });
                 surface.Position += new Vector2(0, 20);
             }
 
-            drill_inventories.ForEach(delegate (IMyShipDrill drill)
+            float xMin = 0f;
+            float xMax = 0f;
+            float yMin = 0f;
+            float yMax = 0f;
+            bool first = true;
+            drillInventories.ForEach(drill =>
             {
-                switch (drills_orientation)
+                switch (drillsOrientation)
                 {
                     case "x":
-                        if (first || drill.Position.Y < x_min) x_min = drill.Position.Y;
-                        if (first || drill.Position.Y > x_max) x_max = drill.Position.Y;
-                        if (first || drill.Position.Z < y_min) y_min = drill.Position.Z;
-                        if (first || drill.Position.Z > y_max) y_max = drill.Position.Z;
+                        if (first || drill.Position.Y < xMin) xMin = drill.Position.Y;
+                        if (first || drill.Position.Y > xMax) xMax = drill.Position.Y;
+                        if (first || drill.Position.Z < yMin) yMin = drill.Position.Z;
+                        if (first || drill.Position.Z > yMax) yMax = drill.Position.Z;
                         break;
                     case "y":
-                        if (first || drill.Position.X < x_min) x_min = drill.Position.X;
-                        if (first || drill.Position.X > x_max) x_max = drill.Position.X;
-                        if (first || drill.Position.Z < y_min) y_min = drill.Position.Z;
-                        if (first || drill.Position.Z > y_max) y_max = drill.Position.Z;
+                        if (first || drill.Position.X < xMin) xMin = drill.Position.X;
+                        if (first || drill.Position.X > xMax) xMax = drill.Position.X;
+                        if (first || drill.Position.Z < yMin) yMin = drill.Position.Z;
+                        if (first || drill.Position.Z > yMax) yMax = drill.Position.Z;
                         break;
                     default:
-                        if (first || drill.Position.X < x_min) x_min = drill.Position.X;
-                        if (first || drill.Position.X > x_max) x_max = drill.Position.X;
-                        if (first || drill.Position.Y < y_min) y_min = drill.Position.Y;
-                        if (first || drill.Position.Y > y_max) y_max = drill.Position.Y;
+                        if (first || drill.Position.X < xMin) xMin = drill.Position.X;
+                        if (first || drill.Position.X > xMax) xMax = drill.Position.X;
+                        if (first || drill.Position.Y < yMin) yMin = drill.Position.Y;
+                        if (first || drill.Position.Y > yMax) yMax = drill.Position.Y;
                         break;
                 }
                 first = false;
             });
 
-            drill_inventories.ForEach(delegate (IMyShipDrill drill)
+            float padding = 4f;
+            var paddingScreen = new Vector2(drillsPaddingX, drillsPaddingY);
+            drillInventories.ForEach(drill =>
             {
-                IMyInventory block_inventory = drill.GetInventory(0);
+                var block_inventory = drill.GetInventory(0);
                 long volume = block_inventory.CurrentVolume.RawValue;
                 long maxVolume = block_inventory.MaxVolume.RawValue;
                 float x = 0;
                 float y = 0;
-                switch (drills_orientation)
+                switch (drillsOrientation)
                 {
                     case "x":
-                        x = Math.Abs(drill.Position.Y - x_min);
-                        y = Math.Abs(drill.Position.Z - y_min);
+                        x = Math.Abs(drill.Position.Y - xMin);
+                        y = Math.Abs(drill.Position.Z - yMin);
                         break;
                     case "y":
-                        x = Math.Abs(drill.Position.X - x_min);
-                        y = Math.Abs(drill.Position.Z - y_min);
+                        x = Math.Abs(drill.Position.X - xMin);
+                        y = Math.Abs(drill.Position.Z - yMin);
                         break;
                     default:
-                        x = Math.Abs(drill.Position.X - x_min);
-                        y = Math.Abs(drill.Position.Y - y_min);
+                        x = Math.Abs(drill.Position.X - xMin);
+                        y = Math.Abs(drill.Position.Y - yMin);
                         break;
                 }
-                if (drills_flip_x) x = Math.Abs(x_max - x_min) - x;
-                if (drills_flip_y) y = Math.Abs(y_max - y_min) - y;
-                var position_relative = drills_rotate ?
+                if (drillsFlipX) x = Math.Abs(xMax - xMin) - x;
+                if (drillsFlipY) y = Math.Abs(yMax - yMin) - y;
+                var position_relative = drillsRotate ?
                     new Vector2(y * (width + padding), x * (width + padding)) :
                     new Vector2(x * (width + padding), y * (width + padding));
 
-                surface.DrawGauge(surface.Position + position_relative + padding_screen, volume, maxVolume, style);
+                surface.DrawGauge(surface.Position + position_relative + paddingScreen, volume, maxVolume, style);
             });
         }
     }

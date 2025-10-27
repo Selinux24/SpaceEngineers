@@ -4,13 +4,9 @@ namespace IngameScript
 {
     public class GaugeThreshold
     {
-        public float Value { get; set; }
-        public Color Color { get; set; }
+        public float Value { get; }
+        public Color Color { get; }
 
-        public GaugeThreshold()
-        {
-
-        }
         public GaugeThreshold(float value, Color color)
         {
             Value = value;

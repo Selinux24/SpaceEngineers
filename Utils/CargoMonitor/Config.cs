@@ -7,7 +7,7 @@ namespace IngameScript
     class Config
     {
         readonly StringBuilder errors = new StringBuilder();
-      
+
         public readonly string CargoContainerName;
         public readonly double CargoUpperLimit;
         public readonly double CargoLowerLimit;
@@ -97,8 +97,8 @@ namespace IngameScript
                 "CargoUpperLimit=0.9\n" +
                 "CargoLowerLimit=0.1\n" +
                 "\n" +
-                "TimerOn=Timer Cargo Above\n" +
-                "TimerOff=Timer Cargo Below\n" +
+                "TimerOn=Timer Cargo Below\n" +
+                "TimerOff=Timer Cargo Above\n" +
                 "\n" +
                 "UseAllGrids=false";
         }

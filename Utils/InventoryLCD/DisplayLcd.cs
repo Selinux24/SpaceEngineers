@@ -30,32 +30,30 @@ namespace IngameScript
             cleanup = 0;
         }
 
-        public void Load(MyIni MyIni)
+        public void Load(MyIni ini)
         {
-            DisplayInventory.Load(MyIni);
-            DisplayDrill.Load(MyIni);
-            DisplayMachine.Load(MyIni);
-            DisplayPower.Load(MyIni);
-            DisplayShip.Load(MyIni);
-            DisplayTank.Load(MyIni);
+            DisplayInventory.Load(ini);
+            DisplayDrill.Load(ini);
+            DisplayMachine.Load(ini);
+            DisplayPower.Load(ini);
+            DisplayShip.Load(ini);
+            DisplayTank.Load(ini);
 
-            if (!Block.CustomData.Trim().Equals("prepare") && !program.ForceUpdate)
-            {
-                return;
-            }
+            if (!Block.CustomData.Trim().Equals("prepare")) return;
 
-            program.DrawingSurface.WriteText($"Prepare:{Block.CustomName}\n", true);
-            DisplayInventory.Save(MyIni);
-            DisplayDrill.Save(MyIni);
-            DisplayMachine.Save(MyIni);
-            DisplayPower.Save(MyIni);
-            DisplayShip.Save(MyIni);
-            DisplayTank.Save(MyIni);
-            Block.CustomData = MyIni.ToString();
+            DisplayInventory.Save(ini);
+            DisplayDrill.Save(ini);
+            DisplayMachine.Save(ini);
+            DisplayPower.Save(ini);
+            DisplayShip.Save(ini);
+            DisplayTank.Save(ini);
+
+            Block.CustomData = ini.ToString();
         }
         public void Draw()
         {
             cleanup++;
+
             var drawing = new Drawing(Block);
             try
             {
@@ -76,7 +74,7 @@ namespace IngameScript
             }
             finally
             {
-                drawing?.Dispose();
+                drawing.Dispose();
             }
         }
     }

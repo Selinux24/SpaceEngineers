@@ -16,7 +16,7 @@ namespace IngameScript
 
         public static BlockFilter<T> Create(IMyTerminalBlock parent, string filter)
         {
-            BlockFilter<T> blockFilter = new BlockFilter<T>
+            var blockFilter = new BlockFilter<T>
             {
                 Value = filter,
                 CubeGrid = parent.CubeGrid
@@ -37,9 +37,10 @@ namespace IngameScript
         }
         public Func<T, bool> BlockVisitor()
         {
-            return delegate (T block)
+            return (block) =>
             {
-                IMyTerminalBlock tBlock = (IMyTerminalBlock)block;
+                var tBlock = (IMyTerminalBlock)block;
+
                 bool state = true;
                 if (Filter != null && !ByGroup)
                 {
@@ -48,12 +49,13 @@ namespace IngameScript
                 }
                 if (!MultiGrid) { if (tBlock.CubeGrid != CubeGrid) state = false; }
                 if (HasInventory) { if (!tBlock.HasInventory) state = false; }
+
                 return state;
             };
         }
         public Func<IMyBlockGroup, bool> GroupVisitor()
         {
-            return delegate (IMyBlockGroup group)
+            return (group) =>
             {
                 bool state = true;
                 if (Filter != null && ByGroup)

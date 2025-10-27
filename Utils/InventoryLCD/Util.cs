@@ -166,14 +166,15 @@ namespace IngameScript
             return string.Format("{0:0.0}{1}", (value / pow), suffix);
 
         }
-        static public string GetType(MyInventoryItem inventory_item)
+      
+        static public string GetType(MyInventoryItem item)
         {
-            return inventory_item.Type.TypeId;
+            return item.Type.TypeId;
         }
-        static public string GetName(MyInventoryItem inventory_item)
+        static public string GetName(MyInventoryItem item)
         {
-            string type = inventory_item.Type.TypeId;
-            string subType = inventory_item.Type.SubtypeId;
+            string type = item.Type.TypeId;
+            string subType = item.Type.SubtypeId;
 
             string name = TranslateName(type, subType);
             if (string.IsNullOrWhiteSpace(name)) name = subType;
@@ -193,27 +194,30 @@ namespace IngameScript
             if (type.Equals("MyObjectBuilder_OxygenContainerObject")) return Bottles.Find(i => i.Item2.Equals(key)).Item1;
             return subType;
         }
-        static public string GetType(MyProductionItem production_item)
+    
+        static public string GetType(MyProductionItem item)
         {
-            MyDefinitionId itemDefinitionId;
-            string subtypeName = production_item.BlueprintId.SubtypeName;
-            string typeName = GetName(production_item);
-            if ((subtypeName.EndsWith("Rifle") || subtypeName.StartsWith("Welder") || subtypeName.StartsWith("HandDrill") || subtypeName.StartsWith("AngleGrinder"))
-                && MyDefinitionId.TryParse("MyObjectBuilder_PhysicalGunObject", typeName, out itemDefinitionId)) return itemDefinitionId.TypeId.ToString();
-            if (subtypeName.StartsWith("Hydrogen") && MyDefinitionId.TryParse("MyObjectBuilder_GasContainerObject", typeName, out itemDefinitionId)) return itemDefinitionId.TypeId.ToString();
-            if (subtypeName.StartsWith("Oxygen") && MyDefinitionId.TryParse("MyObjectBuilder_OxygenContainerObject", typeName, out itemDefinitionId)) return itemDefinitionId.TypeId.ToString();
-            if ((subtypeName.Contains("Missile") || subtypeName.EndsWith("Magazine")) && MyDefinitionId.TryParse("MyObjectBuilder_AmmoMagazine", typeName, out itemDefinitionId)) return itemDefinitionId.TypeId.ToString();
-            if (MyDefinitionId.TryParse("MyObjectBuilder_Component", typeName, out itemDefinitionId)) return itemDefinitionId.TypeId.ToString();
-            return production_item.BlueprintId.TypeId.ToString();
+            MyDefinitionId id;
+            string stName = item.BlueprintId.SubtypeName;
+            string tName = GetName(item);
+
+            if ((stName.EndsWith("Rifle") || stName.StartsWith("Welder") || stName.StartsWith("HandDrill") || stName.StartsWith("AngleGrinder"))
+                && MyDefinitionId.TryParse("MyObjectBuilder_PhysicalGunObject", tName, out id)) return id.TypeId.ToString();
+            if (stName.StartsWith("Hydrogen") && MyDefinitionId.TryParse("MyObjectBuilder_GasContainerObject", tName, out id)) return id.TypeId.ToString();
+            if (stName.StartsWith("Oxygen") && MyDefinitionId.TryParse("MyObjectBuilder_OxygenContainerObject", tName, out id)) return id.TypeId.ToString();
+            if ((stName.Contains("Missile") || stName.EndsWith("Magazine")) && MyDefinitionId.TryParse("MyObjectBuilder_AmmoMagazine", tName, out id)) return id.TypeId.ToString();
+            if (MyDefinitionId.TryParse("MyObjectBuilder_Component", tName, out id)) return id.TypeId.ToString();
+            return item.BlueprintId.TypeId.ToString();
         }
-        static public string GetName(MyProductionItem production_item)
+        static public string GetName(MyProductionItem item)
         {
-            string subtypeName = production_item.BlueprintId.SubtypeName;
-            if (subtypeName.EndsWith("Component")) subtypeName = subtypeName.Replace("Component", "");
-            if (subtypeName.EndsWith("Rifle") || subtypeName.StartsWith("Welder") || subtypeName.StartsWith("HandDrill") || subtypeName.StartsWith("AngleGrinder")) subtypeName = subtypeName + "Item";
-            if (subtypeName.EndsWith("Magazine")) subtypeName = subtypeName.Replace("Magazine", "");
-            return subtypeName;
+            string stName = item.BlueprintId.SubtypeName;
+            if (stName.EndsWith("Component")) stName = stName.Replace("Component", "");
+            if (stName.EndsWith("Rifle") || stName.StartsWith("Welder") || stName.StartsWith("HandDrill") || stName.StartsWith("AngleGrinder")) stName = stName + "Item";
+            if (stName.EndsWith("Magazine")) stName = stName.Replace("Magazine", "");
+            return stName;
         }
+       
         static public string CutString(string value, int limit)
         {
             if (value.Length > limit)

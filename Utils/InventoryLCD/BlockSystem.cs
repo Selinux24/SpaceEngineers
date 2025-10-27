@@ -40,52 +40,42 @@ namespace IngameScript
             List = list;
         }
 
-        public static BlockSystem<T> SearchBlocks(Program program, Func<T, bool> collect = null, string info = null)
+        public static void SearchBlocks(Program program, BlockSystem<T> blockSystem, Func<T, bool> collect = null, string info = null)
         {
-            List<T> list = new List<T>();
-            try
-            {
-                program.GridTerminalSystem.GetBlocksOfType(list, collect);
-            }
-            catch { }
-            if (info == null) program.Echo(string.Format("List <{0}> count: {1}", typeof(T).Name, list.Count));
-            else program.Echo(string.Format("List <{0}> count: {1}", info, list.Count));
+            blockSystem.List.Clear();
 
-            return new BlockSystem<T>(list);
+            program.GridTerminalSystem.GetBlocksOfType(blockSystem.List, collect);
         }
-        public static BlockSystem<T> SearchByFilter(Program program, BlockFilter<T> filter)
+        public static void SearchByFilter(Program program, BlockSystem<T> blockSystem, BlockFilter<T> filter)
         {
-            List<T> list = new List<T>();
-            try
+            blockSystem.List.Clear();
+
+            if (filter.ByGroup)
             {
-                if (filter.ByGroup)
+                var groups = new List<IMyBlockGroup>();
+                program.GridTerminalSystem.GetBlockGroups(groups, filter.GroupVisitor());
+
+                var groupList = new List<T>();
+                groups.ForEach(group =>
                 {
-                    List<IMyBlockGroup> groups = new List<IMyBlockGroup>();
-                    program.GridTerminalSystem.GetBlockGroups(groups, filter.GroupVisitor());
-                    List<T> group_list = new List<T>();
-                    groups.ForEach(delegate (IMyBlockGroup group)
-                    {
-                        group_list.Clear();
-                        group.GetBlocksOfType(list, filter.BlockVisitor());
-                        list.AddList(group_list);
-                    });
-                }
-                else
-                {
-                    program.GridTerminalSystem.GetBlocksOfType(list, filter.BlockVisitor());
-                }
+                    groupList.Clear();
+                    group.GetBlocksOfType(blockSystem.List, filter.BlockVisitor());
+                    blockSystem.List.AddList(groupList);
+                });
             }
-            catch { }
-            program.Echo(string.Format("List<{0}>({1}):{2}", typeof(T).Name, filter.Value, list.Count));
-            return new BlockSystem<T>(list);
+            else
+            {
+                program.GridTerminalSystem.GetBlocksOfType(blockSystem.List, filter.BlockVisitor());
+            }
+
+            program.Echo($"{typeof(T).Name}({filter.Value}):{blockSystem.List.Count}");
         }
 
         public void ForEach(Action<T> action)
         {
-            if (!IsEmpty)
-            {
-                List.ForEach(action);
-            }
+            if (IsEmpty) return;
+
+            List.ForEach(action);
         }
     }
 }

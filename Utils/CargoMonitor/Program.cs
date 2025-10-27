@@ -8,6 +8,7 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
+        const string Version = "1.0";
         const char AttributeSep = '=';
 
         readonly Config config;
@@ -73,6 +74,8 @@ namespace IngameScript
 
         public void Main(string argument)
         {
+            Echo($"Cargo Monitor v{Version}");
+
             ParseTerminalMessage(argument);
 
             var capacity = CalculateCargoPercentage();
@@ -95,11 +98,12 @@ namespace IngameScript
                 }
             }
 
-            lastCapacity = capacity;
-
+            bool growing = capacity > lastCapacity;
             Echo($"Containers found: {cargoContainers.Count}");
-            Echo($"Current capacity: {capacity:P1}");
-            Echo($"Last capacity: {lastCapacity:P1}");
+            Echo($"Limits {config.CargoLowerLimit:P2} / {config.CargoUpperLimit:P2}");
+            Echo($"Capacity from {lastCapacity:P2} to {capacity:P2}. {(growing ? "Increasing" : "Decreasing")}");
+
+            lastCapacity = capacity;
         }
         void ParseTerminalMessage(string argument)
         {
