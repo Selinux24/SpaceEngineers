@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using VRage;
+using VRage.Game;
 using VRage.Game.GUI.TextPanel;
 using VRage.Game.ModAPI.Ingame;
 using VRageMath;
@@ -39,8 +41,9 @@ namespace Sandbox.ModAPI.Ingame
     }
     public struct MyShipMass
     {
-        public double PhysicalMass { get; set; }
-        public double TotalMass { get; set; }
+        public float BaseMass;
+        public float PhysicalMass;
+        public float TotalMass;
     }
     public struct MyIGCMessage
     {
@@ -59,6 +62,12 @@ namespace Sandbox.ModAPI.Ingame
         {
             return (TData)Data;
         }
+    }
+    public struct MyProductionItem
+    {
+        public MyFixedPoint Amount;
+        public MyDefinitionId BlueprintId;
+        public uint ItemId;
     }
 
     public enum MyDetectedEntityType
@@ -135,8 +144,9 @@ namespace Sandbox.ModAPI.Ingame
     }
     public interface IMyGridTerminalSystem
     {
+        void GetBlockGroups(List<IMyBlockGroup> blockGroups, Func<IMyBlockGroup, bool> collect = null);
         void GetBlocksOfType<T>(List<IMyTerminalBlock> blocks, Func<IMyTerminalBlock, bool> collect = null);
-        void GetBlocksOfType<T>(List<T> blocks, Func<T, bool> collect = null) where T : class, IMyTerminalBlock;
+        void GetBlocksOfType<T>(List<T> blocks, Func<T, bool> collect = null);
         IMyTerminalBlock GetBlockWithName(string name);
     }
 
@@ -168,15 +178,25 @@ namespace Sandbox.ModAPI.Ingame
     }
     public interface IMyPowerProducer : IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity
     {
+        float CurrentOutput { get; }
+        float MaxOutput { get; }
     }
     public interface IMyTextSurface
     {
         ContentType ContentType { get; set; }
         bool WriteText(string value, bool append = false);
         bool WriteText(StringBuilder value, bool append = false);
+        Color ScriptBackgroundColor { get; set; }
+        Vector2 TextureSize { get; }
+        string Script { get; set; }
+        Vector2 SurfaceSize { get; }
+
+        void GetSprites(List<string> sprites);
+        MySpriteDrawFrame DrawFrame();
     }
     public interface IMyTextSurfaceProvider
     {
+        int SurfaceCount { get; }
         IMyTextSurface GetSurface(int index);
     }
 
@@ -206,8 +226,10 @@ namespace Sandbox.ModAPI.Ingame
     }
     public interface IMyThrust : IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity
     {
+        float MaxThrust { get; }
         float ThrustOverridePercentage { get; set; }
         float MaxEffectiveThrust { get; set; }
+        Vector3I GridThrustDirection { get; }
     }
     public interface IMyGyro : IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity
     {
@@ -277,5 +299,28 @@ namespace Sandbox.ModAPI.Ingame
     public interface IMyMechanicalConnectionBlock : IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity
     {
         IMyCubeGrid TopGrid { get; }
+    }
+    public interface IMyBlockGroup
+    {
+        string Name { get; }
+
+        void GetBlocksOfType<T>(List<T> list, Func<T, bool> func) where T : class;
+    }
+    public interface IMyProductionBlock : IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity
+    {
+        IMyInventory InputInventory { get; }
+        void GetQueue(List<MyProductionItem> items);
+    }
+    public interface IMyAssembler : IMyProductionBlock, IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity
+    {
+
+    }
+    public interface IMyShipToolBase : IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity
+    {
+
+    }
+    public interface IMyShipDrill : IMyShipToolBase, IMyFunctionalBlock, IMyTerminalBlock, IMyCubeBlock, IMyEntity
+    {
+
     }
 }

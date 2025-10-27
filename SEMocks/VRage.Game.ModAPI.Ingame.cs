@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using Sandbox.Game.EntityComponents;
+using System.Collections.Generic;
 using VRage.ObjectBuilder;
 using VRageMath;
 
@@ -11,20 +12,27 @@ namespace VRage.Game.ModAPI.Ingame
         Vector3D GetPosition();
         MatrixD WorldMatrix { get; }
         IMyInventory GetInventory();
+        IMyInventory GetInventory(int index);
+        bool HasInventory { get; }
+        int InventoryCount { get; }
+        IMyEntityComponentContainer Components { get; }
     }
     public interface IMyCubeGrid : IMyEntity
     {
         string CustomName { get; set; }
+        bool IsStatic { get; }
     }
     public interface IMyCubeBlock : IMyEntity
     {
         SerializableDefinitionId BlockDefinition { get; }
         IMyCubeGrid CubeGrid { get; set; }
+        Vector3I Position { get; }
     }
 
     public struct MyItemType
     {
         public string SubtypeId { get; set; }
+        public string TypeId { get; set; }
     }
     public interface IMyInventory
     {
@@ -41,5 +49,11 @@ namespace VRage.Game.ModAPI.Ingame
     {
         public MyItemType Type { get; set; }
         public MyFixedPoint Amount { get; set; }
+    }
+
+    public interface IMyEntityComponentContainer
+    {
+        bool Has<T>();
+        void TryGet<T>(out T resourceSink);
     }
 }

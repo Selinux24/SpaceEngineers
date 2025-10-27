@@ -8,6 +8,7 @@ namespace VRage
             return new MyFixedPoint();
         }
 
+        public long RawValue;
         public int ToIntSafe()
         {
             return 0;
@@ -123,6 +124,18 @@ namespace VRage
         public static MyFixedPoint operator *(int a, MyFixedPoint b)
         {
             return new MyFixedPoint();
+        }
+    }
+
+    public struct MyTuple<T1, T2>
+    {
+        public T1 Item1;
+        public T2 Item2;
+
+        public MyTuple(T1 item1, T2 item2)
+        {
+            Item1 = item1;
+            Item2 = item2;
         }
     }
 }
