@@ -7,10 +7,10 @@ namespace IngameScript
 {
     class SurfaceDrawing
     {
-        public const string Font = "Monospace";
+        public const string Font = EnumFont.Monospace;
 
         readonly IMyTextSurface surface;
-        
+
         MySpriteDrawFrame frame;
         bool initialized = false;
         RectangleF viewport;
@@ -59,7 +59,7 @@ namespace IngameScript
         {
             frame.Add(sprite);
         }
-       
+
         public void DrawForm(Vector2 position, SpriteForm form, float width, float height, Color color)
         {
             AddSprite(new MySprite()

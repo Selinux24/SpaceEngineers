@@ -10,17 +10,6 @@ namespace IngameScript
         readonly List<SurfaceDrawing> surfaces = new List<SurfaceDrawing>();
 
         public Dictionary<string, string> Symbol { get; private set; } = new Dictionary<string, string>();
-        public IMyTerminalBlock TerminalBlock
-        {
-            get
-            {
-                if (provider != null)
-                {
-                    return provider as IMyTerminalBlock;
-                }
-                return surface as IMyTerminalBlock;
-            }
-        }
 
         public Drawing(IMyTerminalBlock block)
         {

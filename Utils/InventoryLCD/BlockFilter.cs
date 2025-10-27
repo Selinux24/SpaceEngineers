@@ -14,12 +14,13 @@ namespace IngameScript
         public bool MultiGrid { get; set; } = false;
         public bool HasInventory { get; set; } = false;
 
-        public static BlockFilter<T> Create(IMyTerminalBlock parent, string filter)
+        public static BlockFilter<T> Create(IMyTerminalBlock parent, string filter, bool hasInventory = false)
         {
             var blockFilter = new BlockFilter<T>
             {
                 Value = filter,
-                CubeGrid = parent.CubeGrid
+                CubeGrid = parent.CubeGrid,
+                HasInventory = hasInventory
             };
             if (filter.Contains(":"))
             {

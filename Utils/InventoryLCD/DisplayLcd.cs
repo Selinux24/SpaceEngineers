@@ -5,7 +5,8 @@ namespace IngameScript
 {
     class DisplayLcd
     {
-        readonly Program program;
+        const int CleanupTicks = 100;
+
         readonly DisplayInventory DisplayInventory;
         readonly DisplayDrill DisplayDrill;
         readonly DisplayMachine DisplayMachine;
@@ -18,7 +19,6 @@ namespace IngameScript
 
         public DisplayLcd(Program program, IMyTerminalBlock block)
         {
-            this.program = program;
             Block = block;
 
             DisplayInventory = new DisplayInventory(program, this);
@@ -57,7 +57,7 @@ namespace IngameScript
             var drawing = new Drawing(Block);
             try
             {
-                if (cleanup < 100)
+                if (cleanup < CleanupTicks)
                 {
                     DisplayInventory.Draw(drawing);
                     DisplayDrill.Draw(drawing);

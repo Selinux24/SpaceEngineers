@@ -1,7 +1,6 @@
 ﻿using Sandbox.ModAPI.Ingame;
 using System;
 using VRage.Game.GUI.TextPanel;
-using VRage.Game.ModAPI.Ingame;
 using VRage.Game.ModAPI.Ingame.Utilities;
 using VRageMath;
 
@@ -12,6 +11,10 @@ namespace IngameScript
         readonly Program program;
         readonly DisplayLcd displayLcd;
         readonly BlockSystem<IMyShipDrill> drillInventories = new BlockSystem<IMyShipDrill>();
+        float xMin = 0f;
+        float xMax = 0f;
+        float yMin = 0f;
+        float yMax = 0f;
 
         int panel = 0;
         bool enable = false;
@@ -75,6 +78,7 @@ namespace IngameScript
         void Draw(SurfaceDrawing surface)
         {
             float width = drillsSize;
+
             var style = new StyleGauge()
             {
                 Orientation = SpriteOrientation.Horizontal,
@@ -100,15 +104,31 @@ namespace IngameScript
                     RotationOrScale = 0.5f,
                     FontId = SurfaceDrawing.Font,
                     Alignment = TextAlignment.LEFT
-
                 });
                 surface.Position += new Vector2(0, 20);
             }
 
-            float xMin = 0f;
-            float xMax = 0f;
-            float yMin = 0f;
-            float yMax = 0f;
+            DrillLimits();
+
+            float padding = width + 4f;
+            var paddingScreen = new Vector2(drillsPaddingX, drillsPaddingY);
+            drillInventories.ForEach(drill =>
+            {
+                var blockInventory = drill.GetInventory(0);
+                long volume = blockInventory.CurrentVolume.RawValue;
+                long maxVolume = blockInventory.MaxVolume.RawValue;
+
+                var positionRelative = GetRelativePosition(drill, padding);
+
+                surface.DrawGauge(surface.Position + positionRelative + paddingScreen, volume, maxVolume, style);
+            });
+        }
+        void DrillLimits()
+        {
+            xMin = 0f;
+            xMax = 0f;
+            yMin = 0f;
+            yMax = 0f;
             bool first = true;
             drillInventories.ForEach(drill =>
             {
@@ -135,39 +155,31 @@ namespace IngameScript
                 }
                 first = false;
             });
-
-            float padding = 4f;
-            var paddingScreen = new Vector2(drillsPaddingX, drillsPaddingY);
-            drillInventories.ForEach(drill =>
+        }
+        Vector2 GetRelativePosition(IMyShipDrill drill, float padding)
+        {
+            float x;
+            float y;
+            switch (drillsOrientation)
             {
-                var block_inventory = drill.GetInventory(0);
-                long volume = block_inventory.CurrentVolume.RawValue;
-                long maxVolume = block_inventory.MaxVolume.RawValue;
-                float x = 0;
-                float y = 0;
-                switch (drillsOrientation)
-                {
-                    case "x":
-                        x = Math.Abs(drill.Position.Y - xMin);
-                        y = Math.Abs(drill.Position.Z - yMin);
-                        break;
-                    case "y":
-                        x = Math.Abs(drill.Position.X - xMin);
-                        y = Math.Abs(drill.Position.Z - yMin);
-                        break;
-                    default:
-                        x = Math.Abs(drill.Position.X - xMin);
-                        y = Math.Abs(drill.Position.Y - yMin);
-                        break;
-                }
-                if (drillsFlipX) x = Math.Abs(xMax - xMin) - x;
-                if (drillsFlipY) y = Math.Abs(yMax - yMin) - y;
-                var position_relative = drillsRotate ?
-                    new Vector2(y * (width + padding), x * (width + padding)) :
-                    new Vector2(x * (width + padding), y * (width + padding));
+                case "x":
+                    x = Math.Abs(drill.Position.Y - xMin);
+                    y = Math.Abs(drill.Position.Z - yMin);
+                    break;
+                case "y":
+                    x = Math.Abs(drill.Position.X - xMin);
+                    y = Math.Abs(drill.Position.Z - yMin);
+                    break;
+                default:
+                    x = Math.Abs(drill.Position.X - xMin);
+                    y = Math.Abs(drill.Position.Y - yMin);
+                    break;
+            }
+            if (drillsFlipX) x = Math.Abs(xMax - xMin) - x;
+            if (drillsFlipY) y = Math.Abs(yMax - yMin) - y;
 
-                surface.DrawGauge(surface.Position + position_relative + paddingScreen, volume, maxVolume, style);
-            });
+            var p = drillsRotate ? new Vector2(y, x) : new Vector2(x, y);
+            return p * padding;
         }
     }
 }

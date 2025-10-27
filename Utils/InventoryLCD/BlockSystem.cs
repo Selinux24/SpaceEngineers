@@ -1,33 +1,20 @@
 ﻿using Sandbox.ModAPI.Ingame;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace IngameScript
 {
     class BlockSystem<T> where T : class
     {
         public List<T> List { get; private set; } = new List<T>();
-        public bool IsEmpty
-        {
-            get
-            {
-                if (List != null && List.Count > 0)
-                {
-                    return false;
-                }
-                return true;
-            }
-        }
+        public bool IsEmpty => List.Count == 0;
         public T First
         {
             get
             {
-                if (!IsEmpty)
-                {
-                    return List.First();
-                }
-                return null;
+                if (IsEmpty) return null;
+
+                return List[0];
             }
         }
 
@@ -35,12 +22,8 @@ namespace IngameScript
         {
 
         }
-        public BlockSystem(List<T> list)
-        {
-            List = list;
-        }
 
-        public static void SearchBlocks(Program program, BlockSystem<T> blockSystem, Func<T, bool> collect = null, string info = null)
+        public static void SearchBlocks(Program program, BlockSystem<T> blockSystem, Func<T, bool> collect = null)
         {
             blockSystem.List.Clear();
 
@@ -55,11 +38,10 @@ namespace IngameScript
                 var groups = new List<IMyBlockGroup>();
                 program.GridTerminalSystem.GetBlockGroups(groups, filter.GroupVisitor());
 
-                var groupList = new List<T>();
                 groups.ForEach(group =>
                 {
-                    groupList.Clear();
-                    group.GetBlocksOfType(blockSystem.List, filter.BlockVisitor());
+                    var groupList = new List<T>();
+                    group.GetBlocksOfType(groupList, filter.BlockVisitor());
                     blockSystem.List.AddList(groupList);
                 });
             }

@@ -19,6 +19,8 @@ namespace IngameScript
         readonly Dictionary<string, double> lastAmount = new Dictionary<string, double>();
         readonly List<string> types = new List<string>();
         readonly BlockSystem<IMyTerminalBlock> inventories = new BlockSystem<IMyTerminalBlock>();
+        long volumes = 0;
+        long maxVolumes = 0;
 
         int panel = 0;
         bool enable = false;
@@ -99,8 +101,7 @@ namespace IngameScript
 
         void Search()
         {
-            var blockFilter = BlockFilter<IMyTerminalBlock>.Create(displayLcd.Block, filter);
-            blockFilter.HasInventory = true;
+            var blockFilter = BlockFilter<IMyTerminalBlock>.Create(displayLcd.Block, filter, true);
             BlockSystem<IMyTerminalBlock>.SearchByFilter(program, inventories, blockFilter);
         }
 
@@ -113,6 +114,7 @@ namespace IngameScript
 
             if (gauge)
             {
+                InventoryVolumes();
                 DisplayGauge(surface);
             }
             else
@@ -124,12 +126,12 @@ namespace IngameScript
             if (types.Count == 0) return;
 
             InventoryCount();
-            DisplayByType(surface, types);
+            DisplayByType(surface);
         }
-        void DisplayGauge(SurfaceDrawing drawing)
+        void InventoryVolumes()
         {
-            long volumes = 0;
-            long maxVolumes = 1;
+            volumes = 0;
+            maxVolumes = 1;
             inventories.ForEach(block =>
             {
                 for (int i = 0; i < block.InventoryCount; i++)
@@ -139,23 +141,6 @@ namespace IngameScript
                     maxVolumes += inv.MaxVolume.RawValue;
                 }
             });
-
-            var style = new StyleGauge()
-            {
-                Orientation = gaugeHorizontal ? SpriteOrientation.Horizontal : SpriteOrientation.Vertical,
-                Fullscreen = gaugeFullscreen,
-                Width = gaugeWidth,
-                Height = gaugeHeight,
-                Thresholds = program.Config.ChestThresholds,
-                ColorSoftening = .6f
-            };
-
-            style.Scale(scale);
-            drawing.Position = drawing.DrawGauge(drawing.Position, volumes, maxVolumes, style);
-            if (gaugeHorizontal)
-            {
-                drawing.Position += new Vector2(0, 2 * cellSpacing * scale);
-            }
         }
         void InventoryCount()
         {
@@ -201,7 +186,27 @@ namespace IngameScript
                 }
             }
         }
-        void DisplayByType(SurfaceDrawing drawing, List<string> types)
+
+        void DisplayGauge(SurfaceDrawing drawing)
+        {
+            var style = new StyleGauge()
+            {
+                Orientation = gaugeHorizontal ? SpriteOrientation.Horizontal : SpriteOrientation.Vertical,
+                Fullscreen = gaugeFullscreen,
+                Width = gaugeWidth,
+                Height = gaugeHeight,
+                Thresholds = program.Config.ChestThresholds,
+                ColorSoftening = .6f
+            };
+
+            style.Scale(scale);
+            drawing.Position = drawing.DrawGauge(drawing.Position, volumes, maxVolumes, style);
+            if (gaugeHorizontal)
+            {
+                drawing.Position += new Vector2(0, 2 * cellSpacing * scale);
+            }
+        }
+        void DisplayByType(SurfaceDrawing drawing)
         {
             int count = 0;
             float height = itemSize;

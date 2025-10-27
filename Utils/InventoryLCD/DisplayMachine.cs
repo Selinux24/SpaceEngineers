@@ -1,5 +1,4 @@
 ﻿using Sandbox.ModAPI.Ingame;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using VRage.Game.GUI.TextPanel;
@@ -129,7 +128,7 @@ namespace IngameScript
             float x = 0f;
             foreach (var item in items)
             {
-                // icon
+                // Icon
                 surface.AddSprite(new MySprite()
                 {
                     Type = SpriteType.TEXTURE,
@@ -141,7 +140,7 @@ namespace IngameScript
 
                 if (surface.Parent.Symbol.Keys.Contains(item.Data))
                 {
-                    // symbol
+                    // Symbol
                     var positionSymbol = position + new Vector2(x, 20);
                     surface.AddSprite(new MySprite()
                     {
@@ -155,7 +154,7 @@ namespace IngameScript
                     });
                 }
 
-                // quantity
+                // Quantity
                 var positionQuantity = position + new Vector2(x, sizeIcon - 12);
                 Color maskColor = new Color(0, 0, 20, 200);
                 if (item.Variance == 2) maskColor = new Color(20, 0, 0, 200);
@@ -188,8 +187,6 @@ namespace IngameScript
         }
         void TraversalMachine(IMyProductionBlock block)
         {
-            items.Clear();
-
             Dictionary<string, double> lastAmount;
             if (lastMachineAmount.ContainsKey(block.EntityId))
             {
@@ -201,6 +198,7 @@ namespace IngameScript
                 lastMachineAmount.Add(block.EntityId, lastAmount);
             }
 
+            items.Clear();
             if (block is IMyAssembler)
             {
                 ProcessAssembler(block, lastAmount);
