@@ -2,32 +2,28 @@
 
 namespace IngameScript
 {
-    public class AutoDoor
+    class AutoDoor
     {
-        readonly double autoCloseTime = 0;
+        const string StrAutoDoor = "AutoDoor";
+        const string StrAutoCloseTime = "AutoCloseTime";
 
+        double autoCloseTime = 0;
         double doorOpenTime = 0;
         bool wasOpen = false;
 
-        public IMyDoor Door { get; private set; } = null;
+        public CBlock<IMyDoor> Door { get; private set; } = null;
 
-        public AutoDoor(IMyDoor door, double regularDoorCloseTime, double hangarDoorCloseTime)
+        public AutoDoor(IMyDoor door, double autoCloseTime)
         {
-            Door = door;
-
-            if (door is IMyAirtightHangarDoor)
-            {
-                autoCloseTime = hangarDoorCloseTime;
-            }
-            else
-            {
-                autoCloseTime = regularDoorCloseTime;
-            }
+            Door = new CBlock<IMyDoor>(door);
+            this.autoCloseTime = autoCloseTime;
         }
 
         public void AutoClose(double time)
         {
-            if (Door.OpenRatio == 0)
+            RefreshConfig();
+
+            if (Door.Block.OpenRatio == 0)
             {
                 doorOpenTime = 0;
                 wasOpen = false;
@@ -47,9 +43,20 @@ namespace IngameScript
 
             if (autoCloseTime <= doorOpenTime)
             {
-                Door.CloseDoor();
+                Door.Block.CloseDoor();
                 doorOpenTime = 0;
                 wasOpen = false;
+            }
+        }
+        void RefreshConfig()
+        {
+            if (!Door.ConfigChanged) return;
+            if (!Door.UpdateConfig()) return;
+
+            var value = Door.Config.Get(StrAutoDoor, StrAutoCloseTime);
+            if (!value.IsEmpty)
+            {
+                autoCloseTime = value.ToDouble();
             }
         }
     }

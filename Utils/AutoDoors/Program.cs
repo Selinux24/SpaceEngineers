@@ -43,7 +43,7 @@ namespace IngameScript
 
         readonly List<Airlock> airlockList = new List<Airlock>();
         readonly List<AutoDoor> autoDoors = new List<AutoDoor>();
-        readonly List<IMyDoor> autoDoorsCached = new List<IMyDoor>();
+        readonly List<CBlock<IMyDoor>> autoDoorsCached = new List<CBlock<IMyDoor>>();
 
         Program()
         {
@@ -79,7 +79,9 @@ namespace IngameScript
 
                     if (ShouldAddAutoDoor(door))
                     {
-                        autoDoors.Add(new AutoDoor(door, regularDoorOpenDuration, hangarDoorOpenDuration));
+                        double autoCloseTime = (door is IMyAirtightHangarDoor) ? hangarDoorOpenDuration : regularDoorOpenDuration;
+
+                        autoDoors.Add(new AutoDoor(door, autoCloseTime));
                     }
                 }
 

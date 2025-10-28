@@ -9,10 +9,10 @@ namespace IngameScript
     {
         const string soundBlockPlayingString = "%Playing sound...%";
 
-        readonly List<IMyDoor> airlockInteriorList = new List<IMyDoor>();
-        readonly List<IMyDoor> airlockExteriorList = new List<IMyDoor>();
-        readonly List<IMyLightingBlock> airlockLightList = new List<IMyLightingBlock>();
-        readonly List<IMySoundBlock> airlockSoundList = new List<IMySoundBlock>();
+        readonly List<CBlock<IMyDoor>> airlockInteriorList = new List<CBlock<IMyDoor>>();
+        readonly List<CBlock<IMyDoor>> airlockExteriorList = new List<CBlock<IMyDoor>>();
+        readonly List<CBlock<IMyLightingBlock>> airlockLightList = new List<CBlock<IMyLightingBlock>>();
+        readonly List<CBlock<IMySoundBlock>> airlockSoundList = new List<CBlock<IMySoundBlock>>();
         readonly Color alarmColor = new Color(255, 40, 40);
         readonly Color regularColor = new Color(80, 160, 255);
         readonly float alarmBlinkLength = 50f;
@@ -40,10 +40,10 @@ namespace IngameScript
             this.regularBlinkLength = regularBlinkLength;
             this.blinkInterval = blinkInterval;
 
-            GetBlocks(Name, airlockDoors, allLights, allSounds);
+            GetBlocks(airlockName, airlockDoors, allLights, allSounds);
             Info = $" Interior Doors: {airlockInteriorList.Count}\n Exterior Doors: {airlockExteriorList.Count}\n Lights: {airlockLightList.Count}\n Sound Blocks: {airlockSoundList.Count}";
         }
-        private void GetBlocks(string airlockName, List<IMyDoor> airlockDoors, List<IMyLightingBlock> allLights, List<IMySoundBlock> allSounds)
+        void GetBlocks(string airlockName, List<IMyDoor> airlockDoors, List<IMyLightingBlock> allLights, List<IMySoundBlock> allSounds)
         {
             //Sort through all doors
             airlockInteriorList.Clear();
@@ -58,11 +58,11 @@ namespace IngameScript
 
                 if (name.Contains(Program.AirlockInteriorTag))
                 {
-                    airlockInteriorList.Add(door);
+                    airlockInteriorList.Add(new CBlock<IMyDoor>(door));
                 }
                 else if (name.Contains(Program.AirlockExteriorTag))
                 {
-                    airlockExteriorList.Add(door);
+                    airlockExteriorList.Add(new CBlock<IMyDoor>(door));
                 }
             }
 
@@ -72,7 +72,7 @@ namespace IngameScript
             {
                 if (light.CustomName.Replace(" ", "").ToLower().Contains(airlockName))
                 {
-                    airlockLightList.Add(light);
+                    airlockLightList.Add(new CBlock<IMyLightingBlock>(light));
                 }
             }
 
@@ -82,7 +82,7 @@ namespace IngameScript
             {
                 if (sound.CustomName.Replace(" ", "").ToLower().Contains(airlockName))
                 {
-                    airlockSoundList.Add(sound);
+                    airlockSoundList.Add(new CBlock<IMySoundBlock>(sound));
                 }
             }
 
@@ -99,7 +99,7 @@ namespace IngameScript
             bool isInteriorClosed = true;
             foreach (var airlockInterior in airlockInteriorList)
             {
-                if (airlockInterior.OpenRatio > 0)
+                if (airlockInterior.Block.OpenRatio > 0)
                 {
                     Lock(airlockExteriorList);
                     isInteriorClosed = false;
@@ -112,7 +112,7 @@ namespace IngameScript
             bool isExteriorClosed = true;
             foreach (var airlockExterior in airlockExteriorList)
             {
-                if (airlockExterior.OpenRatio > 0)
+                if (airlockExterior.Block.OpenRatio > 0)
                 {
                     Lock(airlockInteriorList);
                     isExteriorClosed = false;
@@ -138,54 +138,50 @@ namespace IngameScript
             //If all Exterior doors closed     
             if (isExteriorClosed) Unlock(airlockInteriorList);
         }
-
-        private void Lock(List<IMyDoor> doorList)
+        void Lock(List<CBlock<IMyDoor>> doorList)
         {
             foreach (var lockDoor in doorList)
             {
                 //If door is open, then close
-                if (lockDoor.OpenRatio > 0)
+                if (lockDoor.Block.OpenRatio > 0)
                 {
-                    lockDoor.CloseDoor();
+                    lockDoor.Block.CloseDoor();
                 }
 
                 //If door is fully closed, then lock
-                if (lockDoor.OpenRatio == 0 && lockDoor.Enabled)
+                if (lockDoor.Block.OpenRatio == 0 && lockDoor.Block.Enabled)
                 {
-                    lockDoor.Enabled = false;
+                    lockDoor.Block.Enabled = false;
                 }
             }
         }
-
-        private void Unlock(List<IMyDoor> doorList)
+        void Unlock(List<CBlock<IMyDoor>> doorList)
         {
             foreach (var unlockDoor in doorList)
             {
-                unlockDoor.Enabled = true;
+                unlockDoor.Block.Enabled = true;
             }
         }
-
-        private void PlaySound(bool shouldPlay, List<IMySoundBlock> soundList)
+        void PlaySound(bool shouldPlay, List<CBlock<IMySoundBlock>> soundList)
         {
             foreach (var block in soundList)
             {
                 if (!shouldPlay)
                 {
-                    block.Stop();
-                    block.CustomData = block.CustomData.Replace(soundBlockPlayingString, "");
+                    block.Block.Stop();
+                    block.Block.CustomData = block.Block.CustomData.Replace(soundBlockPlayingString, "");
                     continue;
                 }
 
-                if (!block.CustomData.Contains(soundBlockPlayingString))
+                if (!block.Block.CustomData.Contains(soundBlockPlayingString))
                 {
-                    block.Play();
-                    block.LoopPeriod = 100f;
-                    block.CustomData += soundBlockPlayingString;
+                    block.Block.Play();
+                    block.Block.LoopPeriod = 100f;
+                    block.Block.CustomData += soundBlockPlayingString;
                 }
             }
         }
-
-        private void LightColorChanger(bool alarm, List<IMyLightingBlock> listLights)
+        void LightColorChanger(bool alarm, List<CBlock<IMyLightingBlock>> listLights)
         {
             //Applies our status colors to the airlock lights        
             Color lightColor;
@@ -203,9 +199,9 @@ namespace IngameScript
 
             foreach (var thisLight in listLights)
             {
-                thisLight.Color = lightColor;
-                thisLight.BlinkLength = lightBlinkLength;
-                thisLight.BlinkIntervalSeconds = blinkInterval;
+                thisLight.Block.Color = lightColor;
+                thisLight.Block.BlinkLength = lightBlinkLength;
+                thisLight.Block.BlinkIntervalSeconds = blinkInterval;
             }
         }
     }
