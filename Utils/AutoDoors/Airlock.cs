@@ -5,12 +5,12 @@ using VRageMath;
 
 namespace IngameScript
 {
-    public class Airlock
+    class Airlock
     {
         const string soundBlockPlayingString = "%Playing sound...%";
 
-        readonly List<CBlock<IMyDoor>> airlockInteriorList = new List<CBlock<IMyDoor>>();
-        readonly List<CBlock<IMyDoor>> airlockExteriorList = new List<CBlock<IMyDoor>>();
+        readonly List<AutoDoor> airlockInteriorList = new List<AutoDoor>();
+        readonly List<AutoDoor> airlockExteriorList = new List<AutoDoor>();
         readonly List<CBlock<IMyLightingBlock>> airlockLightList = new List<CBlock<IMyLightingBlock>>();
         readonly List<CBlock<IMySoundBlock>> airlockSoundList = new List<CBlock<IMySoundBlock>>();
         readonly Color alarmColor = new Color(255, 40, 40);
@@ -25,13 +25,15 @@ namespace IngameScript
         public Airlock(
             string airlockName,
             List<IMyDoor> airlockDoors,
+            double hangarDoorOpenDuration,
+            double regularDoorOpenDuration,
             List<IMyLightingBlock> allLights,
-            List<IMySoundBlock> allSounds,
             Color alarmColor,
             Color regularColor,
             float alarmBlinkLength,
             float regularBlinkLength,
-            float blinkInterval)
+            float blinkInterval,
+            List<IMySoundBlock> allSounds)
         {
             Name = airlockName;
             this.alarmColor = alarmColor;
@@ -40,10 +42,16 @@ namespace IngameScript
             this.regularBlinkLength = regularBlinkLength;
             this.blinkInterval = blinkInterval;
 
-            GetBlocks(airlockName, airlockDoors, allLights, allSounds);
+            GetBlocks(airlockName, airlockDoors, hangarDoorOpenDuration, regularDoorOpenDuration, allLights, allSounds);
             Info = $" Interior Doors: {airlockInteriorList.Count}\n Exterior Doors: {airlockExteriorList.Count}\n Lights: {airlockLightList.Count}\n Sound Blocks: {airlockSoundList.Count}";
         }
-        void GetBlocks(string airlockName, List<IMyDoor> airlockDoors, List<IMyLightingBlock> allLights, List<IMySoundBlock> allSounds)
+        void GetBlocks(
+            string airlockName,
+            List<IMyDoor> airlockDoors,
+            double hangarDoorOpenDuration,
+            double regularDoorOpenDuration,
+            List<IMyLightingBlock> allLights,
+            List<IMySoundBlock> allSounds)
         {
             //Sort through all doors
             airlockInteriorList.Clear();
@@ -56,13 +64,15 @@ namespace IngameScript
                     continue;
                 }
 
+                double autoCloseTime = (door is IMyAirtightHangarDoor) ? hangarDoorOpenDuration : regularDoorOpenDuration;
+
                 if (name.Contains(Program.AirlockInteriorTag))
                 {
-                    airlockInteriorList.Add(new CBlock<IMyDoor>(door));
+                    airlockInteriorList.Add(new AutoDoor(door, autoCloseTime));
                 }
                 else if (name.Contains(Program.AirlockExteriorTag))
                 {
-                    airlockExteriorList.Add(new CBlock<IMyDoor>(door));
+                    airlockExteriorList.Add(new AutoDoor(door, autoCloseTime));
                 }
             }
 
@@ -89,36 +99,23 @@ namespace IngameScript
             Info = $" Interior Doors: {airlockInteriorList.Count}\n Exterior Doors: {airlockExteriorList.Count}\n Lights: {airlockLightList.Count}\n Sound Blocks: {airlockSoundList.Count}";
         }
 
-        public void DoLogic()
+        public void Update(double time)
         {
             if (airlockInteriorList.Count == 0 || airlockExteriorList.Count == 0) return;
 
             //We assume the airlocks are closed until proven otherwise
 
             //Door Interior Check
-            bool isInteriorClosed = true;
-            foreach (var airlockInterior in airlockInteriorList)
-            {
-                if (airlockInterior.Block.OpenRatio > 0)
-                {
-                    Lock(airlockExteriorList);
-                    isInteriorClosed = false;
-                    break;
-                    //If any doors yield false, bool will persist until comparison
-                }
-            }
+            bool isInteriorClosed = UpdateDoor(airlockInteriorList, time);
 
             //Door Exterior Check
-            bool isExteriorClosed = true;
-            foreach (var airlockExterior in airlockExteriorList)
-            {
-                if (airlockExterior.Block.OpenRatio > 0)
-                {
-                    Lock(airlockInteriorList);
-                    isExteriorClosed = false;
-                    break;
-                }
-            }
+            bool isExteriorClosed = UpdateDoor(airlockExteriorList, time);
+
+            if (isInteriorClosed) Unlock(airlockExteriorList);
+            else Lock(airlockExteriorList);
+
+            if (isExteriorClosed) Unlock(airlockInteriorList);
+            else Lock(airlockInteriorList);
 
             //If all Interior & Exterior doors closed 
             if (isInteriorClosed && isExteriorClosed)
@@ -131,35 +128,36 @@ namespace IngameScript
                 LightColorChanger(true, airlockLightList);
                 PlaySound(true, airlockSoundList);
             }
-
-            //If all Interior doors closed 
-            if (isInteriorClosed) Unlock(airlockExteriorList);
-
-            //If all Exterior doors closed     
-            if (isExteriorClosed) Unlock(airlockInteriorList);
         }
-        void Lock(List<CBlock<IMyDoor>> doorList)
+        bool UpdateDoor(List<AutoDoor> doorList, double time)
+        {
+            bool allClosed = true;
+
+            foreach (var door in doorList)
+            {
+                door.Update(time);
+
+                if (door.IsOpen()) allClosed = false;
+            }
+
+            return allClosed;
+        }
+        void Lock(List<AutoDoor> doorList)
         {
             foreach (var lockDoor in doorList)
             {
-                //If door is open, then close
-                if (lockDoor.Block.OpenRatio > 0)
-                {
-                    lockDoor.Block.CloseDoor();
-                }
-
                 //If door is fully closed, then lock
-                if (lockDoor.Block.OpenRatio == 0 && lockDoor.Block.Enabled)
+                if (lockDoor.IsFulllyClosed() && lockDoor.IsEnabled())
                 {
-                    lockDoor.Block.Enabled = false;
+                    lockDoor.Disable();
                 }
             }
         }
-        void Unlock(List<CBlock<IMyDoor>> doorList)
+        void Unlock(List<AutoDoor> doorList)
         {
             foreach (var unlockDoor in doorList)
             {
-                unlockDoor.Block.Enabled = true;
+                unlockDoor.Enable();
             }
         }
         void PlaySound(bool shouldPlay, List<CBlock<IMySoundBlock>> soundList)

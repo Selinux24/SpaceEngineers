@@ -8,6 +8,7 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
+        const string Version = "2.0";
         internal const string AirlockDoorMask = "airlock";
         internal const string AirlockInteriorDoorMask = "airlock interior";
         internal const string AirlockLightMask = "airlock light";
@@ -43,7 +44,7 @@ namespace IngameScript
 
         readonly List<Airlock> airlockList = new List<Airlock>();
         readonly List<AutoDoor> autoDoors = new List<AutoDoor>();
-        readonly List<CBlock<IMyDoor>> autoDoorsCached = new List<CBlock<IMyDoor>>();
+        readonly List<AutoDoor> autoDoorsCached = new List<AutoDoor>();
 
         Program()
         {
@@ -134,14 +135,14 @@ namespace IngameScript
 
                 if (!dupe)
                 {
-                    airlockList.Add(new Airlock(v, airlockDoors, allLights, allSounds, alarmColor, regularColor, alarmBlinkLength, regularBlinkLength, blinkInterval));
+                    airlockList.Add(new Airlock(v, airlockDoors, hangarDoorOpenDuration, regularDoorOpenDuration, allLights, alarmColor, regularColor, alarmBlinkLength, regularBlinkLength, blinkInterval, allSounds));
                 }
             }
 
             autoDoorsCached.Clear();
             foreach (var autoDoor in autoDoors)
             {
-                autoDoorsCached.Add(autoDoor.Door);
+                autoDoorsCached.Add(autoDoor);
             }
 
             return true;
@@ -149,13 +150,15 @@ namespace IngameScript
 
         public void Main(string argument, UpdateType updateType)
         {
-            Echo("Auto Door and Airlock System\n");
+            Echo($"Auto Door and Airlock System v{Version}\n");
 
             if (Skip()) return;
 
             AutoDoors();
 
             Airlocks();
+
+            currentTime = 0;
 
             Echo($"Instructions: {Runtime.CurrentInstructionCount}/{Runtime.MaxInstructionCount}");
         }
@@ -191,10 +194,8 @@ namespace IngameScript
                     return;
                 }
 
-                door.AutoClose(currentTime);
+                door.Update(currentTime);
             }
-
-            currentTime = 0;
 
             Echo($"\n===Automatic Doors===\nManaged Doors: {autoDoors.Count}");
         }
@@ -215,7 +216,7 @@ namespace IngameScript
                     return;
                 }
 
-                airlock.DoLogic();
+                airlock.Update(currentTime);
                 Echo($"---------------------------------------------\nAirlock group '{airlock.Name}' found\n{airlock.Info}");
             }
         }

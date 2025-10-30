@@ -7,33 +7,56 @@ namespace IngameScript
         const string StrAutoDoor = "AutoDoor";
         const string StrAutoCloseTime = "AutoCloseTime";
 
+        readonly CBlock<IMyDoor> door;
+        bool firstUpdate = true;
         double autoCloseTime = 0;
         double doorOpenTime = 0;
-        bool wasOpen = false;
 
-        public CBlock<IMyDoor> Door { get; private set; } = null;
+        public bool WasOpen { get; private set; } = false;
 
         public AutoDoor(IMyDoor door, double autoCloseTime)
         {
-            Door = new CBlock<IMyDoor>(door);
+            this.door = new CBlock<IMyDoor>(door);
             this.autoCloseTime = autoCloseTime;
         }
 
-        public void AutoClose(double time)
+        public bool IsOpen()
+        {
+            return door.Block.OpenRatio > 0;
+        }
+        public bool IsFulllyClosed()
+        {
+            return door.Block.OpenRatio == 0;
+        }
+        public bool IsEnabled()
+        {
+            return door.Block.Enabled;
+        }
+
+        public void Enable()
+        {
+            door.Block.Enabled = true;
+        }
+        public void Disable()
+        {
+            door.Block.Enabled = false;
+        }
+
+        public void Update(double time)
         {
             RefreshConfig();
 
-            if (Door.Block.OpenRatio == 0)
+            if (door.Block.OpenRatio == 0)
             {
                 doorOpenTime = 0;
-                wasOpen = false;
+                WasOpen = false;
                 return;
             }
 
-            if (!wasOpen)
+            if (!WasOpen)
             {
                 //Begin new count
-                wasOpen = true;
+                WasOpen = true;
                 doorOpenTime = 0;
                 return;
             }
@@ -43,17 +66,19 @@ namespace IngameScript
 
             if (autoCloseTime <= doorOpenTime)
             {
-                Door.Block.CloseDoor();
+                door.Block.CloseDoor();
                 doorOpenTime = 0;
-                wasOpen = false;
+                WasOpen = false;
             }
         }
         void RefreshConfig()
         {
-            if (!Door.ConfigChanged) return;
-            if (!Door.UpdateConfig()) return;
+            if (!firstUpdate && !door.ConfigChanged) return;
+            firstUpdate = false;
 
-            var value = Door.Config.Get(StrAutoDoor, StrAutoCloseTime);
+            if (!door.UpdateConfig()) return;
+
+            var value = door.Config.Get(StrAutoDoor, StrAutoCloseTime);
             if (!value.IsEmpty)
             {
                 autoCloseTime = value.ToDouble();
