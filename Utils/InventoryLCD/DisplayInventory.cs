@@ -10,6 +10,11 @@ namespace IngameScript
 {
     class DisplayInventory
     {
+        const string TYPE_ORE = "MyObjectBuilder_Ore";
+        const string TYPE_INGOT = "MyObjectBuilder_Ingot";
+        const string TYPE_COMPONENT = "MyObjectBuilder_Component";
+        const string TYPE_AMMO = "MyObjectBuilder_AmmoMagazine";
+
         readonly Program program;
         readonly DisplayLcd displayLcd;
 
@@ -69,10 +74,10 @@ namespace IngameScript
             itemAmmo = ini.Get("Inventory", "item_ammo").ToBoolean(true);
 
             types.Clear();
-            if (itemOre) types.Add(Item.TYPE_ORE);
-            if (itemIngot) types.Add(Item.TYPE_INGOT);
-            if (itemComponent) types.Add(Item.TYPE_COMPONENT);
-            if (itemAmmo) types.Add(Item.TYPE_AMMO);
+            if (itemOre) types.Add(TYPE_ORE);
+            if (itemIngot) types.Add(TYPE_INGOT);
+            if (itemComponent) types.Add(TYPE_COMPONENT);
+            if (itemAmmo) types.Add(TYPE_AMMO);
 
             Search();
         }
@@ -145,9 +150,9 @@ namespace IngameScript
         void InventoryCount()
         {
             lastAmount.Clear();
-            foreach (var entry in itemList)
+            foreach (var item in itemList)
             {
-                lastAmount.Add(entry.Key, entry.Value.Amount);
+                lastAmount.Add(item.Key, item.Value.Amount);
             }
 
             itemList.Clear();
@@ -225,23 +230,6 @@ namespace IngameScript
                 {
                     var item = entry.Value;
 
-                    int limitBar = 0;
-                    int variance = 2;
-                    if (itemGauge)
-                    {
-                        limitBar = program.Config.GetInt("Limit", item.Name, limitDefault);
-
-                        if (lastAmount.ContainsKey(entry.Key))
-                        {
-                            if (lastAmount[entry.Key] < item.Amount) variance = 1;
-                            if (lastAmount[entry.Key] > item.Amount) variance = 3;
-                        }
-                        else
-                        {
-                            variance = 1;
-                        }
-                    }
-
                     // Icon
                     var style = new StyleIcon()
                     {
@@ -255,7 +243,9 @@ namespace IngameScript
                     style.Scale(scale);
 
                     var p = drawing.Position + new Vector2((cellSpacing + deltaWidth) * (count / limit), (cellSpacing + deltaHeight) * (count - (count / limit) * limit));
-                    drawing.DrawGaugeIcon(p, item.Name, item.Amount, limitBar, style, itemGauge, itemSymbol, variance);
+                    int l = itemGauge ? program.Config.GetInt("Limit", item.Name, limitDefault) : 0;
+                    Variances v = GetVariance(entry.Key, item.Amount);
+                    drawing.DrawGaugeIcon(p, item.Name, item.Amount, l, style, itemGauge, itemSymbol, v);
 
                     count++;
                 }
@@ -279,6 +269,12 @@ namespace IngameScript
                 limit = (int)Math.Floor((drawing.Height - topPadding * scale) / (itemSize + cellSpacing));
             }
             return Math.Max(limit, 1);
+        }
+        Variances GetVariance(string key, double amount)
+        {
+            if (!lastAmount.ContainsKey(key) || lastAmount[key] < amount) return Variances.Ascending;
+            if (lastAmount[key] > amount) return Variances.Descending;
+            return Variances.NoVariance;
         }
     }
 }

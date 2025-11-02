@@ -14,13 +14,17 @@ namespace IngameScript
         readonly DisplayLcd displayLcd;
 
         readonly int maxLoop = 3;
-        readonly int stringLen = 20;
         readonly Dictionary<long, Dictionary<string, double>> lastMachineAmount = new Dictionary<long, Dictionary<string, double>>();
         readonly List<string> types = new List<string>();
         readonly BlockSystem<IMyProductionBlock> producers = new BlockSystem<IMyProductionBlock>();
         readonly List<Item> items = new List<Item>();
         readonly List<MyProductionItem> productionItems = new List<MyProductionItem>();
         readonly List<MyInventoryItem> inventoryItems = new List<MyInventoryItem>();
+        readonly Color colorTitle = new Color(100, 100, 100, 128);
+        readonly Color colorText = new Color(100, 100, 100, 255);
+        readonly Color colorAscending = new Color(0, 0, 20, 200);
+        readonly Color colorNoVariance = new Color(20, 0, 0, 200);
+        readonly Color colorDescending = new Color(0, 20, 0, 200);
 
         int panel = 0;
         bool enable = false;
@@ -30,6 +34,9 @@ namespace IngameScript
         bool machineAssembler = false;
         int rows = 6;
         int columns = 0;
+        float width = 250;
+        float height = 120;
+        int stringLen = 20;
         Style style = new Style();
 
         public DisplayMachine(Program program, DisplayLcd displayLcd)
@@ -47,6 +54,9 @@ namespace IngameScript
             machineRefinery = ini.Get("Machine", "refinery").ToBoolean(true);
             machineAssembler = ini.Get("Machine", "assembler").ToBoolean(true);
             rows = ini.Get("Machine", "rows").ToInt32(6);
+            width = ini.Get("Machine", "width").ToSingle(250f);
+            height = ini.Get("Machine", "height").ToSingle(120f);
+            stringLen = ini.Get("Machine", "string_len").ToInt32(20);
 
             types.Clear();
             columns = 0;
@@ -64,8 +74,8 @@ namespace IngameScript
 
             style = new Style()
             {
-                Width = 250,
-                Height = 120,
+                Width = width,
+                Height = height,
                 Padding = new StylePadding(0),
             };
             style.Scale(scale);
@@ -83,6 +93,9 @@ namespace IngameScript
             ini.Set("Machine", "refinery", machineRefinery);
             ini.Set("Machine", "assembler", machineAssembler);
             ini.Set("Machine", "rows", rows);
+            ini.Set("Machine", "width", width);
+            ini.Set("Machine", "height", height);
+            ini.Set("Machine", "string_len", stringLen);
         }
 
         public void Draw(Drawing drawing)
@@ -113,8 +126,6 @@ namespace IngameScript
             TraversalMachine(block);
 
             float sizeIcon = style.Height - (10 * scale);
-            Color colorTitle = new Color(100, 100, 100, 128);
-            Color colorText = new Color(100, 100, 100, 255);
             float rotationOrScale = 0.5f * scale;
             float cellSpacing = 10f * scale;
 
@@ -124,6 +135,18 @@ namespace IngameScript
             string colorDefault = program.Config.Get("color", "default");
 
             surface.DrawForm(position, SpriteForm.SquareSimple, formWidth, formHeight, new Color(5, 5, 5, 125));
+
+            // Element Name
+            surface.AddSprite(new MySprite()
+            {
+                Type = SpriteType.TEXT,
+                Data = Util.CutString(block.CustomName, stringLen),
+                Color = colorTitle,
+                Position = position + new Vector2(style.Margin.X, 0),
+                RotationOrScale = 0.6f * scale,
+                FontId = SurfaceDrawing.Font,
+                Alignment = TextAlignment.LEFT
+            });
 
             float x = 0f;
             foreach (var item in items)
@@ -135,13 +158,13 @@ namespace IngameScript
                     Data = item.Icon,
                     Size = new Vector2(sizeIcon, sizeIcon),
                     Color = program.Config.GetColor("color", item.Name, item.Data, colorDefault),
-                    Position = position + new Vector2(x, sizeIcon / 2 + cellSpacing),
+                    Position = position + new Vector2(x, sizeIcon * 0.5f + cellSpacing),
                 });
 
                 if (surface.Parent.Symbol.Keys.Contains(item.Data))
                 {
                     // Symbol
-                    var positionSymbol = position + new Vector2(x, 20);
+                    var positionSymbol = position + new Vector2(x, 20 * scale);
                     surface.AddSprite(new MySprite()
                     {
                         Type = SpriteType.TEXT,
@@ -155,11 +178,9 @@ namespace IngameScript
                 }
 
                 // Quantity
-                var positionQuantity = position + new Vector2(x, sizeIcon - 12);
-                Color maskColor = new Color(0, 0, 20, 200);
-                if (item.Variance == 2) maskColor = new Color(20, 0, 0, 200);
-                if (item.Variance == 3) maskColor = new Color(0, 20, 0, 200);
-                surface.DrawForm(positionQuantity, SpriteForm.SquareSimple, sizeIcon, 15f, maskColor);
+                var positionQuantity = position + new Vector2(x, sizeIcon - (12 * scale));
+                var color = GetVarianceColor(item.Variance);
+                surface.DrawForm(positionQuantity, SpriteForm.SquareSimple, sizeIcon, 15f * scale, color);
                 surface.AddSprite(new MySprite()
                 {
                     Type = SpriteType.TEXT,
@@ -172,18 +193,6 @@ namespace IngameScript
                 });
                 x += style.Height;
             }
-
-            // Element Name
-            surface.AddSprite(new MySprite()
-            {
-                Type = SpriteType.TEXT,
-                Data = Util.CutString(block.CustomName, stringLen),
-                Color = colorTitle,
-                Position = position + new Vector2(style.Margin.X, 0),
-                RotationOrScale = 0.6f * scale,
-                FontId = SurfaceDrawing.Font,
-                Alignment = TextAlignment.LEFT
-            });
         }
         void TraversalMachine(IMyProductionBlock block)
         {
@@ -222,11 +231,11 @@ namespace IngameScript
 
                 string type = Util.GetType(item);
                 string name = Util.GetName(item);
-                string data = item.BlueprintId.SubtypeName;
+                string data = Util.GetData(item.BlueprintId);
                 string key = $"{type}_{name}";
                 double amount = 0;
                 double.TryParse(item.Amount.ToString(), out amount);
-                int variance = CalculateVariance(lastAmount, key, amount);
+                Variances variance = CalculateVariance(lastAmount, key, amount);
 
                 items.Add(new Item()
                 {
@@ -256,7 +265,7 @@ namespace IngameScript
                 string key = $"{type}_{name}";
                 double amount = 0;
                 double.TryParse(item.Amount.ToString(), out amount);
-                int variance = CalculateVariance(lastAmount, key, amount);
+                Variances variance = CalculateVariance(lastAmount, key, amount);
 
                 items.Add(new Item()
                 {
@@ -269,22 +278,26 @@ namespace IngameScript
                 loop++;
             }
         }
-        static int CalculateVariance(Dictionary<string, double> lastAmount, string key, double amount)
+        static Variances CalculateVariance(Dictionary<string, double> lastAmount, string key, double amount)
         {
-            int variance = 2;
-            if (lastAmount.ContainsKey(key))
+            if (!lastAmount.ContainsKey(key))
             {
-                if (lastAmount[key] < amount) variance = 1;
-                if (lastAmount[key] > amount) variance = 3;
-                lastAmount[key] = amount;
-            }
-            else
-            {
-                variance = 1;
                 lastAmount.Add(key, amount);
+                return Variances.Ascending;
             }
 
+            Variances variance = Variances.NoVariance;
+            if (lastAmount[key] < amount) variance = Variances.Ascending;
+            if (lastAmount[key] > amount) variance = Variances.Descending;
+            lastAmount[key] = amount;
+
             return variance;
+        }
+        Color GetVarianceColor(Variances variance)
+        {
+            if (variance == Variances.NoVariance) return colorNoVariance;
+            if (variance == Variances.Descending) return colorDescending;
+            return colorAscending;
         }
     }
 }

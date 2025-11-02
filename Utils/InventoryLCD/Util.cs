@@ -153,6 +153,69 @@ namespace IngameScript
             new MyTuple<string, string>("Space Credit","MyObjectBuilder_PhysicalObject/SpaceCredit"),
         };
 
+        static readonly List<MyTuple<string, string>> Icons = new List<MyTuple<string, string>>()
+        {
+            new MyTuple<string, string>("Position0090_AdvancedHandHeldLauncher", "AdvancedHandHeldLauncherItem"),
+            new MyTuple<string, string>("Position0020_AngleGrinder2", "AngleGrinder2Item"),
+            new MyTuple<string, string>("Position0030_AngleGrinder3", "AngleGrinder3Item"),
+            new MyTuple<string, string>("Position0040_AngleGrinder4", "AngleGrinder4Item"),
+            new MyTuple<string, string>("Position0010_AngleGrinder", "AngleGrinderItem"),
+            new MyTuple<string, string>("Position0090_AutocannonClip", "AutocannonClip"),
+            new MyTuple<string, string>("Position0040_AutomaticRifleGun_Mag_20rd", "AutomaticRifleGun_Mag_20rd"),
+            new MyTuple<string, string>("Position0040_AutomaticRifle", "AutomaticRifleItem"),
+            new MyTuple<string, string>("Position0080_BasicHandHeldLauncher", "BasicHandHeldLauncherItem"),
+            new MyTuple<string, string>("Position0030_Canvas", "Canvas"),
+            new MyTuple<string, string>("ComputerComponent", "Computer"),
+            new MyTuple<string, string>("ConstructionComponent", "Construction"),
+            new MyTuple<string, string>("Position0040_Datapad", "Datapad"),
+            new MyTuple<string, string>("DetectorComponent", "Detector"),
+            new MyTuple<string, string>("Position0030_EliteAutoPistol", "ElitePistolItem"),
+            new MyTuple<string, string>("Position0030_ElitePistolMagazine", "ElitePistolMagazine"),
+            new MyTuple<string, string>("ExplosivesComponent", "Explosives"),
+            new MyTuple<string, string>("Position0007_FireworksBoxBlue", "FireworksBoxBlue"),
+            new MyTuple<string, string>("Position00071_FireworksBoxGreen", "FireworksBoxGreen"),
+            new MyTuple<string, string>("Position00074_FireworksBoxPink", "FireworksBoxPink"),
+            new MyTuple<string, string>("Position00075_FireworksBoxRainbow", "FireworksBoxRainbow"),
+            new MyTuple<string, string>("Position00072_FireworksBoxRed", "FireworksBoxRed"),
+            new MyTuple<string, string>("Position00073_FireworksBoxYellow", "FireworksBoxYellow"),
+            new MyTuple<string, string>("Position0005_FlareGunMagazine", "FlareClip"),
+            new MyTuple<string, string>("Position0005_FlareGun", "FlareGunItem"),
+            new MyTuple<string, string>("Position0020_FullAutoPistol", "FullAutoPistolItem"),
+            new MyTuple<string, string>("Position0020_FullAutoPistolMagazine", "FullAutoPistolMagazine"),
+            new MyTuple<string, string>("GirderComponent", "Girder"),
+            new MyTuple<string, string>("GravityGeneratorComponent", "GravityGenerator"),
+            new MyTuple<string, string>("Position0060_HandDrill2", "HandDrill2Item"),
+            new MyTuple<string, string>("Position0070_HandDrill3", "HandDrill3Item"),
+            new MyTuple<string, string>("Position0080_HandDrill4", "HandDrill4Item"),
+            new MyTuple<string, string>("Position0050_HandDrill", "HandDrillItem"),
+            new MyTuple<string, string>("Position0020_HydrogenBottle", "HydrogenBottle"),
+            new MyTuple<string, string>("Position0120_LargeCalibreAmmo", "LargeCalibreAmmo"),
+            new MyTuple<string, string>("Position0140_LargeRailgunAmmo", "LargeRailgunAmmo"),
+            new MyTuple<string, string>("MedicalComponent", "Medical"),
+            new MyTuple<string, string>("Position0110_MediumCalibreAmmo", "MediumCalibreAmmo"),
+            new MyTuple<string, string>("Position0100_Missile200mm", "Missile200mm"),
+            new MyTuple<string, string>("MotorComponent", "Motor"),
+            new MyTuple<string, string>("Position0080_NATO_25x184mmMagazine", "NATO_25x184mm"),
+            new MyTuple<string, string>("PlatinumOreToIngot", "Nickel"),
+            new MyTuple<string, string>("Position0010_OxygenBottle", "OxygenBottle"),
+            new MyTuple<string, string>("Position0060_PreciseAutomaticRifleGun_Mag_5rd", "PreciseAutomaticRifleGun_Mag_5rd"),
+            new MyTuple<string, string>("Position0060_PreciseAutomaticRifle", "PreciseAutomaticRifleItem"),
+            new MyTuple<string, string>("RadioCommunicationComponent", "RadioCommunication"),
+            new MyTuple<string, string>("Position0050_RapidFireAutomaticRifleGun_Mag_50rd", "RapidFireAutomaticRifleGun_Mag_50rd"),
+            new MyTuple<string, string>("Position0050_RapidFireAutomaticRifle", "RapidFireAutomaticRifleItem"),
+            new MyTuple<string, string>("ReactorComponent", "Reactor"),
+            new MyTuple<string, string>("Position0010_SemiAutoPistol", "SemiAutoPistolItem"),
+            new MyTuple<string, string>("Position0010_SemiAutoPistolMagazine", "SemiAutoPistolMagazine"),
+            new MyTuple<string, string>("Position0130_SmallRailgunAmmo", "SmallRailgunAmmo"),
+            new MyTuple<string, string>("ThrustComponent", "Thrust"),
+            new MyTuple<string, string>("Position0070_UltimateAutomaticRifleGun_Mag_30rd", "UltimateAutomaticRifleGun_Mag_30rd"),
+            new MyTuple<string, string>("Position0070_UltimateAutomaticRifle", "UltimateAutomaticRifleItem"),
+            new MyTuple<string, string>("Position0100_Welder2", "Welder2Item"),
+            new MyTuple<string, string>("Position0110_Welder3", "Welder3Item"),
+            new MyTuple<string, string>("Position0120_Welder4", "Welder4Item"),
+            new MyTuple<string, string>("Position0090_Welder", "WelderItem"),
+        };
+
         static public string GetKiloFormat(double value)
         {
             double pow = 1.0;
@@ -166,7 +229,7 @@ namespace IngameScript
             return string.Format("{0:0.0}{1}", (value / pow), suffix);
 
         }
-      
+
         static public string GetType(MyInventoryItem item)
         {
             return item.Type.TypeId;
@@ -194,7 +257,7 @@ namespace IngameScript
             if (type.Equals("MyObjectBuilder_OxygenContainerObject")) return Bottles.Find(i => i.Item2.Equals(key)).Item1;
             return subType;
         }
-    
+
         static public string GetType(MyProductionItem item)
         {
             MyDefinitionId id;
@@ -217,7 +280,13 @@ namespace IngameScript
             if (stName.EndsWith("Magazine")) stName = stName.Replace("Magazine", "");
             return stName;
         }
-       
+        static public string GetData(MyDefinitionId id)
+        {
+            if (Icons.Exists(i => i.Item1 == id.SubtypeName)) return Icons.Find(i => i.Item1 == id.SubtypeName).Item2;
+
+            return id.SubtypeName;
+        }
+
         static public string CutString(string value, int limit)
         {
             if (value.Length > limit)

@@ -71,7 +71,7 @@ namespace IngameScript
                 Position = position + new Vector2(0, height / 2)
             });
         }
-        public void DrawGaugeIcon(Vector2 position, string name, double amount, int limit, StyleIcon styleIcon, bool showGauge, bool showSymbol, int variance)
+        public void DrawGaugeIcon(Vector2 position, string name, double amount, int limit, StyleIcon styleIcon, bool showGauge, bool showSymbol, Variances variance)
         {
             var p = position + new Vector2(styleIcon.Padding.X, styleIcon.Padding.Y);
 
@@ -147,7 +147,7 @@ namespace IngameScript
             float symbolSize = 20f * fontSizeQuantity;
             float offset = 25f * fontSizeQuantity;
 
-            if (variance == 1)
+            if (variance == Variances.Ascending)
             {
                 Color green = new Color(0, 100, 0, 255);
 
@@ -162,7 +162,7 @@ namespace IngameScript
                 });
             }
 
-            if (variance == 3)
+            if (variance == Variances.Descending)
             {
                 Color red = new Color(100, 0, 0, 255);
 
