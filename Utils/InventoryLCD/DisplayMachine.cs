@@ -13,7 +13,6 @@ namespace IngameScript
         readonly Program program;
         readonly DisplayLcd displayLcd;
 
-        readonly int maxLoop = 3;
         readonly Dictionary<long, Dictionary<string, double>> lastMachineAmount = new Dictionary<long, Dictionary<string, double>>();
         readonly List<string> types = new List<string>();
         readonly BlockSystem<IMyProductionBlock> producers = new BlockSystem<IMyProductionBlock>();
@@ -37,6 +36,7 @@ namespace IngameScript
         float width = 250;
         float height = 120;
         int stringLen = 20;
+        int maxItems = 3;
         Style style = new Style();
 
         public DisplayMachine(Program program, DisplayLcd displayLcd)
@@ -57,6 +57,7 @@ namespace IngameScript
             width = ini.Get("Machine", "width").ToSingle(250f);
             height = ini.Get("Machine", "height").ToSingle(120f);
             stringLen = ini.Get("Machine", "string_len").ToInt32(20);
+            maxItems = ini.Get("Machine", "max_items").ToInt32(3);
 
             types.Clear();
             columns = 0;
@@ -96,6 +97,7 @@ namespace IngameScript
             ini.Set("Machine", "width", width);
             ini.Set("Machine", "height", height);
             ini.Set("Machine", "string_len", stringLen);
+            ini.Set("Machine", "max_items", maxItems);
         }
 
         public void Draw(Drawing drawing)
@@ -227,7 +229,7 @@ namespace IngameScript
             int loop = 0;
             foreach (var item in productionItems)
             {
-                if (loop >= maxLoop) break;
+                if (loop >= maxItems) break;
 
                 string type = Util.GetType(item);
                 string name = Util.GetName(item);
@@ -257,7 +259,7 @@ namespace IngameScript
             int loop = 0;
             foreach (var item in inventoryItems)
             {
-                if (loop >= maxLoop) break;
+                if (loop >= maxItems) break;
 
                 string type = Util.GetType(item);
                 string name = Util.GetName(item);

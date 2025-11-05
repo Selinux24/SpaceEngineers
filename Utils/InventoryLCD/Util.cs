@@ -172,12 +172,12 @@ namespace IngameScript
             new MyTuple<string, string>("Position0030_EliteAutoPistol", "ElitePistolItem"),
             new MyTuple<string, string>("Position0030_ElitePistolMagazine", "ElitePistolMagazine"),
             new MyTuple<string, string>("ExplosivesComponent", "Explosives"),
-            new MyTuple<string, string>("Position0007_FireworksBoxBlue", "FireworksBoxBlue"),
-            new MyTuple<string, string>("Position00071_FireworksBoxGreen", "FireworksBoxGreen"),
-            new MyTuple<string, string>("Position00074_FireworksBoxPink", "FireworksBoxPink"),
-            new MyTuple<string, string>("Position00075_FireworksBoxRainbow", "FireworksBoxRainbow"),
-            new MyTuple<string, string>("Position00072_FireworksBoxRed", "FireworksBoxRed"),
-            new MyTuple<string, string>("Position00073_FireworksBoxYellow", "FireworksBoxYellow"),
+            new MyTuple<string, string>("Position0060_FireworksBoxBlue", "FireworksBoxBlue"),
+            new MyTuple<string, string>("Position0061_FireworksBoxGreen", "FireworksBoxGreen"),
+            new MyTuple<string, string>("Position0064_FireworksBoxPink", "FireworksBoxPink"),
+            new MyTuple<string, string>("Position0065_FireworksBoxRainbow", "FireworksBoxRainbow"),
+            new MyTuple<string, string>("Position0062_FireworksBoxRed", "FireworksBoxRed"),
+            new MyTuple<string, string>("Position0063_FireworksBoxYellow", "FireworksBoxYellow"),
             new MyTuple<string, string>("Position0005_FlareGunMagazine", "FlareClip"),
             new MyTuple<string, string>("Position0005_FlareGun", "FlareGunItem"),
             new MyTuple<string, string>("Position0020_FullAutoPistol", "FullAutoPistolItem"),
@@ -266,10 +266,16 @@ namespace IngameScript
 
             if ((stName.EndsWith("Rifle") || stName.StartsWith("Welder") || stName.StartsWith("HandDrill") || stName.StartsWith("AngleGrinder"))
                 && MyDefinitionId.TryParse("MyObjectBuilder_PhysicalGunObject", tName, out id)) return id.TypeId.ToString();
-            if (stName.StartsWith("Hydrogen") && MyDefinitionId.TryParse("MyObjectBuilder_GasContainerObject", tName, out id)) return id.TypeId.ToString();
-            if (stName.StartsWith("Oxygen") && MyDefinitionId.TryParse("MyObjectBuilder_OxygenContainerObject", tName, out id)) return id.TypeId.ToString();
-            if ((stName.Contains("Missile") || stName.EndsWith("Magazine")) && MyDefinitionId.TryParse("MyObjectBuilder_AmmoMagazine", tName, out id)) return id.TypeId.ToString();
+
+            if (stName.Contains("Ammo") || (stName.Contains("Missile") || stName.EndsWith("Magazine") || stName.Contains("_Mag_") || stName.EndsWith("Clip") || stName.Contains("Fireworks")) 
+                && MyDefinitionId.TryParse("MyObjectBuilder_AmmoMagazine", tName, out id)) return id.TypeId.ToString();
+
+            if (stName.EndsWith("HydrogenBottle") && MyDefinitionId.TryParse("MyObjectBuilder_GasContainerObject", tName, out id)) return id.TypeId.ToString();
+
+            if (stName.EndsWith("OxygenBottle") && MyDefinitionId.TryParse("MyObjectBuilder_OxygenContainerObject", tName, out id)) return id.TypeId.ToString();
+
             if (MyDefinitionId.TryParse("MyObjectBuilder_Component", tName, out id)) return id.TypeId.ToString();
+
             return item.BlueprintId.TypeId.ToString();
         }
         static public string GetName(MyProductionItem item)
