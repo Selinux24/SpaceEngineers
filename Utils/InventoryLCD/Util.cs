@@ -9,12 +9,18 @@ namespace IngameScript
 {
     public class Util
     {
+        const string Weights = "KMGTPEZY";
+        const string StrComponent = "MyObjectBuilder_Component";
+        const string StrPhysicalGunObject = "MyObjectBuilder_PhysicalGunObject";
+        const string StrAmmoMagazine = "MyObjectBuilder_AmmoMagazine";
+        const string StrGasContainerObject = "MyObjectBuilder_GasContainerObject";
+        const string StrOxygenContainerObject = "MyObjectBuilder_OxygenContainerObject";
+
         static readonly List<MyTuple<string, string>> Gases = new List<MyTuple<string, string>>()
         {
             new MyTuple<string, string>("Hydrogen","MyObjectBuilder_GasProperties/Hydrogen"),
             new MyTuple<string, string>("Oxygen","MyObjectBuilder_GasProperties/Oxygen"),
         };
-
         static readonly List<MyTuple<string, string>> Ores = new List<MyTuple<string, string>>()
         {
             new MyTuple<string, string>("Cobalt Ore","MyObjectBuilder_Ore/Cobalt"),
@@ -31,7 +37,6 @@ namespace IngameScript
             new MyTuple<string, string>("Stone","MyObjectBuilder_Ore/Stone"),
             new MyTuple<string, string>("Uranium Ore","MyObjectBuilder_Ore/Uranium"),
         };
-
         static readonly List<MyTuple<string, string>> Ingots = new List<MyTuple<string, string>>()
         {
             new MyTuple<string, string>("Cobalt Ingot","MyObjectBuilder_Ingot/Cobalt"),
@@ -47,7 +52,6 @@ namespace IngameScript
             new MyTuple<string, string>("Silver Ingot","MyObjectBuilder_Ingot/Silver"),
             new MyTuple<string, string>("Uranium Ingot","MyObjectBuilder_Ingot/Uranium"),
         };
-
         static readonly List<MyTuple<string, string>> Magazines = new List<MyTuple<string, string>>()
         {
             new MyTuple<string, string>("5.56x45mm NATO magazine","MyObjectBuilder_AmmoMagazine/NATO_5p56x45mm"),
@@ -73,7 +77,6 @@ namespace IngameScript
             new MyTuple<string, string>("S-20A Pistol Magazine","MyObjectBuilder_AmmoMagazine/FullAutoPistolMagazine"),
             new MyTuple<string, string>("Small Railgun Sabot","MyObjectBuilder_AmmoMagazine/SmallRailgunAmmo"),
         };
-
         static readonly List<MyTuple<string, string>> Components = new List<MyTuple<string, string>>()
         {
             new MyTuple<string, string>("Bulletproof Glass","MyObjectBuilder_Component/BulletproofGlass"),
@@ -109,7 +112,6 @@ namespace IngameScript
             new MyTuple<string, string>("Thruster Comp.","MyObjectBuilder_Component/Thrust"),
             new MyTuple<string, string>("Zone Chip","MyObjectBuilder_Component/ZoneChip"),
         };
-
         static readonly List<MyTuple<string, string>> Tools = new List<MyTuple<string, string>>()
         {
             new MyTuple<string, string>("Elite Grinder","MyObjectBuilder_PhysicalGunObject/AngleGrinder4Item"),
@@ -135,13 +137,11 @@ namespace IngameScript
             new MyTuple<string, string>("S-20A Pistol","MyObjectBuilder_PhysicalGunObject/FullAutoPistolItem"),
             new MyTuple<string, string>("Welder","MyObjectBuilder_PhysicalGunObject/WelderItem"),
         };
-
         static readonly List<MyTuple<string, string>> Bottles = new List<MyTuple<string, string>>()
         {
             new MyTuple<string, string>("Hydrogen Bottle","MyObjectBuilder_GasContainerObject/HydrogenBottle"),
             new MyTuple<string, string>("Oxygen Bottle","MyObjectBuilder_OxygenContainerObject/OxygenBottle"),
         };
-
         static readonly List<MyTuple<string, string>> Others = new List<MyTuple<string, string>>()
         {
             new MyTuple<string, string>("Clang Kola","MyObjectBuilder_ConsumableItem/ClangCola"),
@@ -152,7 +152,6 @@ namespace IngameScript
             new MyTuple<string, string>("Powerkit","MyObjectBuilder_ConsumableItem/Powerkit"),
             new MyTuple<string, string>("Space Credit","MyObjectBuilder_PhysicalObject/SpaceCredit"),
         };
-
         static readonly List<MyTuple<string, string>> Icons = new List<MyTuple<string, string>>()
         {
             new MyTuple<string, string>("Position0090_AdvancedHandHeldLauncher", "AdvancedHandHeldLauncherItem"),
@@ -216,25 +215,28 @@ namespace IngameScript
             new MyTuple<string, string>("Position0090_Welder", "WelderItem"),
         };
 
-        static public string GetKiloFormat(double value)
+        public static string GetKiloFormat(double value)
         {
-            double pow = 1.0;
-            string suffix = "";
-            if (value > 1000.0)
-            {
-                int y = int.Parse(Math.Floor(Math.Log10(value) / 3).ToString());
-                suffix = "KMGTPEZY".Substring(y - 1, 1);
-                pow = Math.Pow(10, y * 3);
-            }
-            return string.Format("{0:0.0}{1}", (value / pow), suffix);
+            if (value <= 1000.0) return $"{value:0.0}";
 
+            int y = int.Parse(Math.Floor(Math.Log10(value) / 3).ToString());
+            double pow = Math.Pow(10, y * 3);
+            string suffix = Weights.Substring(y - 1, 1);
+            return $"{value / pow:0.0}{suffix}";
+        }
+        public static string CutString(string value, int limit)
+        {
+            if (value.Length <= limit) return value;
+
+            int len = (limit - 3) / 2;
+            return value.Substring(0, len) + "..." + value.Substring(value.Length - len, len);
         }
 
-        static public string GetType(MyInventoryItem item)
+        public static string GetType(MyInventoryItem item)
         {
             return item.Type.TypeId;
         }
-        static public string GetName(MyInventoryItem item)
+        public static string GetName(MyInventoryItem item)
         {
             string type = item.Type.TypeId;
             string subType = item.Type.SubtypeId;
@@ -243,7 +245,7 @@ namespace IngameScript
             if (string.IsNullOrWhiteSpace(name)) name = subType;
             return CutString(name, 25);
         }
-        static public string TranslateName(string type, string subType)
+        static string TranslateName(string type, string subType)
         {
             string key = $"{type}/{subType}";
             if (type.Equals("MyObjectBuilder_Ore")) return Ores.Find(i => i.Item2.Equals(key)).Item1;
@@ -258,27 +260,16 @@ namespace IngameScript
             return subType;
         }
 
-        static public string GetType(MyProductionItem item)
+        public static string GetType(MyProductionItem item)
         {
+            string tName = GetTypeName(item.BlueprintId.SubtypeName);
+            string name = GetName(item);
             MyDefinitionId id;
-            string stName = item.BlueprintId.SubtypeName;
-            string tName = GetName(item);
-
-            if ((stName.EndsWith("Rifle") || stName.StartsWith("Welder") || stName.StartsWith("HandDrill") || stName.StartsWith("AngleGrinder"))
-                && MyDefinitionId.TryParse("MyObjectBuilder_PhysicalGunObject", tName, out id)) return id.TypeId.ToString();
-
-            if (stName.Contains("Ammo") || (stName.Contains("Missile") || stName.EndsWith("Magazine") || stName.Contains("_Mag_") || stName.EndsWith("Clip") || stName.Contains("Fireworks")) 
-                && MyDefinitionId.TryParse("MyObjectBuilder_AmmoMagazine", tName, out id)) return id.TypeId.ToString();
-
-            if (stName.EndsWith("HydrogenBottle") && MyDefinitionId.TryParse("MyObjectBuilder_GasContainerObject", tName, out id)) return id.TypeId.ToString();
-
-            if (stName.EndsWith("OxygenBottle") && MyDefinitionId.TryParse("MyObjectBuilder_OxygenContainerObject", tName, out id)) return id.TypeId.ToString();
-
-            if (MyDefinitionId.TryParse("MyObjectBuilder_Component", tName, out id)) return id.TypeId.ToString();
+            if (MyDefinitionId.TryParse(tName, name, out id)) return id.TypeId.ToString();
 
             return item.BlueprintId.TypeId.ToString();
         }
-        static public string GetName(MyProductionItem item)
+        public static string GetName(MyProductionItem item)
         {
             string stName = item.BlueprintId.SubtypeName;
             if (stName.EndsWith("Component")) stName = stName.Replace("Component", "");
@@ -286,21 +277,46 @@ namespace IngameScript
             if (stName.EndsWith("Magazine")) stName = stName.Replace("Magazine", "");
             return stName;
         }
-        static public string GetData(MyDefinitionId id)
+        public static string GetData(MyDefinitionId id)
         {
             if (Icons.Exists(i => i.Item1 == id.SubtypeName)) return Icons.Find(i => i.Item1 == id.SubtypeName).Item2;
 
             return id.SubtypeName;
         }
 
-        static public string CutString(string value, int limit)
+        static string GetTypeName(string name)
         {
-            if (value.Length > limit)
-            {
-                int len = (limit - 3) / 2;
-                return value.Substring(0, len) + "..." + value.Substring(value.Length - len, len);
-            }
-            return value;
+            if (IsPhysicalGunObject(name)) return StrPhysicalGunObject;
+            if (IsAmmoMagazine(name)) return StrAmmoMagazine;
+            if (IsGasContainerObject(name)) return StrGasContainerObject;
+            if (IsOxygenContainerObject(name)) return StrOxygenContainerObject;
+            return StrComponent;
+        }
+        static bool IsPhysicalGunObject(string name)
+        {
+            return
+                name.EndsWith("Rifle") ||
+                name.StartsWith("Welder") ||
+                name.StartsWith("HandDrill") ||
+                name.StartsWith("AngleGrinder");
+        }
+        static bool IsAmmoMagazine(string name)
+        {
+            return
+                name.Contains("Ammo") ||
+                name.Contains("Missile") ||
+                name.EndsWith("Magazine") ||
+                name.Contains("_Mag_") ||
+                name.EndsWith("Clip") ||
+                name.Contains("Fireworks");
+        }
+        static bool IsGasContainerObject(string name)
+        {
+            return name.EndsWith("HydrogenBottle");
+        }
+        static bool IsOxygenContainerObject(string name)
+        {
+            return name.EndsWith("OxygenBottle");
         }
     }
 }
