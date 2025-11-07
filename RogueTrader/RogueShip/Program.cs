@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "2.63";
+        const string Version = "2.64";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
@@ -54,11 +54,11 @@ namespace IngameScript
         readonly StringBuilder sbLog = new StringBuilder();
 
         bool paused = false;
-        bool monitorizeCapacity = false;
-        bool monitorizePropulsion = false;
         bool monitorizeLoadTime = false;
         DateTime loadStart = DateTime.MinValue;
+        bool monitorizeCapacity = false;
         double lastCapacity = -1;
+        bool monitorizePropulsion = false;
         ShipStatus shipStatus = ShipStatus.Idle;
         readonly Navigator navigator;
         readonly Route route;
@@ -223,7 +223,7 @@ namespace IngameScript
 
             UpdateShipStatus();
 
-            MonitorizeLoad();
+            Monitorize();
         }
 
         #region TERMINAL COMMANDS
@@ -258,11 +258,11 @@ namespace IngameScript
             ResetThrust();
 
             paused = false;
-            monitorizeCapacity = false;
-            monitorizePropulsion = false;
             monitorizeLoadTime = false;
             loadStart = DateTime.MinValue;
+            monitorizeCapacity = false;
             lastCapacity = -1;
+            monitorizePropulsion = false;
             shipStatus = ShipStatus.Idle;
             navigator.Clear();
             route.Clear();
@@ -425,8 +425,11 @@ namespace IngameScript
             route.ToUnloadBaseWaypoints.Clear();
             route.ToUnloadBaseWaypoints.AddRange(Utils.ReadVectorList(lines, "ToUnloadBaseWaypoints"));
 
-            monitorizeLoadTime = true;
+            monitorizeLoadTime = Config.MonitorizeLoadTime();
             loadStart = DateTime.Now;
+            monitorizeCapacity = Config.MonitorizeCapacity();
+            lastCapacity = -1;
+            monitorizePropulsion = Config.MonitorizePropulsion();
         }
 
         /// <summary>
@@ -465,70 +468,88 @@ namespace IngameScript
         #endregion
 
         #region MONITORS
-        void MonitorizeLoad()
+        void Monitorize()
         {
-            string msg = null;
-
             if (shipStatus == ShipStatus.Loading)
             {
-                double capacity = CalculateCargoPercentage();
-                bool capacityChanged = lastCapacity != capacity;
-                lastCapacity = capacity;
-                WriteInfoLCDs($"Progress {capacity / Config.MaxLoad:P1}...");
-
-                if (monitorizeLoadTime && !capacityChanged && DateTime.Now - loadStart > Config.MaxLoadTime)
-                {
-                    monitorizeLoadTime = false;
-                    loadStart = DateTime.MinValue;
-                    if (capacity > 0) Next();
-                    return;
-                }
-
-                if (monitorizeCapacity && capacity < Config.MaxLoad)
-                {
-                    return;
-                }
-                monitorizeCapacity = false;
-
-                if (!monitorizePropulsion)
-                {
-                    timerFinalize?.StartCountdown();
-                    monitorizePropulsion = true;
-                    return;
-                }
-
-                if (IsPropulsionFilled(shipStatus, out msg))
-                {
-                    SendWaitingMessage(ExchangeTasks.EndLoad);
-                    monitorizePropulsion = false;
-                }
+                MonitorizeLoading();
             }
             else if (shipStatus == ShipStatus.Unloading)
             {
-                double capacity = CalculateCargoPercentage();
-                WriteInfoLCDs($"Progress {1.0 - (capacity / Config.MaxLoad):P1}...");
+                MonitorizeUnloading();
+            }
+        }
+        void MonitorizeLoading()
+        {
+            double capacity = CalculateCargoPercentage();
+            bool capacityChanged = lastCapacity != capacity;
+            lastCapacity = capacity;
+            WriteInfoLCDs($"Progress {capacity / Config.MaxLoad:P1}...");
 
-                if (monitorizeCapacity && capacity > Config.MinLoad)
-                {
-                    return;
-                }
-                monitorizeCapacity = false;
+            if (monitorizeLoadTime)
+            {
+                if (capacity <= 0 || !capacityChanged || DateTime.Now - loadStart < Config.MaxLoadTime) return;
 
-                if (!monitorizePropulsion)
-                {
-                    timerFinalize?.StartCountdown();
-                    monitorizePropulsion = true;
-                    return;
-                }
-
-                if (IsPropulsionFilled(shipStatus, out msg))
-                {
-                    SendWaitingMessage(ExchangeTasks.EndUnload);
-                    monitorizePropulsion = false;
-                }
+                monitorizeLoadTime = false;
+                loadStart = DateTime.MinValue;
+                Next();
+                return;
             }
 
-            if (!string.IsNullOrWhiteSpace(msg)) WriteInfoLCDs(msg);
+            if (monitorizeCapacity)
+            {
+                if (capacity < Config.MaxLoad) return;
+
+                monitorizeCapacity = false;
+                lastCapacity = -1;
+                return;
+            }
+
+            if (monitorizePropulsion)
+            {
+                string msg;
+                if (!IsPropulsionFilled(shipStatus, out msg))
+                {
+                    WriteInfoLCDs(msg);
+                    return;
+                }
+
+                monitorizePropulsion = false;
+                SendWaitingMessage(ExchangeTasks.EndLoad);
+                return;
+            }
+
+            timerFinalize?.StartCountdown();
+        }
+        void MonitorizeUnloading()
+        {
+            double capacity = CalculateCargoPercentage();
+            WriteInfoLCDs($"Progress {1.0 - (capacity / Config.MaxLoad):P1}...");
+
+            if (monitorizeCapacity)
+            {
+                if (capacity > Config.MinLoad) return;
+
+                monitorizeCapacity = false;
+                lastCapacity = -1;
+                return;
+            }
+
+            if (monitorizePropulsion)
+            {
+                string msg;
+                if (!IsPropulsionFilled(shipStatus, out msg))
+                {
+                    WriteInfoLCDs(msg);
+                    return;
+                }
+
+                SendWaitingMessage(ExchangeTasks.EndUnload);
+                monitorizePropulsion = false;
+                return;
+            }
+
+            timerFinalize?.StartCountdown();
         }
         #endregion
 
@@ -784,15 +805,22 @@ namespace IngameScript
 
         internal void Load()
         {
-            monitorizeCapacity = true;
-            timerLoad?.StartCountdown();
-
-            monitorizeLoadTime = true;
+            monitorizeLoadTime = Config.MonitorizeLoadTime();
             loadStart = DateTime.Now;
+            monitorizeCapacity = Config.MonitorizeCapacity();
+            lastCapacity = -1;
+            monitorizePropulsion = Config.MonitorizePropulsion();
+
+            timerLoad?.StartCountdown();
         }
         internal void Unload()
         {
-            monitorizeCapacity = true;
+            monitorizeLoadTime = false;
+            loadStart = DateTime.Now;
+            monitorizeCapacity = Config.MonitorizeCapacity();
+            lastCapacity = -1;
+            monitorizePropulsion = Config.MonitorizePropulsion();
+
             timerUnload?.StartCountdown();
         }
 
@@ -1219,6 +1247,10 @@ namespace IngameScript
             bool showHydrogen = Config.MinHydrogenOnLoad > 0 || Config.MinHydrogenOnUnload > 0;
             WriteInfoLCDs($"BAT {(showBattery ? $"{CalculateBatteryPercentage():P1}" : "--")} | H2 {(showHydrogen ? $"{CalculateHydrogenPercentage():P1}" : "--")}");
             WriteInfoLCDs($"{shipStatus}");
+            if (shipStatus == ShipStatus.Loading && monitorizeLoadTime)
+            {
+                WriteInfoLCDs($"Until {Config.MaxLoadTime - (DateTime.Now - loadStart):hh\\:mm\\:ss}");
+            }
             if (shipStatus == ShipStatus.WaitingDock)
             {
                 var waitTime = DateTime.Now - lastDockRequest;
@@ -1237,11 +1269,11 @@ namespace IngameScript
             }
 
             paused = Utils.ReadInt(storageLines, "Paused", 0) == 1;
-            monitorizeCapacity = Utils.ReadInt(storageLines, "MonitorizeCapacity", 0) == 1;
-            monitorizePropulsion = Utils.ReadInt(storageLines, "MonitorizePropulsion", 0) == 1;
             monitorizeLoadTime = Utils.ReadInt(storageLines, "MonitorizeLoadTime", 0) == 1;
             loadStart = new DateTime(Utils.ReadLong(storageLines, "LoadStart", 0));
+            monitorizeCapacity = Utils.ReadInt(storageLines, "MonitorizeCapacity", 0) == 1;
             lastCapacity = Utils.ReadDouble(storageLines, "LastCapacity");
+            monitorizePropulsion = Utils.ReadInt(storageLines, "MonitorizePropulsion", 0) == 1;
             shipStatus = (ShipStatus)Utils.ReadInt(storageLines, "ShipStatus", (int)ShipStatus.Idle);
             navigator.LoadFromStorage(Utils.ReadString(storageLines, "Navigator"));
             route.LoadFromStorage(Utils.ReadString(storageLines, "Route"));
@@ -1251,11 +1283,11 @@ namespace IngameScript
             var parts = new List<string>
             {
                 $"Paused={(paused ? 1 : 0)}",
-                $"MonitorizeCapacity={(monitorizeCapacity ? 1 : 0)}",
-                $"MonitorizePropulsion={(monitorizePropulsion ? 1 : 0)}",
                 $"MonitorizeLoadTime={(monitorizeLoadTime ? 1 : 0)}",
                 $"LoadStart={loadStart.Ticks}",
+                $"MonitorizeCapacity={(monitorizeCapacity ? 1 : 0)}",
                 $"LastCapacity={lastCapacity}",
+                $"MonitorizePropulsion={(monitorizePropulsion ? 1 : 0)}",
                 $"ShipStatus={(int)shipStatus}",
                 $"Navigator={navigator.SaveToStorage()}",
                 $"Route={route.SaveToStorage()}",

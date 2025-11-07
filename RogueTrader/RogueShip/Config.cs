@@ -247,6 +247,19 @@ namespace IngameScript
             return lines.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "") ?? "";
         }
 
+        public bool MonitorizeLoadTime()
+        {
+            return MaxLoadTime.TotalSeconds > 0;
+        }
+        public bool MonitorizeCapacity()
+        {
+            return MaxLoad > 0 && MinLoad >= 0 && MaxLoad > MinLoad;
+        }
+        public bool MonitorizePropulsion()
+        {
+            return MinPowerOnLoad > 0 || MinPowerOnUnload > 0 || MinHydrogenOnLoad > 0 || MinHydrogenOnUnload > 0;
+        }
+
         public bool IsValid()
         {
             return errors.Length == 0;
