@@ -8,7 +8,7 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        const string Version = "1.0";
+        const string Version = "1.1";
         const char AttributeSep = '=';
 
         readonly Config config;
@@ -107,7 +107,7 @@ namespace IngameScript
         }
         void ParseTerminalMessage(string argument)
         {
-            if (argument == "START_BELLOW") lastCapacity = 0;
+            if (argument == "START_BELOW") lastCapacity = 0;
             if (argument == "START_ABOVE") lastCapacity = 1;
         }
 

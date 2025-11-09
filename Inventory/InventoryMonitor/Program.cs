@@ -9,9 +9,10 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        const string Version = "1.3";
+        const string Version = "1.4";
         const char AttributeSep = '=';
         const string WildcardLCDs = "[INV]";
+        const int ItemsQueryTicks = 3;
 
         readonly List<IMyCargoContainer> cargoContainers;
         readonly List<IMyTextPanel> infoLCDs;
@@ -28,6 +29,8 @@ namespace IngameScript
         readonly StringBuilder lastMessage = new StringBuilder();
         readonly StringBuilder infoText = new StringBuilder();
         readonly StringBuilder message = new StringBuilder();
+        int currentTick = 0;
+        bool itemsNeeded = false;
 
         public Program()
         {
@@ -193,31 +196,50 @@ namespace IngameScript
             {
                 infoText.Clear();
                 infoText.AppendLine($"Inventory Monitor v{Version} - {channel}. {DateTime.Now:HH:mm:ss}");
-                if (lastMessageDate.Ticks > 0) infoText.AppendLine($"Last message sent {(int)(DateTime.Now - lastMessageDate).TotalMinutes} minutes ago.");
-                infoText.Append(lastMessage.ToString().Replace(";", Environment.NewLine));
-                infoText.AppendLine($"Last query has items? {lastQueryHastItems}");
 
+                PrintLastMessage();
                 Monitorize();
+                PrintCurrentMessage();
 
                 WriteInfo();
             }
+        }
+        void PrintLastMessage()
+        {
+            if (lastMessageDate.Ticks > 0) infoText.AppendLine($"Last message sent {DateTime.Now - lastMessageDate:hh\\:mm} minutes ago.");
+            infoText.AppendLine($"Last query has items? {lastQueryHastItems}");
+            infoText.Append(lastMessage.ToString().Replace(";", Environment.NewLine));
+        }
+        void PrintCurrentMessage()
+        {
+            if (itemsNeeded)
+                infoText.AppendLine(message.ToString().Replace(";", Environment.NewLine));
+            else
+                infoText.AppendLine("All items in required quantities.");
         }
 
         void Monitorize()
         {
             if (retained)
             {
+                infoText.AppendLine("Waiting for delivery to complete.");
                 return;
             }
 
             var time = DateTime.Now - lastQuery;
-            if (time < queryInterval)
+            if (time >= queryInterval)
             {
-                infoText.AppendLine($"Waiting for next query: {queryInterval - time:hh\\:mm\\:ss}");
+                Send();
                 return;
             }
 
-            Send();
+            infoText.AppendLine($"Waiting for next query: {queryInterval - time:hh\\:mm\\:ss}");
+
+            if (currentTick++ > ItemsQueryTicks)
+            {
+                currentTick = 0;
+                itemsNeeded = WriteMessage();
+            }
         }
         void Send()
         {
