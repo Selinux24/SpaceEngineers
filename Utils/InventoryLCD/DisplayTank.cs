@@ -10,18 +10,21 @@ namespace IngameScript
     class DisplayTank
     {
         readonly Program program;
-        readonly List<string> types = new List<string>();
-        readonly BlockSystem<IMyGasTank> tanks = new BlockSystem<IMyGasTank>();
+        readonly DisplayLcd displayLcd;
+        readonly Dictionary<string, BlockSystem<IMyGasTank>> types = new Dictionary<string, BlockSystem<IMyGasTank>>();
 
         int panel = 0;
         bool enable = false;
         float scale = 1f;
+        string filter = "*";
         bool tankH2 = false;
         bool tankO2 = false;
+        bool showPercent = true;
 
-        public DisplayTank(Program program)
+        public DisplayTank(Program program, DisplayLcd displayLcd)
         {
             this.program = program;
+            this.displayLcd = displayLcd;
         }
 
         public void Load(MyIni ini)
@@ -29,20 +32,49 @@ namespace IngameScript
             panel = ini.Get("Tank", "panel").ToInt32(0);
             enable = ini.Get("Tank", "on").ToBoolean(false);
             scale = ini.Get("Tank", "scale").ToSingle(1f);
+            filter = ini.Get("Tank", "filter").ToString("*");
             tankH2 = ini.Get("Tank", "H2").ToBoolean(true);
             tankO2 = ini.Get("Tank", "O2").ToBoolean(true);
+            showPercent = ini.Get("Tank", "show_percent").ToBoolean(true);
 
             types.Clear();
-            if (tankH2) types.Add("Hydrogen");
-            if (tankO2) types.Add("Oxygen");
+            if (tankH2) types.Add("Hydrogen", new BlockSystem<IMyGasTank>());
+            if (tankO2) types.Add("Oxygen", new BlockSystem<IMyGasTank>());
+
+            Search();
         }
         public void Save(MyIni ini)
         {
             ini.Set("Tank", "panel", panel);
             ini.Set("Tank", "on", enable);
             ini.Set("Tank", "scale", scale);
+            ini.Set("Tank", "filter", filter);
             ini.Set("Tank", "H2", tankH2);
             ini.Set("Tank", "O2", tankO2);
+            ini.Set("Tank", "show_percent", showPercent);
+        }
+
+        void Search()
+        {
+            var blockFilter = BlockFilter<IMyGasTank>.Create(displayLcd.Block, filter);
+
+            foreach (var type in types)
+            {
+                Func<IMyGasTank, bool> collect =
+                    (block) =>
+                    {
+                        if (string.IsNullOrEmpty(block.BlockDefinition.SubtypeName))
+                        {
+                            return block.BlockDefinition.TypeIdString.Contains(type.Key);
+                        }
+                        else
+                        {
+                            return block.BlockDefinition.SubtypeName.Contains(type.Key);
+                        }
+                    };
+
+                BlockSystem<IMyGasTank>.SearchByFilter(program, type.Value, blockFilter, collect);
+            }
         }
 
         public void Draw(Drawing drawing)
@@ -69,13 +101,16 @@ namespace IngameScript
                 Padding = new StylePadding(0),
                 Round = false,
                 RotationOrScale = scale,
-                Thresholds = program.Config.TankThresholds
+                Thresholds = program.Config.TankThresholds,
+                Percent = showPercent,
             };
 
             var deltaPosition = new Vector2(0, 45) * scale;
-            foreach (string type in types)
+            foreach (var t in types)
             {
-                BlockSystem<IMyGasTank>.SearchBlocks(program, tanks, block => string.IsNullOrEmpty(block.BlockDefinition.SubtypeName) ? block.BlockDefinition.TypeIdString.Contains(type) : block.BlockDefinition.SubtypeName.Contains(type));
+                var type = t.Key;
+                var tanks = t.Value;
+
                 if (tanks.List.Count == 0) continue;
 
                 float volumes = 0f;
@@ -94,11 +129,11 @@ namespace IngameScript
                 string data;
                 if (type.Equals("Hydrogen"))
                 {
-                    data = $"H2: {Math.Round(volumes, 2):#,000.00}M³/{Math.Round(capacity, 2):#,000.00}M³";
+                    data = $"H2: {tanks.List.Count} {Math.Round(volumes, 2):#,000.00}M³/{Math.Round(capacity, 2):#,000.00}M³";
                 }
                 else if (type.Equals("Oxygen"))
                 {
-                    data = $"O2: {Math.Round(volumes, 2):#,000.00}M³/{Math.Round(capacity, 2):#,000.00}M³";
+                    data = $"O2: {tanks.List.Count} {Math.Round(volumes, 2):#,000.00}M³/{Math.Round(capacity, 2):#,000.00}M³";
                 }
                 else
                 {

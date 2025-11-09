@@ -29,7 +29,7 @@ namespace IngameScript
 
             program.GridTerminalSystem.GetBlocksOfType(blockSystem.List, collect);
         }
-        public static void SearchByFilter(Program program, BlockSystem<T> blockSystem, BlockFilter<T> filter)
+        public static void SearchByFilter(Program program, BlockSystem<T> blockSystem, BlockFilter<T> filter, Func<T, bool> blockCollect = null)
         {
             blockSystem.List.Clear();
 
@@ -41,13 +41,20 @@ namespace IngameScript
                 groups.ForEach(group =>
                 {
                     var groupList = new List<T>();
-                    group.GetBlocksOfType(groupList, filter.BlockVisitor());
+                    group.GetBlocksOfType(groupList, blockCollect);
                     blockSystem.List.AddList(groupList);
                 });
             }
             else
             {
-                program.GridTerminalSystem.GetBlocksOfType(blockSystem.List, filter.BlockVisitor());
+                Func<T, bool> cmp = b =>
+                {
+                    if (blockCollect == null) return filter.BlockVisitor()(b);
+
+                    return filter.BlockVisitor()(b) && blockCollect(b);
+                };
+
+                program.GridTerminalSystem.GetBlocksOfType(blockSystem.List, cmp);
             }
 
             program.Echo($"{typeof(T).Name}({filter.Value}):{blockSystem.List.Count}");

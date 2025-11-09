@@ -34,6 +34,7 @@ namespace IngameScript
         bool gauge = true;
         bool gaugeFullscreen = true;
         bool gaugeHorizontal = true;
+        bool gaugeShowPercent = true;
         float gaugeWidth = 80f;
         float gaugeHeight = 40f;
         bool item = true;
@@ -63,6 +64,7 @@ namespace IngameScript
             gaugeHorizontal = ini.Get("Inventory", "gauge_horizontal").ToBoolean(true);
             gaugeWidth = ini.Get("Inventory", "gauge_width").ToSingle(80f);
             gaugeHeight = ini.Get("Inventory", "gauge_height").ToSingle(40f);
+            gaugeShowPercent = ini.Get("Inventory", "gauge_show_percent").ToBoolean(true);
 
             item = ini.Get("Inventory", "item_on").ToBoolean(true);
             itemGauge = ini.Get("Inventory", "item_gauge_on").ToBoolean(true);
@@ -93,6 +95,7 @@ namespace IngameScript
             ini.Set("Inventory", "gauge_horizontal", gaugeHorizontal);
             ini.Set("Inventory", "gauge_width", gaugeWidth);
             ini.Set("Inventory", "gauge_height", gaugeHeight);
+            ini.Set("Inventory", "gauge_show_percent", gaugeShowPercent);
 
             ini.Set("Inventory", "item_on", item);
             ini.Set("Inventory", "item_gauge_on", itemGauge);
@@ -201,7 +204,8 @@ namespace IngameScript
                 Width = gaugeWidth,
                 Height = gaugeHeight,
                 Thresholds = program.Config.ChestThresholds,
-                ColorSoftening = .6f
+                ColorSoftening = .6f,
+                Percent = gaugeShowPercent,
             };
 
             style.Scale(scale);

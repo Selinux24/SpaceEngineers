@@ -24,9 +24,9 @@ namespace IngameScript
             DisplayInventory = new DisplayInventory(program, this);
             DisplayDrill = new DisplayDrill(program, this);
             DisplayMachine = new DisplayMachine(program, this);
-            DisplayPower = new DisplayPower(program);
+            DisplayPower = new DisplayPower(program, this);
             DisplayShip = new DisplayShip(program);
-            DisplayTank = new DisplayTank(program);
+            DisplayTank = new DisplayTank(program, this);
             cleanup = 0;
         }
 

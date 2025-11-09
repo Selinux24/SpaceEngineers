@@ -22,6 +22,7 @@ namespace IngameScript
                 CubeGrid = parent.CubeGrid,
                 HasInventory = hasInventory
             };
+
             if (filter.Contains(":"))
             {
                 string[] values = filter.Split(':');
@@ -34,8 +35,10 @@ namespace IngameScript
             {
                 if (!filter.Equals("*")) blockFilter.Filter = filter;
             }
+
             return blockFilter;
         }
+       
         public Func<T, bool> BlockVisitor()
         {
             return (block) =>
