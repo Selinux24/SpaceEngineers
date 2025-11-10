@@ -54,6 +54,6 @@ namespace VRage.Game.ModAPI.Ingame
     public interface IMyEntityComponentContainer
     {
         bool Has<T>();
-        void TryGet<T>(out T resourceSink);
+        bool TryGet<T>(out T resourceSink);
     }
 }
