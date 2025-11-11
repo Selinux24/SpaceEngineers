@@ -9,6 +9,9 @@ namespace IngameScript
 {
     class DisplayTank
     {
+        const string SECTION = "Tank";
+        const string SECTION_TANK_THRESHOLD = "TankThresholds";
+
         readonly Program program;
         readonly DisplayLcd displayLcd;
         readonly Dictionary<string, BlockSystem<IMyGasTank>> types = new Dictionary<string, BlockSystem<IMyGasTank>>();
@@ -20,6 +23,7 @@ namespace IngameScript
         bool tankH2 = false;
         bool tankO2 = false;
         bool showPercent = true;
+        GaugeThresholds tankThresholds;
 
         public DisplayTank(Program program, DisplayLcd displayLcd)
         {
@@ -29,13 +33,18 @@ namespace IngameScript
 
         public void Load(MyIni ini)
         {
-            panel = ini.Get("Tank", "panel").ToInt32(0);
-            enable = ini.Get("Tank", "on").ToBoolean(false);
-            scale = ini.Get("Tank", "scale").ToSingle(1f);
-            filter = ini.Get("Tank", "filter").ToString("*");
-            tankH2 = ini.Get("Tank", "H2").ToBoolean(true);
-            tankO2 = ini.Get("Tank", "O2").ToBoolean(true);
-            showPercent = ini.Get("Tank", "show_percent").ToBoolean(true);
+            if (!ini.ContainsSection(SECTION)) return;
+
+            panel = ini.Get(SECTION, "panel").ToInt32(0);
+            enable = ini.Get(SECTION, "on").ToBoolean(false);
+            scale = ini.Get(SECTION, "scale").ToSingle(1f);
+            filter = ini.Get(SECTION, "filter").ToString("*");
+            tankH2 = ini.Get(SECTION, "H2").ToBoolean(true);
+            tankO2 = ini.Get(SECTION, "O2").ToBoolean(true);
+            showPercent = ini.Get(SECTION, "show_percent").ToBoolean(true);
+
+            tankThresholds = GaugeThresholds.LoadThresholds(ini, SECTION_TANK_THRESHOLD);
+            if (tankThresholds == null) tankThresholds = GaugeThresholds.DefaultTankThesholds();
 
             types.Clear();
             if (tankH2) types.Add("Hydrogen", new BlockSystem<IMyGasTank>());
@@ -45,13 +54,15 @@ namespace IngameScript
         }
         public void Save(MyIni ini)
         {
-            ini.Set("Tank", "panel", panel);
-            ini.Set("Tank", "on", enable);
-            ini.Set("Tank", "scale", scale);
-            ini.Set("Tank", "filter", filter);
-            ini.Set("Tank", "H2", tankH2);
-            ini.Set("Tank", "O2", tankO2);
-            ini.Set("Tank", "show_percent", showPercent);
+            ini.Set(SECTION, "panel", panel);
+            ini.Set(SECTION, "on", enable);
+            ini.Set(SECTION, "scale", scale);
+            ini.Set(SECTION, "filter", filter);
+            ini.Set(SECTION, "H2", tankH2);
+            ini.Set(SECTION, "O2", tankO2);
+            ini.Set(SECTION, "show_percent", showPercent);
+
+            GaugeThresholds.SaveThresholds(ini, tankThresholds, SECTION_TANK_THRESHOLD);
         }
 
         void Search()
@@ -101,7 +112,7 @@ namespace IngameScript
                 Padding = new StylePadding(0),
                 Round = false,
                 RotationOrScale = scale,
-                Thresholds = program.Config.TankThresholds,
+                Thresholds = tankThresholds,
                 Percent = showPercent,
             };
 

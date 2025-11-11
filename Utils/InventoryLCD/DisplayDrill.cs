@@ -8,6 +8,9 @@ namespace IngameScript
 {
     class DisplayDrill
     {
+        const string SECTION = "Drills";
+        const string SECTION_CHEST_THRESHOLDS = "DrillsChestThresholds";
+
         readonly Program program;
         readonly DisplayLcd displayLcd;
         readonly BlockSystem<IMyShipDrill> drillInventories = new BlockSystem<IMyShipDrill>();
@@ -27,6 +30,7 @@ namespace IngameScript
         float drillsSize = 50f;
         float drillsPaddingX = 0f;
         float drillsPaddingY = 0f;
+        GaugeThresholds chestThresholds;
 
         public DisplayDrill(Program program, DisplayLcd displayLcd)
         {
@@ -34,36 +38,43 @@ namespace IngameScript
             this.displayLcd = displayLcd;
         }
 
-        public void Load(MyIni MyIni)
+        public void Load(MyIni ini)
         {
-            panel = MyIni.Get("Drills", "panel").ToInt32(0);
-            enable = MyIni.Get("Drills", "on").ToBoolean(false);
-            filter = MyIni.Get("Drills", "filter").ToString("GM:Drills");
-            drillsOrientation = MyIni.Get("Drills", "orientation").ToString("y");
-            drillsRotate = MyIni.Get("Drills", "rotate").ToBoolean(false);
-            drillsFlipX = MyIni.Get("Drills", "flip_x").ToBoolean(false);
-            drillsFlipY = MyIni.Get("Drills", "flip_y").ToBoolean(false);
-            drillsSize = MyIni.Get("Drills", "size").ToSingle(50f);
-            drillsInfo = MyIni.Get("Drills", "info").ToBoolean(false);
-            drillsPaddingX = MyIni.Get("Drills", "padding_x").ToSingle(0f);
-            drillsPaddingY = MyIni.Get("Drills", "padding_y").ToSingle(0f);
+            if (!ini.ContainsSection(SECTION)) return;
+
+            panel = ini.Get(SECTION, "panel").ToInt32(0);
+            enable = ini.Get(SECTION, "on").ToBoolean(false);
+            filter = ini.Get(SECTION, "filter").ToString("GM:Drills");
+            drillsOrientation = ini.Get(SECTION, "orientation").ToString("y");
+            drillsRotate = ini.Get(SECTION, "rotate").ToBoolean(false);
+            drillsFlipX = ini.Get(SECTION, "flip_x").ToBoolean(false);
+            drillsFlipY = ini.Get(SECTION, "flip_y").ToBoolean(false);
+            drillsSize = ini.Get(SECTION, "size").ToSingle(50f);
+            drillsInfo = ini.Get(SECTION, "info").ToBoolean(false);
+            drillsPaddingX = ini.Get(SECTION, "padding_x").ToSingle(0f);
+            drillsPaddingY = ini.Get(SECTION, "padding_y").ToSingle(0f);
+
+            chestThresholds = GaugeThresholds.LoadThresholds(ini, SECTION_CHEST_THRESHOLDS);
+            if (chestThresholds == null) chestThresholds = GaugeThresholds.DefaultChestThesholds();
 
             var blockFilter = BlockFilter<IMyShipDrill>.Create(displayLcd.Block, filter);
             BlockSystem<IMyShipDrill>.SearchByFilter(program, drillInventories, blockFilter);
         }
-        public void Save(MyIni MyIni)
+        public void Save(MyIni ini)
         {
-            MyIni.Set("Drills", "panel", panel);
-            MyIni.Set("Drills", "on", enable);
-            MyIni.Set("Drills", "filter", filter);
-            MyIni.Set("Drills", "orientation", drillsOrientation);
-            MyIni.Set("Drills", "rotate", drillsRotate);
-            MyIni.Set("Drills", "flip_x", drillsFlipX);
-            MyIni.Set("Drills", "flip_y", drillsFlipY);
-            MyIni.Set("Drills", "size", drillsSize);
-            MyIni.Set("Drills", "info", drillsInfo);
-            MyIni.Set("Drills", "padding_x", drillsPaddingX);
-            MyIni.Set("Drills", "padding_y", drillsPaddingY);
+            ini.Set(SECTION, "panel", panel);
+            ini.Set(SECTION, "on", enable);
+            ini.Set(SECTION, "filter", filter);
+            ini.Set(SECTION, "orientation", drillsOrientation);
+            ini.Set(SECTION, "rotate", drillsRotate);
+            ini.Set(SECTION, "flip_x", drillsFlipX);
+            ini.Set(SECTION, "flip_y", drillsFlipY);
+            ini.Set(SECTION, "size", drillsSize);
+            ini.Set(SECTION, "info", drillsInfo);
+            ini.Set(SECTION, "padding_x", drillsPaddingX);
+            ini.Set(SECTION, "padding_y", drillsPaddingY);
+
+            GaugeThresholds.SaveThresholds(ini, chestThresholds, SECTION_CHEST_THRESHOLDS);
         }
 
         public void Draw(Drawing drawing)
@@ -89,7 +100,7 @@ namespace IngameScript
                 Round = false,
                 RotationOrScale = 0.5f,
                 Percent = drillsSize > 49,
-                Thresholds = program.Config.ChestThresholds
+                Thresholds = chestThresholds
             };
 
             if (drillsInfo)

@@ -1,4 +1,5 @@
 ﻿using Sandbox.ModAPI.Ingame;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using VRage.Game.GUI.TextPanel;
@@ -8,7 +9,7 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        const string Version = "1.36";
+        const string Version = "1.37";
         const UpdateType CommandUpdate = UpdateType.Trigger | UpdateType.Terminal;
 
         readonly MyCommandLine commandLine = new MyCommandLine();
@@ -93,20 +94,23 @@ namespace IngameScript
         }
         bool RunLcd()
         {
-            var block = blocks.List[currBlock];
-            currBlock++;
-            currBlock %= maxBlocks;
+            try
+            {
+                var block = blocks.List[currBlock];
+                currBlock++;
+                currBlock %= maxBlocks;
 
-            if (string.IsNullOrWhiteSpace(block.MyBlock.CustomData)) return true;
+                if (string.IsNullOrWhiteSpace(block.MyBlock.CustomData)) return true;
 
-            block.Update();
-
-            if (!block.Ini.ContainsSection("Inventory") && !block.MyBlock.CustomData.Trim().Equals("prepare")) return true;
-
-            var displayLcd = GetDisplayLcd(block.MyBlock);
-
-            if (block.Changed) displayLcd.Load(block.Ini);
-            else displayLcd.Draw();
+                block.Update();
+                var displayLcd = GetDisplayLcd(block.MyBlock);
+                if (block.Changed) displayLcd.Load(block.Ini);
+                else displayLcd.Draw();
+            }
+            catch (Exception ex)
+            {
+                Echo($"Error: {ex.Message}");
+            }
 
             return Runtime.CurrentInstructionCount < 25000;
         }

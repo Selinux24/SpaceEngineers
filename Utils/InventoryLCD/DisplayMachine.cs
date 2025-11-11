@@ -10,6 +10,9 @@ namespace IngameScript
 {
     class DisplayMachine
     {
+        const string SECTION = "Machine";
+        const string SECTION_MACHINE_COLOR = "MachineColor";
+
         readonly Program program;
         readonly DisplayLcd displayLcd;
 
@@ -38,6 +41,7 @@ namespace IngameScript
         int stringLen = 20;
         int maxItems = 3;
         Style style = new Style();
+        ColorDefaults colorDefaults;
 
         public DisplayMachine(Program program, DisplayLcd displayLcd)
         {
@@ -47,17 +51,22 @@ namespace IngameScript
 
         public void Load(MyIni ini)
         {
-            panel = ini.Get("Machine", "panel").ToInt32(0);
-            enable = ini.Get("Machine", "on").ToBoolean(false);
-            filter = ini.Get("Machine", "filter").ToString("*");
-            scale = ini.Get("Machine", "scale").ToSingle(1f);
-            machineRefinery = ini.Get("Machine", "refinery").ToBoolean(true);
-            machineAssembler = ini.Get("Machine", "assembler").ToBoolean(true);
-            rows = ini.Get("Machine", "rows").ToInt32(6);
-            width = ini.Get("Machine", "width").ToSingle(250f);
-            height = ini.Get("Machine", "height").ToSingle(120f);
-            stringLen = ini.Get("Machine", "string_len").ToInt32(20);
-            maxItems = ini.Get("Machine", "max_items").ToInt32(3);
+            if (!ini.ContainsSection(SECTION)) return;
+
+            panel = ini.Get(SECTION, "panel").ToInt32(0);
+            enable = ini.Get(SECTION, "on").ToBoolean(false);
+            filter = ini.Get(SECTION, "filter").ToString("*");
+            scale = ini.Get(SECTION, "scale").ToSingle(1f);
+            machineRefinery = ini.Get(SECTION, "refinery").ToBoolean(true);
+            machineAssembler = ini.Get(SECTION, "assembler").ToBoolean(true);
+            rows = ini.Get(SECTION, "rows").ToInt32(6);
+            width = ini.Get(SECTION, "width").ToSingle(250f);
+            height = ini.Get(SECTION, "height").ToSingle(120f);
+            stringLen = ini.Get(SECTION, "string_len").ToInt32(20);
+            maxItems = ini.Get(SECTION, "max_items").ToInt32(3);
+
+            colorDefaults = new ColorDefaults(ini, SECTION_MACHINE_COLOR);
+            colorDefaults.Load();
 
             types.Clear();
             columns = 0;
@@ -87,17 +96,19 @@ namespace IngameScript
         }
         public void Save(MyIni ini)
         {
-            ini.Set("Machine", "panel", panel);
-            ini.Set("Machine", "on", enable);
-            ini.Set("Machine", "filter", filter);
-            ini.Set("Machine", "scale", scale);
-            ini.Set("Machine", "refinery", machineRefinery);
-            ini.Set("Machine", "assembler", machineAssembler);
-            ini.Set("Machine", "rows", rows);
-            ini.Set("Machine", "width", width);
-            ini.Set("Machine", "height", height);
-            ini.Set("Machine", "string_len", stringLen);
-            ini.Set("Machine", "max_items", maxItems);
+            ini.Set(SECTION, "panel", panel);
+            ini.Set(SECTION, "on", enable);
+            ini.Set(SECTION, "filter", filter);
+            ini.Set(SECTION, "scale", scale);
+            ini.Set(SECTION, "refinery", machineRefinery);
+            ini.Set(SECTION, "assembler", machineAssembler);
+            ini.Set(SECTION, "rows", rows);
+            ini.Set(SECTION, "width", width);
+            ini.Set(SECTION, "height", height);
+            ini.Set(SECTION, "string_len", stringLen);
+            ini.Set(SECTION, "max_items", maxItems);
+
+            colorDefaults.Save();
         }
 
         public void Draw(Drawing drawing)
@@ -134,7 +145,7 @@ namespace IngameScript
             float formWidth = style.Width - (5 * scale);
             float formHeight = style.Height - (5 * scale);
 
-            string colorDefault = program.Config.Get("color", "default");
+            string colorDefault = colorDefaults.GetDefault();
 
             surface.DrawForm(position, SpriteForm.SquareSimple, formWidth, formHeight, new Color(5, 5, 5, 125));
 
@@ -159,7 +170,7 @@ namespace IngameScript
                     Type = SpriteType.TEXTURE,
                     Data = item.Icon,
                     Size = new Vector2(sizeIcon, sizeIcon),
-                    Color = program.Config.GetColor("color", item.Name, item.Data, colorDefault),
+                    Color = colorDefaults.GetColor(item.Name, item.Data, colorDefault),
                     Position = position + new Vector2(x, sizeIcon * 0.5f + cellSpacing),
                 });
 

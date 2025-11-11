@@ -10,6 +10,8 @@ namespace IngameScript
 {
     class DisplayShip
     {
+        const string SECTION = "Ship";
+
         readonly Program program;
         readonly Dictionary<string, List<IMyThrust>> forces = new Dictionary<string, List<IMyThrust>>();
         readonly BlockSystem<IMyThrust> thrusts = new BlockSystem<IMyThrust>();
@@ -26,22 +28,24 @@ namespace IngameScript
             this.program = program;
         }
 
-        public void Load(MyIni MyIni)
+        public void Load(MyIni ini)
         {
-            panel = MyIni.Get("Ship", "panel").ToInt32(0);
-            enable = MyIni.Get("Ship", "on").ToBoolean(false);
-            scale = MyIni.Get("Ship", "scale").ToDouble(1d);
-            oneLine = MyIni.Get("Ship", "one_line").ToBoolean(false);
+            if (!ini.ContainsSection(SECTION)) return;
+
+            panel = ini.Get(SECTION, "panel").ToInt32(0);
+            enable = ini.Get(SECTION, "on").ToBoolean(false);
+            scale = ini.Get(SECTION, "scale").ToDouble(1d);
+            oneLine = ini.Get(SECTION, "one_line").ToBoolean(false);
 
             BlockSystem<IMyCockpit>.SearchBlocks(program, cockpit);
             BlockSystem<IMyThrust>.SearchBlocks(program, thrusts);
         }
-        public void Save(MyIni MyIni)
+        public void Save(MyIni ini)
         {
-            MyIni.Set("Ship", "panel", panel);
-            MyIni.Set("Ship", "on", enable);
-            MyIni.Set("Ship", "scale", scale);
-            MyIni.Set("Ship", "one_line", oneLine);
+            ini.Set(SECTION, "panel", panel);
+            ini.Set(SECTION, "on", enable);
+            ini.Set(SECTION, "scale", scale);
+            ini.Set(SECTION, "one_line", oneLine);
         }
 
         public void Draw(Drawing drawing)

@@ -10,6 +10,12 @@ namespace IngameScript
 {
     class DisplayInventory
     {
+        const string SECTION = "Inventory";
+        const string SECTION_ITEM_THRESHOLDS = "InventoryItemThresholds";
+        const string SECTION_CHEST_THRESHOLDS = "InventoryChestThresholds";
+        const string SECTION_COLORS = "InventoryColor";
+        const string SECTION_LIMITS = "InventoryLimit";
+
         const string TYPE_ORE = "MyObjectBuilder_Ore";
         const string TYPE_INGOT = "MyObjectBuilder_Ingot";
         const string TYPE_COMPONENT = "MyObjectBuilder_Component";
@@ -45,6 +51,10 @@ namespace IngameScript
         bool itemIngot = true;
         bool itemComponent = true;
         bool itemAmmo = true;
+        GaugeThresholds itemThresholds;
+        GaugeThresholds chestThresholds;
+        ColorDefaults colorDefaults;
+        Limits limits;
 
         public DisplayInventory(Program program, DisplayLcd displayLcd)
         {
@@ -54,26 +64,40 @@ namespace IngameScript
 
         public void Load(MyIni ini)
         {
-            panel = ini.Get("Inventory", "panel").ToInt32(0);
-            filter = ini.Get("Inventory", "filter").ToString("*");
-            enable = ini.Get("Inventory", "on").ToBoolean(true);
-            scale = ini.Get("Inventory", "scale").ToSingle(1f);
+            if (!ini.ContainsSection(SECTION)) return;
 
-            gauge = ini.Get("Inventory", "gauge_on").ToBoolean(true);
-            gaugeFullscreen = ini.Get("Inventory", "gauge_fullscreen").ToBoolean(true);
-            gaugeHorizontal = ini.Get("Inventory", "gauge_horizontal").ToBoolean(true);
-            gaugeWidth = ini.Get("Inventory", "gauge_width").ToSingle(80f);
-            gaugeHeight = ini.Get("Inventory", "gauge_height").ToSingle(40f);
-            gaugeShowPercent = ini.Get("Inventory", "gauge_show_percent").ToBoolean(true);
+            panel = ini.Get(SECTION, "panel").ToInt32(0);
+            filter = ini.Get(SECTION, "filter").ToString("*");
+            enable = ini.Get(SECTION, "on").ToBoolean(true);
+            scale = ini.Get(SECTION, "scale").ToSingle(1f);
 
-            item = ini.Get("Inventory", "item_on").ToBoolean(true);
-            itemGauge = ini.Get("Inventory", "item_gauge_on").ToBoolean(true);
-            itemSymbol = ini.Get("Inventory", "item_symbol_on").ToBoolean(true);
-            itemSize = ini.Get("Inventory", "item_size").ToSingle(80f);
-            itemOre = ini.Get("Inventory", "item_ore").ToBoolean(true);
-            itemIngot = ini.Get("Inventory", "item_ingot").ToBoolean(true);
-            itemComponent = ini.Get("Inventory", "item_component").ToBoolean(true);
-            itemAmmo = ini.Get("Inventory", "item_ammo").ToBoolean(true);
+            gauge = ini.Get(SECTION, "gauge_on").ToBoolean(true);
+            gaugeFullscreen = ini.Get(SECTION, "gauge_fullscreen").ToBoolean(true);
+            gaugeHorizontal = ini.Get(SECTION, "gauge_horizontal").ToBoolean(true);
+            gaugeWidth = ini.Get(SECTION, "gauge_width").ToSingle(80f);
+            gaugeHeight = ini.Get(SECTION, "gauge_height").ToSingle(40f);
+            gaugeShowPercent = ini.Get(SECTION, "gauge_show_percent").ToBoolean(true);
+
+            item = ini.Get(SECTION, "item_on").ToBoolean(true);
+            itemGauge = ini.Get(SECTION, "item_gauge_on").ToBoolean(true);
+            itemSymbol = ini.Get(SECTION, "item_symbol_on").ToBoolean(true);
+            itemSize = ini.Get(SECTION, "item_size").ToSingle(80f);
+            itemOre = ini.Get(SECTION, "item_ore").ToBoolean(true);
+            itemIngot = ini.Get(SECTION, "item_ingot").ToBoolean(true);
+            itemComponent = ini.Get(SECTION, "item_component").ToBoolean(true);
+            itemAmmo = ini.Get(SECTION, "item_ammo").ToBoolean(true);
+
+            itemThresholds = GaugeThresholds.LoadThresholds(ini, SECTION_ITEM_THRESHOLDS);
+            if (itemThresholds == null) itemThresholds = GaugeThresholds.DefaultItemThesholds();
+
+            chestThresholds = GaugeThresholds.LoadThresholds(ini, SECTION_CHEST_THRESHOLDS);
+            if (chestThresholds == null) chestThresholds = GaugeThresholds.DefaultChestThesholds();
+
+            colorDefaults = new ColorDefaults(ini, SECTION_COLORS);
+            colorDefaults.Load();
+
+            limits = new Limits(ini, SECTION_LIMITS);
+            limits.Load();
 
             types.Clear();
             if (itemOre) types.Add(TYPE_ORE);
@@ -85,26 +109,31 @@ namespace IngameScript
         }
         public void Save(MyIni ini)
         {
-            ini.Set("Inventory", "panel", panel);
-            ini.Set("Inventory", "filter", filter);
-            ini.Set("Inventory", "on", enable);
-            ini.Set("Inventory", "scale", scale);
+            ini.Set(SECTION, "panel", panel);
+            ini.Set(SECTION, "filter", filter);
+            ini.Set(SECTION, "on", enable);
+            ini.Set(SECTION, "scale", scale);
 
-            ini.Set("Inventory", "gauge_on", gauge);
-            ini.Set("Inventory", "gauge_fullscreen", gaugeFullscreen);
-            ini.Set("Inventory", "gauge_horizontal", gaugeHorizontal);
-            ini.Set("Inventory", "gauge_width", gaugeWidth);
-            ini.Set("Inventory", "gauge_height", gaugeHeight);
-            ini.Set("Inventory", "gauge_show_percent", gaugeShowPercent);
+            ini.Set(SECTION, "gauge_on", gauge);
+            ini.Set(SECTION, "gauge_fullscreen", gaugeFullscreen);
+            ini.Set(SECTION, "gauge_horizontal", gaugeHorizontal);
+            ini.Set(SECTION, "gauge_width", gaugeWidth);
+            ini.Set(SECTION, "gauge_height", gaugeHeight);
+            ini.Set(SECTION, "gauge_show_percent", gaugeShowPercent);
 
-            ini.Set("Inventory", "item_on", item);
-            ini.Set("Inventory", "item_gauge_on", itemGauge);
-            ini.Set("Inventory", "item_symbol_on", itemSymbol);
-            ini.Set("Inventory", "item_size", itemSize);
-            ini.Set("Inventory", "item_ore", itemOre);
-            ini.Set("Inventory", "item_ingot", itemIngot);
-            ini.Set("Inventory", "item_component", itemComponent);
-            ini.Set("Inventory", "item_ammo", itemAmmo);
+            ini.Set(SECTION, "item_on", item);
+            ini.Set(SECTION, "item_gauge_on", itemGauge);
+            ini.Set(SECTION, "item_symbol_on", itemSymbol);
+            ini.Set(SECTION, "item_size", itemSize);
+            ini.Set(SECTION, "item_ore", itemOre);
+            ini.Set(SECTION, "item_ingot", itemIngot);
+            ini.Set(SECTION, "item_component", itemComponent);
+            ini.Set(SECTION, "item_ammo", itemAmmo);
+
+            GaugeThresholds.SaveThresholds(ini, itemThresholds, SECTION_ITEM_THRESHOLDS);
+            GaugeThresholds.SaveThresholds(ini, chestThresholds, SECTION_CHEST_THRESHOLDS);
+            colorDefaults.Save();
+            limits.Save();
         }
 
         void Search()
@@ -203,7 +232,7 @@ namespace IngameScript
                 Fullscreen = gaugeFullscreen,
                 Width = gaugeWidth,
                 Height = gaugeHeight,
-                Thresholds = program.Config.ChestThresholds,
+                Thresholds = chestThresholds,
                 ColorSoftening = .6f,
                 Percent = gaugeShowPercent,
             };
@@ -223,8 +252,8 @@ namespace IngameScript
             float deltaWidth = width * scale;
             float deltaHeight = height * scale;
             int limit = GetLimit(drawing, deltaHeight, cellSpacing);
-            string colorDefault = program.Config.Get("color", "default");
-            int limitDefault = program.Config.GetInt("Limit", "default");
+            string colorDefault = colorDefaults.GetDefault();
+            int limitDefault = limits.GetInt("default");
 
             foreach (string type in types)
             {
@@ -240,14 +269,14 @@ namespace IngameScript
                         Path = item.Icon,
                         Width = width,
                         Height = height,
-                        Color = program.Config.GetColor("color", item.Name, item.Data, colorDefault),
-                        Thresholds = program.Config.ItemThresholds,
+                        Color = colorDefaults.GetColor(item.Name, item.Data, colorDefault),
+                        Thresholds = itemThresholds,
                         ColorSoftening = .6f
                     };
                     style.Scale(scale);
 
                     var p = drawing.Position + new Vector2((cellSpacing + deltaWidth) * (count / limit), (cellSpacing + deltaHeight) * (count - (count / limit) * limit));
-                    int l = itemGauge ? program.Config.GetInt("Limit", item.Name, limitDefault) : 0;
+                    int l = itemGauge ? limits.GetInt(item.Name, limitDefault) : 0;
                     Variances v = GetVariance(entry.Key, item.Amount);
                     drawing.DrawGaugeIcon(p, item.Name, item.Amount, l, style, itemGauge, itemSymbol, v);
 

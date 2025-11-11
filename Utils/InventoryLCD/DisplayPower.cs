@@ -13,6 +13,9 @@ namespace IngameScript
 {
     class DisplayPower
     {
+        const string SECTION = "Power";
+        const string SECTION_POWER_THRESHOLD = "PowerThresholds";
+
         readonly Program program;
         readonly DisplayLcd displayLcd;
         readonly MyDefinitionId powerDefinitionId = new MyDefinitionId(typeof(MyObjectBuilder_GasProperties), "Electricity");
@@ -32,6 +35,7 @@ namespace IngameScript
         bool showBatteries = true;
         bool showInput = true;
         bool showPercent = true;
+        GaugeThresholds powerThresholds;
 
         public DisplayPower(Program program, DisplayLcd displayLcd)
         {
@@ -41,29 +45,36 @@ namespace IngameScript
 
         public void Load(MyIni ini)
         {
-            panel = ini.Get("Power", "panel").ToInt32(0);
-            enable = ini.Get("Power", "on").ToBoolean(false);
-            scale = ini.Get("Power", "scale").ToSingle(1f);
-            producersFilter = ini.Get("Power", "producers_filter").ToString("*");
-            consummersFilter = ini.Get("Power", "consummers_filter").ToString("*");
-            showDetails = ini.Get("Power", "show_details").ToBoolean(true);
-            showBatteries = ini.Get("Power", "show_batteries").ToBoolean(true);
-            showInput = ini.Get("Power", "show_input").ToBoolean(true);
-            showPercent = ini.Get("Power", "show_percent").ToBoolean(true);
+            if (!ini.ContainsSection(SECTION)) return;
+
+            panel = ini.Get(SECTION, "panel").ToInt32(0);
+            enable = ini.Get(SECTION, "on").ToBoolean(false);
+            scale = ini.Get(SECTION, "scale").ToSingle(1f);
+            producersFilter = ini.Get(SECTION, "producers_filter").ToString("*");
+            consummersFilter = ini.Get(SECTION, "consummers_filter").ToString("*");
+            showDetails = ini.Get(SECTION, "show_details").ToBoolean(true);
+            showBatteries = ini.Get(SECTION, "show_batteries").ToBoolean(true);
+            showInput = ini.Get(SECTION, "show_input").ToBoolean(true);
+            showPercent = ini.Get(SECTION, "show_percent").ToBoolean(true);
+
+            powerThresholds = GaugeThresholds.LoadThresholds(ini, SECTION_POWER_THRESHOLD);
+            if (powerThresholds == null) powerThresholds = GaugeThresholds.DefaultPowerThesholds();
 
             Search();
         }
         public void Save(MyIni ini)
         {
-            ini.Set("Power", "panel", panel);
-            ini.Set("Power", "on", enable);
-            ini.Set("Power", "scale", scale);
-            ini.Set("Power", "producers_filter", producersFilter);
-            ini.Set("Power", "consummers_filter", consummersFilter);
-            ini.Set("Power", "show_details", showDetails);
-            ini.Set("Power", "show_batteries", showBatteries);
-            ini.Set("Power", "show_input", showInput);
-            ini.Set("Power", "show_percent", showPercent);
+            ini.Set(SECTION, "panel", panel);
+            ini.Set(SECTION, "on", enable);
+            ini.Set(SECTION, "scale", scale);
+            ini.Set(SECTION, "producers_filter", producersFilter);
+            ini.Set(SECTION, "consummers_filter", consummersFilter);
+            ini.Set(SECTION, "show_details", showDetails);
+            ini.Set(SECTION, "show_batteries", showBatteries);
+            ini.Set(SECTION, "show_input", showInput);
+            ini.Set(SECTION, "show_percent", showPercent);
+
+            GaugeThresholds.SaveThresholds(ini, powerThresholds, SECTION_POWER_THRESHOLD);
         }
 
         void Search()
@@ -100,7 +111,7 @@ namespace IngameScript
                 Padding = new StylePadding(0),
                 Round = false,
                 RotationOrScale = scale,
-                Thresholds = program.Config.PowerThresholds,
+                Thresholds = powerThresholds,
                 Percent = showPercent,
             };
 
