@@ -16,12 +16,15 @@ namespace IngameScript
         readonly Dictionary<string, List<IMyThrust>> forces = new Dictionary<string, List<IMyThrust>>();
         readonly BlockSystem<IMyThrust> thrusts = new BlockSystem<IMyThrust>();
         readonly BlockSystem<IMyCockpit> cockpit = new BlockSystem<IMyCockpit>();
-        float mass = 0f;
 
         int panel = 0;
         bool enable = false;
         double scale = 1d;
         bool oneLine = false;
+
+        Vector2 offset;
+
+        float mass = 0f;
 
         public DisplayShip(Program program)
         {
@@ -36,6 +39,8 @@ namespace IngameScript
             enable = ini.Get(SECTION, "on").ToBoolean(false);
             scale = ini.Get(SECTION, "scale").ToDouble(1d);
             oneLine = ini.Get(SECTION, "one_line").ToBoolean(false);
+
+            offset = new Vector2(0, 35f * (float)scale);
 
             BlockSystem<IMyCockpit>.SearchBlocks(program, cockpit);
             BlockSystem<IMyThrust>.SearchBlocks(program, thrusts);
@@ -71,10 +76,9 @@ namespace IngameScript
             forces.Add("Forward", thrusts.List.FindAll(x => x.GridThrustDirection == Vector3I.Backward));
             forces.Add("Backward", thrusts.List.FindAll(x => x.GridThrustDirection == Vector3I.Forward));
         }
+       
         void Draw(SurfaceDrawing surface)
         {
-            var offset = new Vector2(0, 35f * (float)scale);
-
             var text = new MySprite()
             {
                 Type = SpriteType.TEXT,

@@ -22,9 +22,6 @@ namespace IngameScript
         readonly Dictionary<string, Power> outputs = new Dictionary<string, Power>();
         readonly BlockSystem<IMyTerminalBlock> producers = new BlockSystem<IMyTerminalBlock>();
         readonly BlockSystem<IMyTerminalBlock> consummers = new BlockSystem<IMyTerminalBlock>();
-        Power batteriesStore;
-        float currentInput = 0f;
-        float maxInput = 0f;
 
         int panel = 0;
         bool enable = false;
@@ -36,6 +33,15 @@ namespace IngameScript
         bool showInput = true;
         bool showPercent = true;
         GaugeThresholds powerThresholds;
+
+        float height;
+        Vector2 padding;
+        Vector2 deltaPosition;
+        StyleGauge style;
+
+        Power batteriesStore;
+        float currentInput = 0f;
+        float maxInput = 0f;
 
         public DisplayPower(Program program, DisplayLcd displayLcd)
         {
@@ -59,6 +65,23 @@ namespace IngameScript
 
             powerThresholds = GaugeThresholds.LoadThresholds(ini, SECTION_POWER_THRESHOLD);
             if (powerThresholds == null) powerThresholds = GaugeThresholds.DefaultPowerThesholds();
+
+            height = 40f * scale;
+            padding = new Vector2(0, 6) * scale;
+            deltaPosition = new Vector2(0, 45) * scale;
+
+            style = new StyleGauge()
+            {
+                Orientation = SpriteOrientation.Horizontal,
+                Fullscreen = true,
+                Width = height,
+                Height = height,
+                Padding = new StylePadding(0),
+                Round = false,
+                RotationOrScale = scale,
+                Thresholds = powerThresholds,
+                Percent = showPercent,
+            };
 
             Search();
         }
@@ -93,32 +116,62 @@ namespace IngameScript
             var surface = drawing.GetSurfaceDrawing(panel);
             surface.Initialize();
 
+            UpdateOutputs();
             Draw(surface);
         }
+        void UpdateOutputs()
+        {
+            outputs.Clear();
+            outputs.Add("all", new Power() { Type = "All" });
+
+            batteriesStore = new Power() { Type = "Batteries" };
+            producers.ForEach(block =>
+            {
+                if (block is IMyBatteryBlock)
+                {
+                    var battery = (IMyBatteryBlock)block;
+
+                    batteriesStore.AddCurrent(battery.CurrentStoredPower);
+                    batteriesStore.AddMax(battery.MaxStoredPower);
+                }
+                else if (block is IMyPowerProducer)
+                {
+                    var producer = (IMyPowerProducer)block;
+
+                    var global = outputs["all"];
+                    global.AddCurrent(producer.CurrentOutput);
+                    global.AddMax(producer.MaxOutput);
+
+                    string type = block.BlockDefinition.SubtypeName;
+                    if (!outputs.ContainsKey(type)) outputs.Add(type, new Power() { Type = type });
+                    var current = outputs[type];
+                    current.AddCurrent(producer.CurrentOutput);
+                    current.AddMax(producer.MaxOutput);
+                }
+            });
+
+            currentInput = 0f;
+            maxInput = 0f;
+            consummers.ForEach(block =>
+            {
+                if (block is IMyBatteryBlock) return;
+
+                MyResourceSinkComponent resourceSink;
+                if (!block.Components.TryGet(out resourceSink)) return;
+
+                var myDefinitionIds = resourceSink.AcceptedResources;
+                if (myDefinitionIds.Contains(powerDefinitionId))
+                {
+                    maxInput += resourceSink.RequiredInputByType(powerDefinitionId);
+                    currentInput += resourceSink.CurrentInputByType(powerDefinitionId);
+                }
+            });
+        }
+
         void Draw(SurfaceDrawing surface)
         {
-            UpdateOutputs();
-
-            float height = 40f * scale;
-            var padding = new Vector2(0, 6) * scale;
-
-            var style = new StyleGauge()
-            {
-                Orientation = SpriteOrientation.Horizontal,
-                Fullscreen = true,
-                Width = height,
-                Height = height,
-                Padding = new StylePadding(0),
-                Round = false,
-                RotationOrScale = scale,
-                Thresholds = powerThresholds,
-                Percent = showPercent,
-            };
-
             surface.DrawGauge(surface.Position, outputs["all"].Current, outputs["all"].Max, style);
             surface.Position += new Vector2(0, height) + padding;
-
-            var deltaPosition = new Vector2(0, 45) * scale;
 
             foreach (var v in outputs)
             {
@@ -189,54 +242,6 @@ namespace IngameScript
                 });
                 surface.Position += deltaPosition;
             }
-        }
-        void UpdateOutputs()
-        {
-            outputs.Clear();
-            outputs.Add("all", new Power() { Type = "All" });
-
-            batteriesStore = new Power() { Type = "Batteries" };
-            producers.ForEach(block =>
-            {
-                if (block is IMyBatteryBlock)
-                {
-                    var battery = (IMyBatteryBlock)block;
-
-                    batteriesStore.AddCurrent(battery.CurrentStoredPower);
-                    batteriesStore.AddMax(battery.MaxStoredPower);
-                }
-                else if (block is IMyPowerProducer)
-                {
-                    var producer = (IMyPowerProducer)block;
-
-                    var global = outputs["all"];
-                    global.AddCurrent(producer.CurrentOutput);
-                    global.AddMax(producer.MaxOutput);
-
-                    string type = block.BlockDefinition.SubtypeName;
-                    if (!outputs.ContainsKey(type)) outputs.Add(type, new Power() { Type = type });
-                    var current = outputs[type];
-                    current.AddCurrent(producer.CurrentOutput);
-                    current.AddMax(producer.MaxOutput);
-                }
-            });
-
-            currentInput = 0f;
-            maxInput = 0f;
-            consummers.ForEach(block =>
-            {
-                if (block is IMyBatteryBlock) return;
-
-                MyResourceSinkComponent resourceSink;
-                if (!block.Components.TryGet(out resourceSink)) return;
-
-                var myDefinitionIds = resourceSink.AcceptedResources;
-                if (myDefinitionIds.Contains(powerDefinitionId))
-                {
-                    maxInput += resourceSink.RequiredInputByType(powerDefinitionId);
-                    currentInput += resourceSink.CurrentInputByType(powerDefinitionId);
-                }
-            });
         }
     }
 }

@@ -9,8 +9,8 @@ namespace IngameScript
         readonly Program program;
         readonly MyIni ini = new MyIni();
         string lastCustomData = null;
+        string lCDFilter = "*";
 
-        public string LCDFilter { get; private set; } = "*";
         public BlockFilter<IMyTextPanel> TextPanelFilter { get; private set; }
         public BlockFilter<IMyCockpit> CockpitFilter { get; private set; }
 
@@ -29,9 +29,9 @@ namespace IngameScript
                 throw new Exception(result.ToString());
             }
 
-            LCDFilter = ini.Get("LCD", "filter").ToString("*");
-            TextPanelFilter = BlockFilter<IMyTextPanel>.Create(program.Me, LCDFilter);
-            CockpitFilter = BlockFilter<IMyCockpit>.Create(program.Me, LCDFilter);
+            lCDFilter = ini.Get("LCD", "filter").ToString("*");
+            TextPanelFilter = BlockFilter<IMyTextPanel>.Create(program.Me, lCDFilter);
+            CockpitFilter = BlockFilter<IMyCockpit>.Create(program.Me, lCDFilter);
 
             if (program.Me.CustomData.Trim().Equals("")) Save();
 
@@ -44,7 +44,7 @@ namespace IngameScript
             {
                 throw new Exception(result.ToString());
             }
-            ini.Set("LCD", "filter", LCDFilter);
+            ini.Set("LCD", "filter", lCDFilter);
 
             program.Me.CustomData = ini.ToString();
         }

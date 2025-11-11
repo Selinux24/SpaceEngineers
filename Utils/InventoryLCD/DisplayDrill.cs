@@ -14,10 +14,6 @@ namespace IngameScript
         readonly Program program;
         readonly DisplayLcd displayLcd;
         readonly BlockSystem<IMyShipDrill> drillInventories = new BlockSystem<IMyShipDrill>();
-        float xMin = 0f;
-        float xMax = 0f;
-        float yMin = 0f;
-        float yMax = 0f;
 
         int panel = 0;
         bool enable = false;
@@ -31,6 +27,15 @@ namespace IngameScript
         float drillsPaddingX = 0f;
         float drillsPaddingY = 0f;
         GaugeThresholds chestThresholds;
+
+        StyleGauge styleGauge;
+        float padding;
+        Vector2 paddingScreen;
+
+        float xMin = 0f;
+        float xMax = 0f;
+        float yMin = 0f;
+        float yMax = 0f;
 
         public DisplayDrill(Program program, DisplayLcd displayLcd)
         {
@@ -59,6 +64,22 @@ namespace IngameScript
 
             var blockFilter = BlockFilter<IMyShipDrill>.Create(displayLcd.Block, filter);
             BlockSystem<IMyShipDrill>.SearchByFilter(program, drillInventories, blockFilter);
+
+            styleGauge = new StyleGauge()
+            {
+                Orientation = SpriteOrientation.Horizontal,
+                Fullscreen = false,
+                Width = drillsSize,
+                Height = drillsSize,
+                Padding = new StylePadding(0),
+                Round = false,
+                RotationOrScale = 0.5f,
+                Percent = drillsSize > 49,
+                Thresholds = chestThresholds
+            };
+
+            padding = drillsSize + 4f;
+            paddingScreen = new Vector2(drillsPaddingX, drillsPaddingY);
         }
         public void Save(MyIni ini)
         {
@@ -86,32 +107,18 @@ namespace IngameScript
 
             Draw(surface);
         }
+  
         void Draw(SurfaceDrawing surface)
         {
-            float width = drillsSize;
-
-            var style = new StyleGauge()
-            {
-                Orientation = SpriteOrientation.Horizontal,
-                Fullscreen = false,
-                Width = width,
-                Height = width,
-                Padding = new StylePadding(0),
-                Round = false,
-                RotationOrScale = 0.5f,
-                Percent = drillsSize > 49,
-                Thresholds = chestThresholds
-            };
-
             if (drillsInfo)
             {
                 surface.AddSprite(new MySprite()
                 {
                     Type = SpriteType.TEXT,
                     Data = $"Drill Number:{drillInventories.List.Count} ({filter})",
-                    Size = new Vector2(width, width),
+                    Size = new Vector2(drillsSize),
                     Color = Color.DimGray,
-                    Position = surface.Position + new Vector2(0, 0),
+                    Position = surface.Position,
                     RotationOrScale = 0.5f,
                     FontId = SurfaceDrawing.Font,
                     Alignment = TextAlignment.LEFT
@@ -121,17 +128,15 @@ namespace IngameScript
 
             DrillLimits();
 
-            float padding = width + 4f;
-            var paddingScreen = new Vector2(drillsPaddingX, drillsPaddingY);
             drillInventories.ForEach(drill =>
             {
-                var blockInventory = drill.GetInventory(0);
-                long volume = blockInventory.CurrentVolume.RawValue;
-                long maxVolume = blockInventory.MaxVolume.RawValue;
+                var p = GetRelativePosition(drill.Position) * padding;
 
-                var positionRelative = GetRelativePosition(drill, padding);
+                var bl = drill.GetInventory(0);
+                long volume = bl.CurrentVolume.RawValue;
+                long maxVolume = bl.MaxVolume.RawValue;
 
-                surface.DrawGauge(surface.Position + positionRelative + paddingScreen, volume, maxVolume, style);
+                surface.DrawGauge(surface.Position + p + paddingScreen, volume, maxVolume, styleGauge);
             });
         }
         void DrillLimits()
@@ -143,54 +148,54 @@ namespace IngameScript
             bool first = true;
             drillInventories.ForEach(drill =>
             {
+                var p = drill.Position;
                 switch (drillsOrientation)
                 {
                     case "x":
-                        if (first || drill.Position.Y < xMin) xMin = drill.Position.Y;
-                        if (first || drill.Position.Y > xMax) xMax = drill.Position.Y;
-                        if (first || drill.Position.Z < yMin) yMin = drill.Position.Z;
-                        if (first || drill.Position.Z > yMax) yMax = drill.Position.Z;
+                        if (first || p.Y < xMin) xMin = p.Y;
+                        if (first || p.Y > xMax) xMax = p.Y;
+                        if (first || p.Z < yMin) yMin = p.Z;
+                        if (first || p.Z > yMax) yMax = p.Z;
                         break;
                     case "y":
-                        if (first || drill.Position.X < xMin) xMin = drill.Position.X;
-                        if (first || drill.Position.X > xMax) xMax = drill.Position.X;
-                        if (first || drill.Position.Z < yMin) yMin = drill.Position.Z;
-                        if (first || drill.Position.Z > yMax) yMax = drill.Position.Z;
+                        if (first || p.X < xMin) xMin = p.X;
+                        if (first || p.X > xMax) xMax = p.X;
+                        if (first || p.Z < yMin) yMin = p.Z;
+                        if (first || p.Z > yMax) yMax = p.Z;
                         break;
                     default:
-                        if (first || drill.Position.X < xMin) xMin = drill.Position.X;
-                        if (first || drill.Position.X > xMax) xMax = drill.Position.X;
-                        if (first || drill.Position.Y < yMin) yMin = drill.Position.Y;
-                        if (first || drill.Position.Y > yMax) yMax = drill.Position.Y;
+                        if (first || p.X < xMin) xMin = p.X;
+                        if (first || p.X > xMax) xMax = p.X;
+                        if (first || p.Y < yMin) yMin = p.Y;
+                        if (first || p.Y > yMax) yMax = p.Y;
                         break;
                 }
                 first = false;
             });
         }
-        Vector2 GetRelativePosition(IMyShipDrill drill, float padding)
+        Vector2 GetRelativePosition(Vector3I p)
         {
             float x;
             float y;
             switch (drillsOrientation)
             {
                 case "x":
-                    x = Math.Abs(drill.Position.Y - xMin);
-                    y = Math.Abs(drill.Position.Z - yMin);
+                    x = Math.Abs(p.Y - xMin);
+                    y = Math.Abs(p.Z - yMin);
                     break;
                 case "y":
-                    x = Math.Abs(drill.Position.X - xMin);
-                    y = Math.Abs(drill.Position.Z - yMin);
+                    x = Math.Abs(p.X - xMin);
+                    y = Math.Abs(p.Z - yMin);
                     break;
                 default:
-                    x = Math.Abs(drill.Position.X - xMin);
-                    y = Math.Abs(drill.Position.Y - yMin);
+                    x = Math.Abs(p.X - xMin);
+                    y = Math.Abs(p.Y - yMin);
                     break;
             }
             if (drillsFlipX) x = Math.Abs(xMax - xMin) - x;
             if (drillsFlipY) y = Math.Abs(yMax - yMin) - y;
 
-            var p = drillsRotate ? new Vector2(y, x) : new Vector2(x, y);
-            return p * padding;
+            return drillsRotate ? new Vector2(y, x) : new Vector2(x, y);
         }
     }
 }

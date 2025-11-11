@@ -30,8 +30,6 @@ namespace IngameScript
         readonly Dictionary<string, double> lastAmount = new Dictionary<string, double>();
         readonly List<string> types = new List<string>();
         readonly BlockSystem<IMyTerminalBlock> inventories = new BlockSystem<IMyTerminalBlock>();
-        long volumes = 0;
-        long maxVolumes = 0;
 
         int panel = 0;
         bool enable = false;
@@ -55,6 +53,16 @@ namespace IngameScript
         GaugeThresholds chestThresholds;
         ColorDefaults colorDefaults;
         Limits limits;
+
+        StyleGauge styleGauge;
+        float iconWidth;
+        float iconHeight;
+        StyleIcon styleIcon;
+        string cDefault;
+        int lDefault;
+
+        long volumes = 0;
+        long maxVolumes = 0;
 
         public DisplayInventory(Program program, DisplayLcd displayLcd)
         {
@@ -95,15 +103,41 @@ namespace IngameScript
 
             colorDefaults = new ColorDefaults(ini, SECTION_COLORS);
             colorDefaults.Load();
+            cDefault = colorDefaults.GetDefault();
 
             limits = new Limits(ini, SECTION_LIMITS);
             limits.Load();
+            lDefault = limits.GetInt("default");
 
             types.Clear();
             if (itemOre) types.Add(TYPE_ORE);
             if (itemIngot) types.Add(TYPE_INGOT);
             if (itemComponent) types.Add(TYPE_COMPONENT);
             if (itemAmmo) types.Add(TYPE_AMMO);
+
+            styleGauge = new StyleGauge()
+            {
+                Orientation = gaugeHorizontal ? SpriteOrientation.Horizontal : SpriteOrientation.Vertical,
+                Fullscreen = gaugeFullscreen,
+                Width = gaugeWidth,
+                Height = gaugeHeight,
+                Thresholds = chestThresholds,
+                ColorSoftening = .6f,
+                Percent = gaugeShowPercent,
+            };
+            styleGauge.Scale(scale);
+
+            iconWidth = 2.5f * itemSize;
+            iconHeight = itemSize;
+
+            styleIcon = new StyleIcon()
+            {
+                Width = iconWidth,
+                Height = iconHeight,
+                Thresholds = itemThresholds,
+                ColorSoftening = .6f
+            };
+            styleIcon.Scale(scale);
 
             Search();
         }
@@ -226,19 +260,7 @@ namespace IngameScript
 
         void DisplayGauge(SurfaceDrawing drawing)
         {
-            var style = new StyleGauge()
-            {
-                Orientation = gaugeHorizontal ? SpriteOrientation.Horizontal : SpriteOrientation.Vertical,
-                Fullscreen = gaugeFullscreen,
-                Width = gaugeWidth,
-                Height = gaugeHeight,
-                Thresholds = chestThresholds,
-                ColorSoftening = .6f,
-                Percent = gaugeShowPercent,
-            };
-
-            style.Scale(scale);
-            drawing.Position = drawing.DrawGauge(drawing.Position, volumes, maxVolumes, style);
+            drawing.Position = drawing.DrawGauge(drawing.Position, volumes, maxVolumes, styleGauge);
             if (gaugeHorizontal)
             {
                 drawing.Position += new Vector2(0, 2 * cellSpacing * scale);
@@ -247,13 +269,9 @@ namespace IngameScript
         void DisplayByType(SurfaceDrawing drawing)
         {
             int count = 0;
-            float height = itemSize;
-            float width = 2.5f * itemSize;
-            float deltaWidth = width * scale;
-            float deltaHeight = height * scale;
+            float deltaWidth = iconWidth * scale;
+            float deltaHeight = iconHeight * scale;
             int limit = GetLimit(drawing, deltaHeight, cellSpacing);
-            string colorDefault = colorDefaults.GetDefault();
-            int limitDefault = limits.GetInt("default");
 
             foreach (string type in types)
             {
@@ -263,22 +281,12 @@ namespace IngameScript
                 {
                     var item = entry.Value;
 
-                    // Icon
-                    var style = new StyleIcon()
-                    {
-                        Path = item.Icon,
-                        Width = width,
-                        Height = height,
-                        Color = colorDefaults.GetColor(item.Name, item.Data, colorDefault),
-                        Thresholds = itemThresholds,
-                        ColorSoftening = .6f
-                    };
-                    style.Scale(scale);
-
                     var p = drawing.Position + new Vector2((cellSpacing + deltaWidth) * (count / limit), (cellSpacing + deltaHeight) * (count - (count / limit) * limit));
-                    int l = itemGauge ? limits.GetInt(item.Name, limitDefault) : 0;
-                    Variances v = GetVariance(entry.Key, item.Amount);
-                    drawing.DrawGaugeIcon(p, item.Name, item.Amount, l, style, itemGauge, itemSymbol, v);
+                    styleIcon.Path = item.Icon;
+                    styleIcon.Color = colorDefaults.GetColor(item.Name, item.Data, cDefault);
+                    int l = itemGauge ? limits.GetInt(item.Name, lDefault) : 0;
+                    var v = GetVariance(entry.Key, item.Amount);
+                    drawing.DrawGaugeIcon(p, item.Name, item.Amount, l, styleIcon, itemGauge, itemSymbol, v);
 
                     count++;
                 }
@@ -286,22 +294,22 @@ namespace IngameScript
 
             if (itemList.Count > limit)
             {
-                drawing.Position += new Vector2(0, (cellSpacing * scale + height) * limit);
+                drawing.Position += new Vector2(0, (cellSpacing * scale + iconHeight) * limit);
             }
-            drawing.Position += new Vector2(0, (cellSpacing * scale + height) * itemList.Count);
+            drawing.Position += new Vector2(0, (cellSpacing * scale + iconHeight) * itemList.Count);
         }
         int GetLimit(SurfaceDrawing drawing, float itemSize, float cellSpacing)
         {
-            int limit;
+            float v;
             if (gauge && gaugeHorizontal)
             {
-                limit = (int)Math.Floor((drawing.Height - (gaugeHeight + topPadding) * scale) / (itemSize + cellSpacing));
+                v = (drawing.Height - (gaugeHeight + topPadding) * scale) / (itemSize + cellSpacing);
             }
             else
             {
-                limit = (int)Math.Floor((drawing.Height - topPadding * scale) / (itemSize + cellSpacing));
+                v = (drawing.Height - topPadding * scale) / (itemSize + cellSpacing);
             }
-            return Math.Max(limit, 1);
+            return Math.Max((int)Math.Floor(v), 1);
         }
         Variances GetVariance(string key, double amount)
         {

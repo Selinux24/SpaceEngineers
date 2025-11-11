@@ -27,6 +27,7 @@ namespace IngameScript
         readonly Color colorAscending = new Color(0, 0, 20, 200);
         readonly Color colorNoVariance = new Color(20, 0, 0, 200);
         readonly Color colorDescending = new Color(0, 20, 0, 200);
+        readonly Dictionary<string, string> symbol = new Dictionary<string, string>();
 
         int panel = 0;
         bool enable = false;
@@ -43,10 +44,29 @@ namespace IngameScript
         Style style = new Style();
         ColorDefaults colorDefaults;
 
+        string cDefault;
+        float sizeIcon;
+        float rotationOrScale;
+        float cellSpacing;
+        float formWidth;
+        float formHeight;
+
         public DisplayMachine(Program program, DisplayLcd displayLcd)
         {
             this.program = program;
             this.displayLcd = displayLcd;
+
+            symbol.Add("Cobalt", "Co");
+            symbol.Add("Nickel", "Ni");
+            symbol.Add("Magnesium", "Mg");
+            symbol.Add("Platinum", "Pt");
+            symbol.Add("Iron", "Fe");
+            symbol.Add("Gold", "Au");
+            symbol.Add("Silicon", "Si");
+            symbol.Add("Silver", "Ag");
+            symbol.Add("Stone", "Stone");
+            symbol.Add("Uranium", "U");
+            symbol.Add("Ice", "Ice");
         }
 
         public void Load(MyIni ini)
@@ -67,6 +87,7 @@ namespace IngameScript
 
             colorDefaults = new ColorDefaults(ini, SECTION_MACHINE_COLOR);
             colorDefaults.Load();
+            cDefault = colorDefaults.GetDefault();
 
             types.Clear();
             columns = 0;
@@ -89,6 +110,13 @@ namespace IngameScript
                 Padding = new StylePadding(0),
             };
             style.Scale(scale);
+
+            sizeIcon = style.Height - (10f * scale);
+            rotationOrScale = 0.5f * scale;
+            cellSpacing = 10f * scale;
+
+            formWidth = style.Width - (5f * scale);
+            formHeight = style.Height - (5f * scale);
 
             var blockFilter = BlockFilter<IMyProductionBlock>.Create(displayLcd.Block, filter);
             BlockSystem<IMyProductionBlock>.SearchByFilter(program, producers, blockFilter);
@@ -128,7 +156,7 @@ namespace IngameScript
 
                     var p = surface.Position + new Vector2(style.Width * (count / columns), style.Height * (count - (count / columns) * columns));
                     DrawMachine(surface, p, block);
-                    count += 1;
+                    count++;
                 });
                 surface.Position += new Vector2(0, style.Height) * columns;
             }
@@ -137,15 +165,6 @@ namespace IngameScript
         void DrawMachine(SurfaceDrawing surface, Vector2 position, IMyProductionBlock block)
         {
             TraversalMachine(block);
-
-            float sizeIcon = style.Height - (10 * scale);
-            float rotationOrScale = 0.5f * scale;
-            float cellSpacing = 10f * scale;
-
-            float formWidth = style.Width - (5 * scale);
-            float formHeight = style.Height - (5 * scale);
-
-            string colorDefault = colorDefaults.GetDefault();
 
             surface.DrawForm(position, SpriteForm.SquareSimple, formWidth, formHeight, new Color(5, 5, 5, 125));
 
@@ -170,18 +189,18 @@ namespace IngameScript
                     Type = SpriteType.TEXTURE,
                     Data = item.Icon,
                     Size = new Vector2(sizeIcon, sizeIcon),
-                    Color = colorDefaults.GetColor(item.Name, item.Data, colorDefault),
+                    Color = colorDefaults.GetColor(item.Name, item.Data, cDefault),
                     Position = position + new Vector2(x, sizeIcon * 0.5f + cellSpacing),
                 });
 
-                if (surface.Parent.Symbol.Keys.Contains(item.Data))
+                if (symbol.Keys.Contains(item.Data))
                 {
                     // Symbol
                     var positionSymbol = position + new Vector2(x, 20 * scale);
                     surface.AddSprite(new MySprite()
                     {
                         Type = SpriteType.TEXT,
-                        Data = surface.Parent.Symbol[item.Data],
+                        Data = symbol[item.Data],
                         Color = colorText,
                         Position = positionSymbol,
                         RotationOrScale = rotationOrScale,
@@ -246,15 +265,14 @@ namespace IngameScript
                 string name = Util.GetName(item);
                 string data = Util.GetData(item.BlueprintId);
                 string key = $"{type}_{name}";
-                double amount = 0;
-                double.TryParse(item.Amount.ToString(), out amount);
-                Variances variance = CalculateVariance(lastAmount, key, amount);
+                double amount = (double)item.Amount;
+                var variance = CalculateVariance(lastAmount, key, amount);
 
                 items.Add(new Item()
                 {
+                    Type = type,
                     Name = name,
                     Data = data,
-                    Type = type,
                     Amount = amount,
                     Variance = variance
                 });
@@ -276,9 +294,8 @@ namespace IngameScript
                 string name = Util.GetName(item);
                 string data = item.Type.SubtypeId;
                 string key = $"{type}_{name}";
-                double amount = 0;
-                double.TryParse(item.Amount.ToString(), out amount);
-                Variances variance = CalculateVariance(lastAmount, key, amount);
+                double amount = (double)item.Amount;
+                var variance = CalculateVariance(lastAmount, key, amount);
 
                 items.Add(new Item()
                 {
@@ -299,7 +316,7 @@ namespace IngameScript
                 return Variances.Ascending;
             }
 
-            Variances variance = Variances.NoVariance;
+            var variance = Variances.NoVariance;
             if (lastAmount[key] < amount) variance = Variances.Ascending;
             if (lastAmount[key] > amount) variance = Variances.Descending;
             lastAmount[key] = amount;

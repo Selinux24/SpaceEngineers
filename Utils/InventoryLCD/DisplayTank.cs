@@ -25,6 +25,11 @@ namespace IngameScript
         bool showPercent = true;
         GaugeThresholds tankThresholds;
 
+        float height;
+        Vector2 padding;
+        StyleGauge style;
+        Vector2 deltaPosition;
+
         public DisplayTank(Program program, DisplayLcd displayLcd)
         {
             this.program = program;
@@ -49,6 +54,23 @@ namespace IngameScript
             types.Clear();
             if (tankH2) types.Add("Hydrogen", new BlockSystem<IMyGasTank>());
             if (tankO2) types.Add("Oxygen", new BlockSystem<IMyGasTank>());
+
+            height = 40f * scale;
+            padding = new Vector2(0, 6) * scale;
+            deltaPosition = new Vector2(0, 45) * scale;
+
+            style = new StyleGauge()
+            {
+                Orientation = SpriteOrientation.Horizontal,
+                Fullscreen = true,
+                Width = height,
+                Height = height,
+                Padding = new StylePadding(0),
+                Round = false,
+                RotationOrScale = scale,
+                Thresholds = tankThresholds,
+                Percent = showPercent,
+            };
 
             Search();
         }
@@ -100,23 +122,6 @@ namespace IngameScript
         }
         void Draw(SurfaceDrawing surface)
         {
-            float height = 40f * scale;
-            var padding = new Vector2(0, 6) * scale;
-
-            var style = new StyleGauge()
-            {
-                Orientation = SpriteOrientation.Horizontal,
-                Fullscreen = true,
-                Width = height,
-                Height = height,
-                Padding = new StylePadding(0),
-                Round = false,
-                RotationOrScale = scale,
-                Thresholds = tankThresholds,
-                Percent = showPercent,
-            };
-
-            var deltaPosition = new Vector2(0, 45) * scale;
             foreach (var t in types)
             {
                 var type = t.Key;
@@ -124,15 +129,9 @@ namespace IngameScript
 
                 if (tanks.List.Count == 0) continue;
 
-                float volumes = 0f;
-                float capacity = 0f;
-                tanks.ForEach(block =>
-                {
-                    volumes += (float)block.FilledRatio * block.Capacity;
-                    capacity += block.Capacity;
-                });
-                volumes /= 1000f;
-                capacity /= 1000f;
+                float volumes;
+                float capacity;
+                GetTankCapacity(tanks, out volumes, out capacity);
 
                 surface.DrawGauge(surface.Position, volumes, capacity, style);
                 surface.Position += new Vector2(0, height) + padding;
@@ -164,6 +163,18 @@ namespace IngameScript
 
                 surface.Position += deltaPosition;
             }
+        }
+        void GetTankCapacity(BlockSystem<IMyGasTank> tanks, out float volumes, out float capacity)
+        {
+            float v = 0f;
+            float c = 0f;
+            tanks.ForEach(block =>
+            {
+                v += (float)block.FilledRatio * block.Capacity;
+                c += block.Capacity;
+            });
+            volumes = v / 1000f;
+            capacity = c / 1000f;
         }
     }
 }
