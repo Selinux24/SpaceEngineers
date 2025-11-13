@@ -35,12 +35,16 @@ namespace IngameScript
         bool enable = false;
         float scale = 1f;
         string filter = "*";
+        float padding = 2f;
+        float margin = 2f;
+
         bool gauge = true;
         bool gaugeFullscreen = true;
         bool gaugeHorizontal = true;
         bool gaugeShowPercent = true;
         float gaugeWidth = 80f;
         float gaugeHeight = 40f;
+
         bool item = true;
         bool itemGauge = true;
         bool itemSymbol = true;
@@ -78,6 +82,8 @@ namespace IngameScript
             filter = ini.Get(SECTION, "filter").ToString("*");
             enable = ini.Get(SECTION, "on").ToBoolean(true);
             scale = ini.Get(SECTION, "scale").ToSingle(1f);
+            padding = ini.Get(SECTION, "padding").ToSingle(2f);
+            margin = ini.Get(SECTION, "margin").ToSingle(2f);
 
             gauge = ini.Get(SECTION, "gauge_on").ToBoolean(true);
             gaugeFullscreen = ini.Get(SECTION, "gauge_fullscreen").ToBoolean(true);
@@ -124,6 +130,8 @@ namespace IngameScript
                 Thresholds = chestThresholds,
                 ColorSoftening = .6f,
                 Percent = gaugeShowPercent,
+                Padding = new StylePadding(padding),
+                Margin = new StyleMargin(margin),
             };
             styleGauge.Scale(scale);
 
@@ -135,7 +143,9 @@ namespace IngameScript
                 Width = iconWidth,
                 Height = iconHeight,
                 Thresholds = itemThresholds,
-                ColorSoftening = .6f
+                ColorSoftening = .6f,
+                Padding = new StylePadding(padding),
+                Margin = new StyleMargin(margin),
             };
             styleIcon.Scale(scale);
 
@@ -147,6 +157,8 @@ namespace IngameScript
             ini.Set(SECTION, "filter", filter);
             ini.Set(SECTION, "on", enable);
             ini.Set(SECTION, "scale", scale);
+            ini.Set(SECTION, "padding", padding);
+            ini.Set(SECTION, "margin", margin);
 
             ini.Set(SECTION, "gauge_on", gauge);
             ini.Set(SECTION, "gauge_fullscreen", gaugeFullscreen);
@@ -166,8 +178,8 @@ namespace IngameScript
 
             GaugeThresholds.SaveThresholds(ini, itemThresholds, SECTION_ITEM_THRESHOLDS);
             GaugeThresholds.SaveThresholds(ini, chestThresholds, SECTION_CHEST_THRESHOLDS);
-            colorDefaults.Save();
-            limits.Save();
+            colorDefaults?.Save();
+            limits?.Save();
         }
 
         void Search()
@@ -260,7 +272,7 @@ namespace IngameScript
 
         void DisplayGauge(SurfaceDrawing drawing)
         {
-            drawing.Position = drawing.DrawGauge(drawing.Position, volumes, maxVolumes, styleGauge);
+            drawing.Position = drawing.DrawGauge(styleGauge, drawing.Position, volumes, maxVolumes);
             if (gaugeHorizontal)
             {
                 drawing.Position += new Vector2(0, 2 * cellSpacing * scale);
@@ -286,7 +298,7 @@ namespace IngameScript
                     styleIcon.Color = colorDefaults.GetColor(item.Name, item.Data, cDefault);
                     int l = itemGauge ? limits.GetInt(item.Name, lDefault) : 0;
                     var v = GetVariance(entry.Key, item.Amount);
-                    drawing.DrawGaugeIcon(p, item.Name, item.Amount, l, styleIcon, itemGauge, itemSymbol, v);
+                    drawing.DrawGaugeIcon(styleIcon, p, item.Name, item.Amount, l, itemGauge, itemSymbol, v);
 
                     count++;
                 }

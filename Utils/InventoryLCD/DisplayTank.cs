@@ -20,13 +20,15 @@ namespace IngameScript
         bool enable = false;
         float scale = 1f;
         string filter = "*";
+        float padding = 0f;
+        float margin = 0f;
         bool tankH2 = false;
         bool tankO2 = false;
         bool showPercent = true;
         GaugeThresholds tankThresholds;
 
         float height;
-        Vector2 padding;
+        Vector2 deltaPadding;
         StyleGauge style;
         Vector2 deltaPosition;
 
@@ -44,6 +46,8 @@ namespace IngameScript
             enable = ini.Get(SECTION, "on").ToBoolean(false);
             scale = ini.Get(SECTION, "scale").ToSingle(1f);
             filter = ini.Get(SECTION, "filter").ToString("*");
+            padding = ini.Get(SECTION, "padding").ToSingle(0f);
+            margin = ini.Get(SECTION, "margin").ToSingle(0f);
             tankH2 = ini.Get(SECTION, "H2").ToBoolean(true);
             tankO2 = ini.Get(SECTION, "O2").ToBoolean(true);
             showPercent = ini.Get(SECTION, "show_percent").ToBoolean(true);
@@ -56,7 +60,7 @@ namespace IngameScript
             if (tankO2) types.Add("Oxygen", new BlockSystem<IMyGasTank>());
 
             height = 40f * scale;
-            padding = new Vector2(0, 6) * scale;
+            deltaPadding = new Vector2(0, 6) * scale;
             deltaPosition = new Vector2(0, 45) * scale;
 
             style = new StyleGauge()
@@ -65,11 +69,12 @@ namespace IngameScript
                 Fullscreen = true,
                 Width = height,
                 Height = height,
-                Padding = new StylePadding(0),
                 Round = false,
                 RotationOrScale = scale,
                 Thresholds = tankThresholds,
                 Percent = showPercent,
+                Padding = new StylePadding(padding),
+                Margin = new StyleMargin(margin),
             };
 
             Search();
@@ -80,6 +85,8 @@ namespace IngameScript
             ini.Set(SECTION, "on", enable);
             ini.Set(SECTION, "scale", scale);
             ini.Set(SECTION, "filter", filter);
+            ini.Set(SECTION, "padding", padding);
+            ini.Set(SECTION, "margin", margin);
             ini.Set(SECTION, "H2", tankH2);
             ini.Set(SECTION, "O2", tankO2);
             ini.Set(SECTION, "show_percent", showPercent);
@@ -133,8 +140,8 @@ namespace IngameScript
                 float capacity;
                 GetTankCapacity(tanks, out volumes, out capacity);
 
-                surface.DrawGauge(surface.Position, volumes, capacity, style);
-                surface.Position += new Vector2(0, height) + padding;
+                surface.DrawGauge(style, surface.Position, volumes, capacity);
+                surface.Position += new Vector2(0, height) + deltaPadding;
 
                 string data;
                 if (type.Equals("Hydrogen"))

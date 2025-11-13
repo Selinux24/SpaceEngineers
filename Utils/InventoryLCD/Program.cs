@@ -9,7 +9,7 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        const string Version = "1.37";
+        const string Version = "1.38";
         const UpdateType CommandUpdate = UpdateType.Trigger | UpdateType.Terminal;
 
         readonly MyCommandLine commandLine = new MyCommandLine();
@@ -94,23 +94,20 @@ namespace IngameScript
         }
         bool RunLcd()
         {
-            try
-            {
-                var block = blocks.List[currBlock];
-                currBlock++;
-                currBlock %= maxBlocks;
+            var block = blocks.List[currBlock];
+            currBlock++;
+            currBlock %= maxBlocks;
 
-                if (string.IsNullOrWhiteSpace(block.MyBlock.CustomData)) return true;
+            if (string.IsNullOrWhiteSpace(block.MyBlock.CustomData)) return true;
 
-                block.Update();
-                var displayLcd = GetDisplayLcd(block.MyBlock);
-                if (block.Changed) displayLcd.Load(block.Ini);
-                else displayLcd.Draw();
-            }
-            catch (Exception ex)
+            block.Update();
+            var displayLcd = GetDisplayLcd(block.MyBlock);
+            if (block.Changed)
             {
-                Echo($"Error: {ex.Message}");
+                try { displayLcd.Load(block.Ini); } catch (Exception ex) { Echo($"Load Error: {ex}"); }
+                try { displayLcd.Save(block.Ini); } catch (Exception ex) { Echo($"Save Error: {ex}"); }
             }
+            else displayLcd.Draw();
 
             return Runtime.CurrentInstructionCount < 25000;
         }

@@ -6,6 +6,7 @@ namespace IngameScript
     class DisplayLcd
     {
         const int CleanupTicks = 100;
+        const string PrepareTag = "prepare";
 
         readonly DisplayInventory DisplayInventory;
         readonly DisplayDrill DisplayDrill;
@@ -38,8 +39,11 @@ namespace IngameScript
             DisplayPower.Load(ini);
             DisplayShip.Load(ini);
             DisplayTank.Load(ini);
-
-            if (!Block.CustomData.Trim().Equals("prepare")) return;
+        }
+        public void Save(MyIni ini)
+        {
+            string customData = Block.CustomData ?? "";
+            if (!customData.Trim().Equals(PrepareTag)) return;
 
             DisplayInventory.Save(ini);
             DisplayDrill.Save(ini);

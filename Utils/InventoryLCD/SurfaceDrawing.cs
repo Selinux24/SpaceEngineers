@@ -52,7 +52,7 @@ namespace IngameScript
         {
             if (!initialized) return;
 
-            DrawForm(new Vector2(), SpriteForm.SquareSimple, viewport.Width, viewport.Height, Color.Black);
+            DrawForm(SpriteForm.SquareSimple, Vector2.Zero, viewport.Width, viewport.Height, Color.Black);
         }
 
         public void AddSprite(MySprite sprite)
@@ -60,7 +60,7 @@ namespace IngameScript
             frame.Add(sprite);
         }
 
-        public void DrawForm(Vector2 position, SpriteForm form, float width, float height, Color color)
+        public void DrawForm(SpriteForm form, Vector2 position, float width, float height, Color color)
         {
             AddSprite(new MySprite()
             {
@@ -71,7 +71,7 @@ namespace IngameScript
                 Position = position + new Vector2(0, height / 2)
             });
         }
-        public void DrawGaugeIcon(Vector2 position, string name, double amount, int limit, StyleIcon styleIcon, bool showGauge, bool showSymbol, Variances variance)
+        public void DrawGaugeIcon(StyleIcon styleIcon, Vector2 position, string name, double amount, int limit, bool showGauge, bool showSymbol, Variances variance)
         {
             var p = position + new Vector2(styleIcon.Padding.X, styleIcon.Padding.Y);
 
@@ -91,7 +91,7 @@ namespace IngameScript
 
             float globalSoftening = 0.7f;
 
-            DrawForm(p, SpriteForm.SquareSimple, styleIcon.Width, styleIcon.Height, new Color(5, 5, 5, 125));
+            DrawForm(SpriteForm.SquareSimple, p, styleIcon.Width, styleIcon.Height, new Color(5, 5, 5, 125));
 
             // Add Icon
             AddSprite(new MySprite()
@@ -139,7 +139,7 @@ namespace IngameScript
                     Thresholds = styleIcon.Thresholds,
                     ColorSoftening = styleIcon.ColorSoftening
                 };
-                DrawGauge(p + new Vector2(width + styleIcon.Margin.X, deltaTitle + deltaQuantity + styleIcon.Margin.Y), (float)amount, limit, style);
+                DrawGauge(style, p + new Vector2(width + styleIcon.Margin.X, deltaTitle + deltaQuantity + styleIcon.Margin.Y), (float)amount, limit);
             }
 
             if (!showSymbol) return;
@@ -177,57 +177,57 @@ namespace IngameScript
                 });
             }
         }
-        public Vector2 DrawGauge(Vector2 position, float amount, float limit, StyleGauge style)
+        public Vector2 DrawGauge(StyleGauge style, Vector2 position, float amount, float limit)
         {
-            float width = style.Width;
-            float height = style.Height;
+            float w = style.Width;
+            float h = style.Height;
 
-            if (style.Fullscreen && style.Orientation.Equals(SpriteOrientation.Horizontal)) width = viewport.Width;
-            if (style.Fullscreen && style.Orientation.Equals(SpriteOrientation.Vertical)) height = viewport.Height;
+            if (style.Fullscreen && style.Orientation.Equals(SpriteOrientation.Horizontal)) w = viewport.Width;
+            if (style.Fullscreen && style.Orientation.Equals(SpriteOrientation.Vertical)) h = viewport.Height;
 
-            width += -2 * style.Padding.X;
-            height += -2 * style.Padding.X;
             var p = position + new Vector2(style.Padding.X, style.Padding.Y);
+            w += -2 * style.Padding.X;
+            h += -2 * style.Padding.Y;
 
             // Gauge
-            DrawForm(p, SpriteForm.SquareSimple, width, height, style.Color);
+            DrawForm(SpriteForm.SquareSimple, p, w, h, style.Color);
+
+            float w2 = w - 2 * style.Margin.X;
+            float h2 = h - 2 * style.Margin.Y;
 
             // Gauge interior
-            var colorInt = new Color(20, 20, 20, 255);
-            DrawForm(p + new Vector2(style.Margin.X, style.Margin.Y), SpriteForm.SquareSimple, width - 2 * style.Margin.X, height - 2 * style.Margin.Y, colorInt);
+            DrawForm(SpriteForm.SquareSimple, p + new Vector2(style.Margin.X, style.Margin.Y), w2, h2, style.ColorInt);
 
             // Gauge quantity
-            float percent = Math.Min(1f, amount / limit);
-            var threshold = style.Thresholds.GetGaugeThreshold(percent);
-            float w2 = width - 2 * style.Margin.X;
-            float h2 = height - 2 * style.Margin.Y;
-            var color = threshold.Color * style.ColorSoftening;
+            float pct = Math.Min(1f, amount / limit);
+            var thr = style.Thresholds.GetGaugeThreshold(pct);
+            var color = thr.Color * style.ColorSoftening;
 
             if (style.Orientation.Equals(SpriteOrientation.Horizontal))
             {
-                float length = w2 * percent;
-                DrawForm(p + new Vector2(style.Margin.X, style.Margin.Y), SpriteForm.SquareSimple, length, h2, color);
+                float l = w2 * pct;
+                DrawForm(SpriteForm.SquareSimple, p + new Vector2(style.Margin.X, style.Margin.Y), l, h2, color);
             }
             else
             {
-                float length = h2 * percent;
-                DrawForm(p + new Vector2(style.Margin.X, h2 - length + style.Margin.Y), SpriteForm.SquareSimple, w2, length, color);
+                float l = h2 * pct;
+                DrawForm(SpriteForm.SquareSimple, p + new Vector2(style.Margin.X, h2 - l + style.Margin.Y), w2, l, color);
             }
 
             if (style.Percent)
             {
-                string data = $"{percent:P0}";
-                if (percent < 0.999 && style.Round) data = $"{percent:P1}";
+                string data = $"{pct:P0}";
+                if (pct < 0.999 && style.Round) data = $"{pct:P1}";
 
                 // Tag
                 AddSprite(new MySprite()
                 {
                     Type = SpriteType.TEXT,
                     Data = data,
-                    Size = new Vector2(width, width),
+                    Size = new Vector2(w, w),
                     Color = Color.Black,
                     Position = p + new Vector2(2 * style.Margin.X, style.Margin.Y),
-                    RotationOrScale = Math.Max(0.3f, (float)Math.Round((height - 2 * style.Margin.Y) / 32f, 1)),
+                    RotationOrScale = Math.Max(0.3f, (float)Math.Round((h - 2 * style.Margin.Y) / 32f, 1)),
 
                     FontId = EnumFont.Monospace,
                     Alignment = TextAlignment.LEFT
@@ -236,11 +236,11 @@ namespace IngameScript
 
             if (style.Orientation == SpriteOrientation.Horizontal)
             {
-                return position + new Vector2(0, height + 2 * style.Margin.Y);
+                return position + new Vector2(0, h + 2 * style.Margin.Y);
             }
             else
             {
-                return position + new Vector2(width + 2 * style.Margin.X, 0);
+                return position + new Vector2(w + 2 * style.Margin.X, 0);
             }
         }
     }

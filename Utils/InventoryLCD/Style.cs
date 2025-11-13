@@ -10,6 +10,7 @@ namespace IngameScript
         public float Height { get; set; } = 50f;
         public float RotationOrScale { get; set; } = 1f;
         public Color Color { get; set; } = new Color(100, 100, 100, 128);
+        public Color ColorInt { get; set; } = new Color(20, 20, 20, 255);
         public float ColorSoftening { get; set; } = 1f;
 
         public virtual void Scale(float scale)

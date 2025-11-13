@@ -18,6 +18,9 @@ namespace IngameScript
         int panel = 0;
         bool enable = false;
         string filter = "*";
+        float padding = 0f;
+        float margin = 0f;
+
         string drillsOrientation = "y";
         bool drillsRotate = false;
         bool drillsFlipX = false;
@@ -29,7 +32,7 @@ namespace IngameScript
         GaugeThresholds chestThresholds;
 
         StyleGauge styleGauge;
-        float padding;
+        float drillPadding;
         Vector2 paddingScreen;
 
         float xMin = 0f;
@@ -50,6 +53,9 @@ namespace IngameScript
             panel = ini.Get(SECTION, "panel").ToInt32(0);
             enable = ini.Get(SECTION, "on").ToBoolean(false);
             filter = ini.Get(SECTION, "filter").ToString("GM:Drills");
+            padding = ini.Get(SECTION, "padding").ToSingle(0f);
+            margin = ini.Get(SECTION, "margin").ToSingle(0f);
+
             drillsOrientation = ini.Get(SECTION, "orientation").ToString("y");
             drillsRotate = ini.Get(SECTION, "rotate").ToBoolean(false);
             drillsFlipX = ini.Get(SECTION, "flip_x").ToBoolean(false);
@@ -71,14 +77,15 @@ namespace IngameScript
                 Fullscreen = false,
                 Width = drillsSize,
                 Height = drillsSize,
-                Padding = new StylePadding(0),
                 Round = false,
                 RotationOrScale = 0.5f,
                 Percent = drillsSize > 49,
-                Thresholds = chestThresholds
+                Thresholds = chestThresholds,
+                Padding = new StylePadding(padding),
+                Margin = new StyleMargin(margin),
             };
 
-            padding = drillsSize + 4f;
+            drillPadding = drillsSize + 4f;
             paddingScreen = new Vector2(drillsPaddingX, drillsPaddingY);
         }
         public void Save(MyIni ini)
@@ -86,6 +93,9 @@ namespace IngameScript
             ini.Set(SECTION, "panel", panel);
             ini.Set(SECTION, "on", enable);
             ini.Set(SECTION, "filter", filter);
+            ini.Set(SECTION, "padding", padding);
+            ini.Set(SECTION, "margin", margin);
+
             ini.Set(SECTION, "orientation", drillsOrientation);
             ini.Set(SECTION, "rotate", drillsRotate);
             ini.Set(SECTION, "flip_x", drillsFlipX);
@@ -107,7 +117,7 @@ namespace IngameScript
 
             Draw(surface);
         }
-  
+
         void Draw(SurfaceDrawing surface)
         {
             if (drillsInfo)
@@ -130,13 +140,13 @@ namespace IngameScript
 
             drillInventories.ForEach(drill =>
             {
-                var p = GetRelativePosition(drill.Position) * padding;
+                var p = GetRelativePosition(drill.Position) * drillPadding;
 
                 var bl = drill.GetInventory(0);
                 long volume = bl.CurrentVolume.RawValue;
                 long maxVolume = bl.MaxVolume.RawValue;
 
-                surface.DrawGauge(surface.Position + p + paddingScreen, volume, maxVolume, styleGauge);
+                surface.DrawGauge(styleGauge, surface.Position + p + paddingScreen, volume, maxVolume);
             });
         }
         void DrillLimits()

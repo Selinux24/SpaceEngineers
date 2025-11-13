@@ -1,4 +1,5 @@
 ﻿using Sandbox.ModAPI.Ingame;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using VRage.Game.GUI.TextPanel;
@@ -33,6 +34,8 @@ namespace IngameScript
         bool enable = false;
         float scale = 1f;
         string filter = "*";
+        float padding = 0f;
+        float margin = 0f;
         bool machineRefinery = false;
         bool machineAssembler = false;
         int rows = 6;
@@ -77,6 +80,9 @@ namespace IngameScript
             enable = ini.Get(SECTION, "on").ToBoolean(false);
             filter = ini.Get(SECTION, "filter").ToString("*");
             scale = ini.Get(SECTION, "scale").ToSingle(1f);
+            padding = ini.Get(SECTION, "padding").ToSingle(0f);
+            margin = ini.Get(SECTION, "margin").ToSingle(0f);
+
             machineRefinery = ini.Get(SECTION, "refinery").ToBoolean(true);
             machineAssembler = ini.Get(SECTION, "assembler").ToBoolean(true);
             rows = ini.Get(SECTION, "rows").ToInt32(6);
@@ -101,13 +107,14 @@ namespace IngameScript
                 types.Add("Assembler");
                 columns += 1;
             }
-            columns = rows / columns;
+            columns = rows / Math.Max(1, columns);
 
             style = new Style()
             {
                 Width = width,
                 Height = height,
-                Padding = new StylePadding(0),
+                Padding = new StylePadding(padding),
+                Margin = new StyleMargin(margin),
             };
             style.Scale(scale);
 
@@ -128,6 +135,9 @@ namespace IngameScript
             ini.Set(SECTION, "on", enable);
             ini.Set(SECTION, "filter", filter);
             ini.Set(SECTION, "scale", scale);
+            ini.Set(SECTION, "padding", padding);
+            ini.Set(SECTION, "margin", margin);
+
             ini.Set(SECTION, "refinery", machineRefinery);
             ini.Set(SECTION, "assembler", machineAssembler);
             ini.Set(SECTION, "rows", rows);
@@ -136,7 +146,7 @@ namespace IngameScript
             ini.Set(SECTION, "string_len", stringLen);
             ini.Set(SECTION, "max_items", maxItems);
 
-            colorDefaults.Save();
+            colorDefaults?.Save();
         }
 
         public void Draw(Drawing drawing)
@@ -166,7 +176,7 @@ namespace IngameScript
         {
             TraversalMachine(block);
 
-            surface.DrawForm(position, SpriteForm.SquareSimple, formWidth, formHeight, new Color(5, 5, 5, 125));
+            surface.DrawForm(SpriteForm.SquareSimple, position, formWidth, formHeight, new Color(5, 5, 5, 125));
 
             // Element Name
             surface.AddSprite(new MySprite()
@@ -212,7 +222,7 @@ namespace IngameScript
                 // Quantity
                 var positionQuantity = position + new Vector2(x, sizeIcon - (12 * scale));
                 var color = GetVarianceColor(item.Variance);
-                surface.DrawForm(positionQuantity, SpriteForm.SquareSimple, sizeIcon, 15f * scale, color);
+                surface.DrawForm(SpriteForm.SquareSimple, positionQuantity, sizeIcon, 15f * scale, color);
                 surface.AddSprite(new MySprite()
                 {
                     Type = SpriteType.TEXT,

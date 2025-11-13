@@ -26,6 +26,8 @@ namespace IngameScript
         int panel = 0;
         bool enable = false;
         float scale = 1f;
+        float padding = 0f;
+        float margin = 0f;
         string producersFilter = "*";
         string consummersFilter = "*";
         bool showDetails = true;
@@ -35,7 +37,7 @@ namespace IngameScript
         GaugeThresholds powerThresholds;
 
         float height;
-        Vector2 padding;
+        Vector2 deltaPadding;
         Vector2 deltaPosition;
         StyleGauge style;
 
@@ -56,6 +58,9 @@ namespace IngameScript
             panel = ini.Get(SECTION, "panel").ToInt32(0);
             enable = ini.Get(SECTION, "on").ToBoolean(false);
             scale = ini.Get(SECTION, "scale").ToSingle(1f);
+            padding = ini.Get(SECTION, "padding").ToSingle(0f);
+            margin = ini.Get(SECTION, "margin").ToSingle(0f);
+
             producersFilter = ini.Get(SECTION, "producers_filter").ToString("*");
             consummersFilter = ini.Get(SECTION, "consummers_filter").ToString("*");
             showDetails = ini.Get(SECTION, "show_details").ToBoolean(true);
@@ -67,7 +72,7 @@ namespace IngameScript
             if (powerThresholds == null) powerThresholds = GaugeThresholds.DefaultPowerThesholds();
 
             height = 40f * scale;
-            padding = new Vector2(0, 6) * scale;
+            deltaPadding = new Vector2(0, 6) * scale;
             deltaPosition = new Vector2(0, 45) * scale;
 
             style = new StyleGauge()
@@ -76,11 +81,12 @@ namespace IngameScript
                 Fullscreen = true,
                 Width = height,
                 Height = height,
-                Padding = new StylePadding(0),
                 Round = false,
                 RotationOrScale = scale,
                 Thresholds = powerThresholds,
                 Percent = showPercent,
+                Padding = new StylePadding(padding),
+                Margin = new StyleMargin(margin),
             };
 
             Search();
@@ -170,8 +176,8 @@ namespace IngameScript
 
         void Draw(SurfaceDrawing surface)
         {
-            surface.DrawGauge(surface.Position, outputs["all"].Current, outputs["all"].Max, style);
-            surface.Position += new Vector2(0, height) + padding;
+            surface.DrawGauge(style, surface.Position, outputs["all"].Current, outputs["all"].Max);
+            surface.Position += new Vector2(0, height) + deltaPadding;
 
             foreach (var v in outputs)
             {
@@ -207,11 +213,11 @@ namespace IngameScript
 
                 surface.Position += deltaPosition;
             }
-            surface.Position += padding;
+            surface.Position += deltaPadding;
 
             if (showBatteries)
             {
-                surface.DrawGauge(surface.Position, batteriesStore.Current, batteriesStore.Max, style);
+                surface.DrawGauge(style, surface.Position, batteriesStore.Current, batteriesStore.Max);
                 surface.Position += deltaPosition;
                 surface.AddSprite(new MySprite()
                 {
@@ -228,7 +234,7 @@ namespace IngameScript
 
             if (showInput)
             {
-                surface.DrawGauge(surface.Position, currentInput, maxInput, style);
+                surface.DrawGauge(style, surface.Position, currentInput, maxInput);
                 surface.Position += deltaPosition;
                 surface.AddSprite(new MySprite()
                 {
