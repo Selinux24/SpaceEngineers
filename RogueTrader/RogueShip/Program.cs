@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "2.64";
+        const string Version = "2.66";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
@@ -93,19 +93,19 @@ namespace IngameScript
             remoteDocking = GetBlockWithName<IMyRemoteControl>(Config.RemoteControlDocking);
             if (remoteDocking == null)
             {
-                WriteLogLCDs($"Remote Control '{Config.RemoteControlDocking}' not found.", true);
+                WriteLogLCDs($"{nameof(Config.RemoteControlDocking)} Control '{Config.RemoteControlDocking}' not found.", true);
                 return;
             }
             connectorA = GetBlockWithName<IMyShipConnector>(Config.Connector);
             if (connectorA == null)
             {
-                WriteLogLCDs($"Connector '{Config.Connector}' not found.", true);
+                WriteLogLCDs($"{nameof(Config.Connector)} '{Config.Connector}' not found.", true);
                 return;
             }
             timerDock = GetBlockWithName<IMyTimerBlock>(Config.TimerDock);
             if (timerDock == null)
             {
-                WriteLogLCDs($"Timer '{Config.TimerDock}' not found.", true);
+                WriteLogLCDs($"{nameof(Config.TimerDock)} '{Config.TimerDock}' not found.", true);
                 return;
             }
             gyros = GetBlocksOfType<IMyGyro>();
@@ -125,55 +125,55 @@ namespace IngameScript
             timerPilot = GetBlockWithName<IMyTimerBlock>(Config.TimerPilot);
             if (timerPilot == null)
             {
-                WriteLogLCDs($"Timer '{Config.TimerPilot}' not found.", true);
+                WriteLogLCDs($"{nameof(Config.TimerPilot)} '{Config.TimerPilot}' not found.", true);
             }
             timerWaiting = GetBlockWithName<IMyTimerBlock>(Config.TimerWaiting);
             if (timerWaiting == null)
             {
-                WriteLogLCDs($"Timer '{Config.TimerWaiting}' not found.", true);
+                WriteLogLCDs($"{nameof(Config.TimerWaiting)} '{Config.TimerWaiting}' not found.", true);
             }
             timerUndock = GetBlockWithName<IMyTimerBlock>(Config.TimerUndock);
             if (timerUndock == null)
             {
-                WriteLogLCDs($"Timer '{Config.TimerUndock}' not found.", true);
+                WriteLogLCDs($"{nameof(Config.TimerUndock)} '{Config.TimerUndock}' not found.", true);
             }
             timerLoad = GetBlockWithName<IMyTimerBlock>(Config.TimerLoad);
             if (timerLoad == null)
             {
-                WriteLogLCDs($"Timer '{Config.TimerLoad}' not found.", true);
+                WriteLogLCDs($"{nameof(Config.TimerLoad)} '{Config.TimerLoad}' not found.", true);
             }
             timerUnload = GetBlockWithName<IMyTimerBlock>(Config.TimerUnload);
             if (timerUnload == null)
             {
-                WriteLogLCDs($"Timer '{Config.TimerUnload}' not found.", true);
+                WriteLogLCDs($"{nameof(Config.TimerUnload)} '{Config.TimerUnload}' not found.", true);
             }
             timerFinalize = GetBlockWithName<IMyTimerBlock>(Config.TimerFinalizeCargo);
             if (timerFinalize == null)
             {
-                WriteLogLCDs($"Timer '{Config.TimerFinalizeCargo}' not found.", true);
+                WriteLogLCDs($"{nameof(Config.TimerFinalizeCargo)} '{Config.TimerFinalizeCargo}' not found.", true);
             }
 
             remotePilot = GetBlockWithName<IMyRemoteControl>(Config.RemoteControlPilot);
             if (remotePilot == null)
             {
-                WriteLogLCDs($"Remote Control '{Config.RemoteControlPilot}' not found.", true);
+                WriteLogLCDs($"{nameof(Config.RemoteControlPilot)} '{Config.RemoteControlPilot}' not found.", true);
             }
             remoteLanding = GetBlockWithName<IMyRemoteControl>(Config.RemoteControlLanding);
             if (remoteLanding == null)
             {
-                WriteLogLCDs($"Remote Control '{Config.RemoteControlLanding}' not found. This ship is not available for landing.", true);
+                WriteLogLCDs($"{nameof(Config.RemoteControlLanding)} '{Config.RemoteControlLanding}' not found. This ship is not available for landing.", true);
             }
 
             antenna = GetBlockWithName<IMyRadioAntenna>(Config.Antenna);
             if (antenna == null)
             {
-                WriteLogLCDs($"Antenna {Config.Antenna} not found.", true);
+                WriteLogLCDs($"{nameof(Config.Antenna)} '{Config.Antenna}' not found.", true);
             }
 
             cameraPilot = GetBlockWithName<IMyCameraBlock>(Config.Camera);
             if (cameraPilot == null)
             {
-                WriteLogLCDs($"Camera {Config.Camera} not found.", true);
+                WriteLogLCDs($"{nameof(Config.Camera)} '{Config.Camera}' not found.", true);
             }
 
             shipCargos = GetBlocksOfType<IMyCargoContainer>();
@@ -242,9 +242,9 @@ namespace IngameScript
             else if (argument == "START_LOAD") SendWaitingMessage(ExchangeTasks.StartLoad);
             else if (argument == "START_UNLOAD") SendWaitingMessage(ExchangeTasks.StartUnload);
             else if (argument == "START_DOCK") SendWaitingMessage(ExchangeTasks.Dock);
+            else if (argument == "START_UNDOCK") SendWaitingMessage(ExchangeTasks.Undock);
 
             else if (argument == "NEXT") Next();
-            else if (argument == "UNDOCK") StopAndUndocK();
 
             else if (argument == "PLAN") Plan();
         }
@@ -324,6 +324,7 @@ namespace IngameScript
             if (command == "COME_TO_LOAD") ProcessDocking(source, lines, ExchangeTasks.StartLoad);
             if (command == "COME_TO_UNLOAD") ProcessDocking(source, lines, ExchangeTasks.StartUnload);
             if (command == "COME_TO_DOCK") ProcessDocking(source, lines, ExchangeTasks.Dock);
+            if (command == "UNDOCK_FROM_BASE") ProcessDocking(source, lines, ExchangeTasks.Undock);
             if (command == "UNDOCK_TO_LOAD") ProcessDocking(source, lines, ExchangeTasks.EndLoad);
             if (command == "UNDOCK_TO_UNLOAD") ProcessDocking(source, lines, ExchangeTasks.EndUnload);
 
@@ -388,24 +389,17 @@ namespace IngameScript
             var up = Utils.ReadVector(lines, "Up");
             var wpList = Utils.ReadVectorList(lines, "Waypoints");
 
-            if (task == ExchangeTasks.StartLoad || task == ExchangeTasks.StartUnload)
+            if (task == ExchangeTasks.StartLoad || task == ExchangeTasks.StartUnload || task == ExchangeTasks.Dock)
             {
                 navigator.ApproachToDock(source, isStatic, landing, exchange, fw, up, wpList, "ON_APPROACHING_COMPLETED", task);
                 shipStatus = ShipStatus.Docking;
                 lastDockRequest = DateTime.MinValue;
                 dockUpdating = false;
             }
-            else if (task == ExchangeTasks.EndLoad || task == ExchangeTasks.EndUnload)
+            else if (task == ExchangeTasks.EndLoad || task == ExchangeTasks.EndUnload || task == ExchangeTasks.Undock)
             {
                 navigator.SeparateFromDock(source, landing, exchange, fw, up, wpList, "ON_SEPARATION_COMPLETED", task);
                 shipStatus = ShipStatus.Undocking;
-                lastDockRequest = DateTime.MinValue;
-                dockUpdating = false;
-            }
-            else if (task == ExchangeTasks.Dock)
-            {
-                navigator.ApproachToDock(source, isStatic, landing, exchange, fw, up, wpList, "ON_APPROACHING_COMPLETED", task);
-                shipStatus = ShipStatus.Docking;
                 lastDockRequest = DateTime.MinValue;
                 dockUpdating = false;
             }
@@ -668,6 +662,11 @@ namespace IngameScript
                 onPlanet = route.LoadBaseOnPlanet;
                 waypoints = route.ToLoadBaseWaypoints;
                 callBack = "ON_NAVIGATION_COMPLETED";
+            }
+            else if (task == ExchangeTasks.Undock)
+            {
+                shipStatus = ShipStatus.Idle;
+                return;
             }
             else
             {
@@ -1149,6 +1148,14 @@ namespace IngameScript
                 shipStatus = ShipStatus.WaitingDock;
                 lastDockRequest = DateTime.Now;
             }
+            else if (task == ExchangeTasks.Undock)
+            {
+                message = "REQUEST_UNDOCK";
+                to = GetDockedGridName();
+
+                shipStatus = ShipStatus.WaitingUndock;
+                lastDockRequest = DateTime.Now;
+            }
             else
             {
                 WriteLogLCDs($"Unknown task: {task}");
@@ -1170,37 +1177,27 @@ namespace IngameScript
 
         void Next()
         {
-            if (shipStatus == ShipStatus.Loading)
+            if (shipStatus != ShipStatus.Loading && shipStatus != ShipStatus.Unloading)
+            {
+                WriteLogLCDs($"Ship is not loading/unloading: {shipStatus}");
+                return;
+            }
+
+            if (monitorizeCapacity)
             {
                 monitorizeCapacity = false;
+                return;
             }
-            else if (shipStatus == ShipStatus.Unloading)
-            {
-                monitorizeCapacity = false;
-            }
-            else
-            {
-                WriteLogLCDs($"Ship is not docked: {shipStatus}");
-            }
-        }
-        void StopAndUndocK()
-        {
-            if (shipStatus == ShipStatus.Loading)
+
+            if (monitorizePropulsion)
             {
                 timerFinalize?.StartCountdown();
-                SendWaitingMessage(ExchangeTasks.EndLoad);
+                SendWaitingMessage(shipStatus == ShipStatus.Loading ? ExchangeTasks.EndLoad : ExchangeTasks.EndUnload);
                 monitorizePropulsion = false;
+                return;
             }
-            else if (shipStatus == ShipStatus.Unloading)
-            {
-                timerFinalize?.StartCountdown();
-                SendWaitingMessage(ExchangeTasks.EndUnload);
-                monitorizePropulsion = false;
-            }
-            else
-            {
-                WriteLogLCDs($"Ship is not docked: {shipStatus}");
-            }
+
+            WriteLogLCDs($"No changes: {shipStatus}");
         }
 
         void Plan()

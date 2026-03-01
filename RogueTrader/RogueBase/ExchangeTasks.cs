@@ -9,5 +9,6 @@ namespace IngameScript
         EndLoad = 3,
         EndUnload = 4,
         Dock = 5,
+        Undock = 6,
     }
 }

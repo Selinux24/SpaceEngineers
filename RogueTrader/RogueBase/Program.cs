@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "2.32";
+        const string Version = "2.34";
         const string Separate = "------";
 
         #region Blocks
@@ -232,6 +232,7 @@ namespace IngameScript
             string command = Utils.ReadArgument(lines, "Command");
 
             if (command == "REQUEST_DOCK") ProcessRequestDock(lines);
+            if (command == "REQUEST_UNDOCK") ProcessRequestUndock(lines);
 
             if (!direct && !IsForMe(lines)) return;
 
@@ -265,6 +266,16 @@ namespace IngameScript
             EnqueueExchangeRequest(exchangeType, from, ExchangeTasks.Dock);
         }
         /// <summary>
+        /// Appends an undock request from a ship
+        /// </summary>
+        void ProcessRequestUndock(string[] lines)
+        {
+            string from = Utils.ReadString(lines, "From");
+            string exchangeType = Utils.ReadString(lines, "ExchangeType");
+
+            EnqueueExchangeRequest(exchangeType, from, ExchangeTasks.Undock);
+        }
+        /// <summary>
         /// BASE updates the SHIP status
         /// </summary>
         /// <remarks>
@@ -286,12 +297,19 @@ namespace IngameScript
                 ships.Add(ship);
             }
 
+            bool removeRequests = ship.Status != status && status == ShipStatus.Idle;
+
             ship.ExchangeType = exchangeType;
             ship.Status = status;
             ship.StatusMessage = statusMessage;
             ship.Position = position;
             ship.Cargo = cargo;
             ship.UpdateTime = DateTime.Now;
+
+            if (removeRequests)
+            {
+                exchangeRequests.RemoveAll(r => r.Ship == from);
+            }
         }
         /// <summary>
         /// BASE updates the SHIP plan
@@ -513,6 +531,9 @@ namespace IngameScript
                             break;
                         case ExchangeTasks.EndUnload:
                             command = "UNDOCK_TO_UNLOAD";
+                            break;
+                        case ExchangeTasks.Undock:
+                            command = "UNDOCK_FROM_BASE";
                             break;
                     }
 
@@ -765,14 +786,14 @@ namespace IngameScript
             return exchangeRequests.FindAll(r =>
                 r.ExchangeType == exchangeType &&
                 r.Pending &&
-                (r.Task == ExchangeTasks.StartLoad || r.Task == ExchangeTasks.StartUnload || r.Task == ExchangeTasks.Dock));
+                (r.Task == ExchangeTasks.StartLoad || r.Task == ExchangeTasks.StartUnload || r.Task == ExchangeTasks.Dock || r.Task == ExchangeTasks.Undock));
         }
         List<ExchangeRequest> GetPendingExchangeUndockRequests(string exchangeType)
         {
             return exchangeRequests.FindAll(r =>
                 r.ExchangeType == exchangeType &&
                 r.Pending &&
-                (r.Task == ExchangeTasks.EndLoad || r.Task == ExchangeTasks.EndUnload));
+                (r.Task == ExchangeTasks.EndLoad || r.Task == ExchangeTasks.EndUnload || r.Task == ExchangeTasks.Undock));
         }
         List<ExchangeGroup> GetFreeExchanges(string exchangeType)
         {
