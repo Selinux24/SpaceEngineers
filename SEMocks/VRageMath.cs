@@ -81,6 +81,13 @@ namespace VRageMath
 
     public struct Vector2 : IEquatable<Vector2>
     {
+        public static Vector2 Zero = new Vector2();
+
+        public Vector2(float v) : this()
+        {
+            X = v;
+            Y = v;
+        }
         public Vector2(float x, float y) : this()
         {
             X = x;
