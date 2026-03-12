@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "2.66";
+        const string Version = "2.67";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
@@ -584,7 +584,7 @@ namespace IngameScript
         {
             if (shipStatus != ShipStatus.WaitingDock) return;
 
-            if ((DateTime.Now - lastDockRequest) <= Config.DockRequestTimeout) return;
+            if (Config.DockRequestTimeout.TotalSeconds > 0 && (DateTime.Now - lastDockRequest) <= Config.DockRequestTimeout) return;
 
             shipStatus = ShipStatus.Idle;
             lastDockRequest = DateTime.MinValue;

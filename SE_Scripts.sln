@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.13.35931.197
+# Visual Studio Version 18
+VisualStudioVersion = 18.3.11520.95 d18.3
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SEMocks", "SEMocks\SEMocks.csproj", "{ABDAB762-7D8C-13B6-C25B-8DA568F445C3}"
 EndProject
@@ -26,6 +26,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AutoDoors", "Utils\AutoDoors\AutoDoors.csproj", "{F1B0832D-A66A-5980-B70A-2AEABC8B3140}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InventoryLCD", "Utils\InventoryLCD\InventoryLCD.csproj", "{29F6098A-976B-6443-D81D-C00A27A48033}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProductionMonitor", "Utils\ProductionMonitor\ProductionMonitor.csproj", "{DF78B690-2D1C-C2F1-0642-CA60C05D86A9}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -69,6 +71,10 @@ Global
 		{29F6098A-976B-6443-D81D-C00A27A48033}.Debug|x64.Build.0 = Debug|x64
 		{29F6098A-976B-6443-D81D-C00A27A48033}.Release|x64.ActiveCfg = Release|x64
 		{29F6098A-976B-6443-D81D-C00A27A48033}.Release|x64.Build.0 = Release|x64
+		{DF78B690-2D1C-C2F1-0642-CA60C05D86A9}.Debug|x64.ActiveCfg = Debug|x64
+		{DF78B690-2D1C-C2F1-0642-CA60C05D86A9}.Debug|x64.Build.0 = Debug|x64
+		{DF78B690-2D1C-C2F1-0642-CA60C05D86A9}.Release|x64.ActiveCfg = Release|x64
+		{DF78B690-2D1C-C2F1-0642-CA60C05D86A9}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -82,6 +88,7 @@ Global
 		{ABA43349-4E72-0673-8F73-6519D4608942} = {7279C55B-63F4-4C0F-A19B-156521F27E56}
 		{F1B0832D-A66A-5980-B70A-2AEABC8B3140} = {7279C55B-63F4-4C0F-A19B-156521F27E56}
 		{29F6098A-976B-6443-D81D-C00A27A48033} = {7279C55B-63F4-4C0F-A19B-156521F27E56}
+		{DF78B690-2D1C-C2F1-0642-CA60C05D86A9} = {7279C55B-63F4-4C0F-A19B-156521F27E56}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {271CF823-5D34-427E-8578-F9C0AD612EC6}
