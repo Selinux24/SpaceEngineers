@@ -112,7 +112,6 @@ namespace IngameScript
             cDefault = colorDefaults.GetDefault();
 
             limits = new Limits(ini, SECTION_LIMITS);
-            limits.Load();
             lDefault = limits.GetInt("default");
 
             types.Clear();
@@ -179,7 +178,6 @@ namespace IngameScript
             GaugeThresholds.SaveThresholds(ini, itemThresholds, SECTION_ITEM_THRESHOLDS);
             GaugeThresholds.SaveThresholds(ini, chestThresholds, SECTION_CHEST_THRESHOLDS);
             colorDefaults?.Save();
-            limits?.Save();
         }
 
         void Search()

@@ -9,7 +9,7 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        const string Version = "1.38";
+        const string Version = "1.39";
         const UpdateType CommandUpdate = UpdateType.Trigger | UpdateType.Terminal;
 
         readonly MyCommandLine commandLine = new MyCommandLine();
