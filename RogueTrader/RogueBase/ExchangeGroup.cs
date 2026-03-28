@@ -9,6 +9,8 @@ namespace IngameScript
     class ExchangeGroup
     {
         private double dockRequestTime = 0;
+        private bool waitingDock = false;
+        private bool waitingUndock = false;
 
         public readonly string Name;
         public readonly int NumWaypoints;
@@ -18,6 +20,10 @@ namespace IngameScript
         public IMyCameraBlock Camera;
         public IMyTimerBlock TimerLoad;
         public IMyTimerBlock TimerUnload;
+        public IMyTimerBlock TimerDockPrepare;
+        public IMyTimerBlock TimerDockStart;
+        public IMyTimerBlock TimerUndockPrepare;
+        public IMyTimerBlock TimerUndockStart;
         public IMyTimerBlock TimerFree;
         public Vector3D Forward => Camera.WorldMatrix.Forward;
         public Vector3D Up => Camera.WorldMatrix.Up;
@@ -121,10 +127,41 @@ namespace IngameScript
             }
         }
 
-        public void DockRequest(string shipName)
+        public bool DockRequest(string shipName)
         {
-            dockRequestTime = 0;
-            ReservedShipName = shipName;
+            if (waitingDock)
+            {
+                if (TimerDockPrepare?.IsCountingDown ?? false) return false;
+                waitingDock = false;
+                return true;
+            }
+            else
+            {
+                dockRequestTime = 0;
+                ReservedShipName = shipName;
+                TimerDockPrepare?.StartCountdown();
+                TimerDockStart?.StartCountdown();
+                waitingDock = true;
+                return false;
+            }
+        }
+        public bool UndockRequest()
+        {
+            if (TimerUndockPrepare == null) return true;
+
+            if (waitingUndock)
+            {
+                if (TimerUndockPrepare.IsCountingDown) return false;
+                waitingUndock = false;
+                return true;
+            }
+            else
+            {
+                TimerUndockPrepare.StartCountdown();
+                TimerUndockStart?.StartCountdown();
+                waitingUndock = true;
+                return false;
+            }
         }
 
         public List<Vector3D> CalculateRouteToConnector()

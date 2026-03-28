@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "2.34";
+        const string Version = "2.35";
         const string Separate = "------";
 
         #region Blocks
@@ -430,35 +430,20 @@ namespace IngameScript
             foreach (var ex in exchanges.Keys)
             {
                 var exRequest = GetPendingExchangeDockRequests(ex);
-                if (exRequest.Count == 0)
-                {
-                    continue;
-                }
+                if (exRequest.Count == 0) continue;
                 var freeExchanges = GetFreeExchanges(ex);
-                if (freeExchanges.Count == 0)
-                {
-                    continue;
-                }
+                if (freeExchanges.Count == 0) continue;
                 var waitingShips = GetWaitingShips(ex);
-                if (waitingShips.Count == 0)
-                {
-                    continue;
-                }
+                if (waitingShips.Count == 0) continue;
                 WriteLogLCDs($"Exchange {ex} requests: {exRequest.Count}; Free exchanges: {freeExchanges.Count}; Free ships: {waitingShips.Count}");
 
                 var shipExchangePairs = ShipExchangePair.GetNearestShipsFromExchanges(waitingShips, freeExchanges);
-                if (shipExchangePairs.Count == 0)
-                {
-                    continue;
-                }
+                if (shipExchangePairs.Count == 0) continue;
 
                 foreach (var request in exRequest)
                 {
                     var pair = shipExchangePairs.FirstOrDefault(s => s.Ship.Name == request.Ship);
-                    if (pair == null)
-                    {
-                        continue;
-                    }
+                    if (pair == null) continue;
 
                     var exchange = pair.Exchange;
 
@@ -508,19 +493,14 @@ namespace IngameScript
             foreach (var ex in exchanges.Keys)
             {
                 var exRequest = GetPendingExchangeUndockRequests(ex);
-                if (exRequest.Count == 0)
-                {
-                    continue;
-                }
+                if (exRequest.Count == 0) continue;
 
                 foreach (var request in exRequest)
                 {
                     var exchange = FindShipExchange(request.Ship);
-                    if (exchange == null)
-                    {
-                        continue;
-                    }
+                    if (exchange == null) continue;
 
+                    if (!exchange.UndockRequest()) return true;
                     request.SetDoing();
 
                     string command = null;
@@ -749,6 +729,10 @@ namespace IngameScript
                     {
                         if (timer.CustomName.Contains(config.ExchangeTimerLoad)) exchangeGroup.TimerLoad = timer;
                         else if (timer.CustomName.Contains(config.ExchangeTimerUnload)) exchangeGroup.TimerUnload = timer;
+                        else if (timer.CustomName.Contains(config.ExchangeTimerDockPrepare)) exchangeGroup.TimerDockPrepare = timer;
+                        else if (timer.CustomName.Contains(config.ExchangeTimerDockStart)) exchangeGroup.TimerDockStart = timer;
+                        else if (timer.CustomName.Contains(config.ExchangeTimerUndockPrepare)) exchangeGroup.TimerUndockPrepare = timer;
+                        else if (timer.CustomName.Contains(config.ExchangeTimerUndockStart)) exchangeGroup.TimerUndockStart = timer;
                         else if (timer.CustomName.Contains(config.ExchangeTimerFree)) exchangeGroup.TimerFree = timer;
                     }
                 }
