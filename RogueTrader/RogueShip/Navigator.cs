@@ -32,6 +32,7 @@ namespace IngameScript
         public NavigatorCrsStatus CrsStatus { get; private set; } = NavigatorCrsStatus.None;
 
         public Config Config => ship.Config;
+        public bool Idle => Task == NavigatorTasks.None && AtmStatus == NavigatorAtmStatus.None && CrsStatus == NavigatorCrsStatus.None;
 
         public double NavigationSpeed => ship.GetPilotSpeed();
         public Vector3D NavigationToWaypoint => GetCurrentPilotWaypoint() - ship.GetPilotPosition();

@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "2.35";
+        const string Version = "2.36";
         const string Separate = "------";
 
         #region Blocks
@@ -707,7 +707,7 @@ namespace IngameScript
             //For each group, initialize the blocks of the ExchangeGroup class
             foreach (var group in groups)
             {
-                var exchangeGroup = new ExchangeGroup(group.Key, exConfig.NumWaypoints, exConfig.PathDistance);
+                var exchangeGroup = new ExchangeGroup(group.Key, exConfig.NumWaypoints, exConfig.PathDistance, exConfig.PathType);
 
                 foreach (var block in group)
                 {

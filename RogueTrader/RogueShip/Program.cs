@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "2.68";
+        const string Version = "2.69";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
@@ -381,6 +381,8 @@ namespace IngameScript
         /// </summary>
         void ProcessDocking(long source, string[] lines, ExchangeTasks task)
         {
+            if (!navigator.Idle) return;
+
             var isStatic = Utils.ReadInt(lines, "IsStatic") == 1;
             var landing = Utils.ReadInt(lines, "Landing") == 1;
 
@@ -395,6 +397,7 @@ namespace IngameScript
                 shipStatus = ShipStatus.Docking;
                 lastDockRequest = DateTime.MinValue;
                 dockUpdating = false;
+                Plan();
             }
             else if (task == ExchangeTasks.EndLoad || task == ExchangeTasks.EndUnload || task == ExchangeTasks.Undock)
             {
@@ -402,6 +405,7 @@ namespace IngameScript
                 shipStatus = ShipStatus.Undocking;
                 lastDockRequest = DateTime.MinValue;
                 dockUpdating = false;
+                Plan();
             }
         }
         /// <summary>

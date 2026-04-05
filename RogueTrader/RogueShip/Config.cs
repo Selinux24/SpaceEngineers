@@ -15,6 +15,7 @@ namespace IngameScript
 
         public bool EnableLogs = true;
         public bool EnableRefreshLCDs = false;
+        public readonly TimeSpan RefreshLCDsInterval; // seconds, how often to refresh LCDs
 
         public readonly System.Text.RegularExpressions.Regex WildcardShipInfo;
         public readonly System.Text.RegularExpressions.Regex WildcardPlanLCDs;
@@ -53,6 +54,7 @@ namespace IngameScript
         public readonly double DockingSlowdownDistance;
         public readonly double DockingDistanceThrWaypoints;
         public readonly TimeSpan DockUpdateInterval;
+        public readonly TimeSpan DockRequestTimeout = TimeSpan.FromSeconds(300); //Seconds to wait for a docking request to be accepted
 
         public readonly double TaxiSpeed;
 
@@ -79,10 +81,6 @@ namespace IngameScript
         public readonly double GyrosThr;
         public readonly double GyrosSpeed;
 
-        public readonly TimeSpan DockRequestTimeout = TimeSpan.FromSeconds(300); //Seconds to wait for a docking request to be accepted
-
-        public readonly TimeSpan RefreshLCDsInterval; // seconds, how often to refresh LCDs
-
         public Config(string customData)
         {
             Channel = Utils.ReadConfig(customData, "Channel");
@@ -90,6 +88,7 @@ namespace IngameScript
 
             EnableLogs = ReadConfigBool(customData, "EnableLogs", false);
             EnableRefreshLCDs = ReadConfigBool(customData, "EnableRefreshLCDs", false);
+            RefreshLCDsInterval = TimeSpan.FromSeconds(ReadConfigInt(customData, "RefreshLCDsInterval", 10));
 
             WildcardShipInfo = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "WildcardShipInfo", "SHIP_INFO")}(?:\.(\d+))?\]");
             WildcardPlanLCDs = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "WildcardPlanLCDs", "SHIP_PLAN")}(?:\.(\d+))?\]");
@@ -137,6 +136,7 @@ namespace IngameScript
             DockingSlowdownDistance = ReadConfigDouble(customData, "DockingSlowdownDistance", 50.0);
             DockingDistanceThrWaypoints = ReadConfigDouble(customData, "DockingDistanceThrWaypoints", 0.5);
             DockUpdateInterval = TimeSpan.FromSeconds(ReadConfigDouble(customData, "DockUpdateInterval", 0.5));
+            DockRequestTimeout = TimeSpan.FromSeconds(ReadConfigInt(customData, "DockRequestTimeout", 300));
 
             TaxiSpeed = ReadConfigDouble(customData, "TaxiSpeed", 25);
 
@@ -159,10 +159,6 @@ namespace IngameScript
 
             GyrosThr = ReadConfigDouble(customData, "GyrosThr", 0.001);
             GyrosSpeed = ReadConfigDouble(customData, "GyrosSpeed", 2.0);
-
-            DockRequestTimeout = TimeSpan.FromSeconds(ReadConfigInt(customData, "DockRequestTimeout", 300));
-
-            RefreshLCDsInterval = TimeSpan.FromSeconds(ReadConfigInt(customData, "RefreshLCDsInterval", 10));
         }
         string ReadConfig(string customData, string name, string defaultValue = null)
         {
@@ -277,6 +273,7 @@ namespace IngameScript
                 "\n" +
                 "EnableLogs=false\n" +
                 "EnableRefreshLCDs=false\n" +
+                "RefreshLCDsInterval=10" +
                 "\n" +
                 "WildcardShipInfo=SHIP_INFO\n" +
                 "WildcardPlanLCDs=SHIP_PLAN\n" +
@@ -322,6 +319,7 @@ namespace IngameScript
                 "DockingSlowdownDistance=50.0\n" +
                 "DockingDistanceThrWaypoints=0.5\n" +
                 "DockUpdateInterval=0.5\n" +
+                "DockRequestTimeout=300\n" +
                 "\n" +
                 "TaxiSpeed=25\n" +
                 "\n" +
@@ -343,11 +341,7 @@ namespace IngameScript
                 "CrsNavigationEvadingWaypointThr=100.0\n" +
                 "\n" +
                 "GyrosThr=0.001\n" +
-                "GyrosSpeed=2.0\n" +
-                "\n" +
-                "DockRequestTimeout=300\n" +
-                "\n" +
-                "RefreshLCDsInterval=10";
+                "GyrosSpeed=2.0\n";
         }
     }
 }

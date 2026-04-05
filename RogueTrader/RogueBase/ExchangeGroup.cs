@@ -1,5 +1,6 @@
 ﻿using Sandbox.ModAPI.Ingame;
 using SpaceEngineers.Game.ModAPI.Ingame;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using VRageMath;
@@ -15,6 +16,7 @@ namespace IngameScript
         public readonly string Name;
         public readonly int NumWaypoints;
         public readonly double PathDistance; //Meters, distance from the dock to the first waypoint
+        public readonly int PathType; //0 = Straight, 1 = Curve
         public IMyShipConnector MainConnector;
         public readonly List<IMyShipConnector> Connectors = new List<IMyShipConnector>();
         public IMyCameraBlock Camera;
@@ -31,11 +33,12 @@ namespace IngameScript
         public string DockedShipName { get; private set; }
         public string ReservedShipName { get; private set; }
 
-        public ExchangeGroup(string name, int numWaypoints, double pathDistance)
+        public ExchangeGroup(string name, int numWaypoints, double pathDistance, int pathType)
         {
             Name = name;
             NumWaypoints = numWaypoints;
             PathDistance = pathDistance;
+            PathType = pathType;
         }
 
         public bool IsValid(out string errorMessage)
@@ -166,25 +169,60 @@ namespace IngameScript
 
         public List<Vector3D> CalculateRouteToConnector()
         {
-            var waypoints = new List<Vector3D>();
+            var targetDock = MainConnector.GetPosition();
 
-            var targetDock = MainConnector.GetPosition();   //Last point
-            var forward = MainConnector.WorldMatrix.Forward;
-            var approachStart = targetDock + forward * PathDistance;  //Initial approach point
+            var forward = Camera.WorldMatrix.Forward;
+            var up = Camera.WorldMatrix.Up;
 
-            for (int i = 0; i <= NumWaypoints; i++)
-            {
-                double t = i / (double)NumWaypoints;
-                var point = Vector3D.Lerp(approachStart, targetDock, t) + forward * 2.3;
-                waypoints.Add(point);
-            }
-
-            return waypoints;
+            return PathType == 0 ?
+                CalculateStraightRoute(targetDock, forward, PathDistance, NumWaypoints) :
+                CalculateCurveRoute(targetDock, forward, up, PathDistance, NumWaypoints);
         }
         public List<Vector3D> CalculateRouteFromConnector()
         {
             var waypoints = CalculateRouteToConnector();
             waypoints.Reverse();
+            return waypoints;
+        }
+        static List<Vector3D> CalculateStraightRoute(Vector3D targetDock, Vector3D forward, double distance, int numWaypoints)
+        {
+            var waypoints = new List<Vector3D>();
+
+            var offset = forward * 2.3;
+            var approachStart = targetDock + forward * distance; //Initial approach point
+
+            for (int i = 0; i <= numWaypoints; i++)
+            {
+                double t = i / (double)numWaypoints;
+
+                var point = Vector3D.Lerp(approachStart, targetDock, t);
+                waypoints.Add(point + offset);
+            }
+
+            return waypoints;
+        }
+        static List<Vector3D> CalculateCurveRoute(Vector3D targetDock, Vector3D forward, Vector3D up, double distance, int numWaypoints)
+        {
+            var waypoints = new List<Vector3D>();
+
+            var offset = forward * 2.3;
+
+            // Calculate the center of the curve, wich is located along the down direction of the target dock, taking account the forward direction to determine the correct side
+            var center = targetDock + (-up * distance);
+
+            // Calculate the entry point of the route. It is located over the center at a distance of radios, in the same direction as the forward vector
+            var entryPoint = center + forward * distance;
+
+            // Calculate the waypoints along the curve, from the entry point to the target dock
+            for (int i = 0; i <= numWaypoints; i++)
+            {
+                double t = i / (double)numWaypoints;
+
+                // Interpolate the curve between the entry point and the target dock, using a quarter of a circle arc (90 degrees) around the center
+                var point = Vector3D.Transform(entryPoint - center, MatrixD.CreateFromAxisAngle(Vector3D.Cross(forward, up), MathHelper.PiOver2 * t)) + center;
+                waypoints.Add(point + offset);
+            }
+
             return waypoints;
         }
 
