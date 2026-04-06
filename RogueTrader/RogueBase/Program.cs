@@ -13,13 +13,13 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "2.36";
+        const string Version = "2.37";
         const string Separate = "------";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
         readonly IMyUnicastListener ul;
-        readonly List<IMyTextSurface> dataLCDs = new List<IMyTextSurface>();
+        readonly List<TextPanelDesc> dataLCDs = new List<TextPanelDesc>();
         readonly List<TextPanelDesc> logLCDs = new List<TextPanelDesc>();
         #endregion
 
@@ -27,7 +27,11 @@ namespace IngameScript
         readonly Config config;
         readonly bool isStatic;
 
-        readonly StringBuilder sbData = new StringBuilder();
+        readonly StringBuilder sbTitle = new StringBuilder();
+        readonly StringBuilder sbExchanges = new StringBuilder();
+        readonly StringBuilder sbShips = new StringBuilder();
+        readonly StringBuilder sbRequests = new StringBuilder();
+        readonly StringBuilder sbFlightPlans = new StringBuilder();
         readonly StringBuilder sbLog = new StringBuilder();
 
         readonly Dictionary<string, List<ExchangeGroup>> exchanges = new Dictionary<string, List<ExchangeGroup>>();
@@ -103,7 +107,11 @@ namespace IngameScript
 
             UpdateBaseState();
 
-            sbData.Clear();
+            sbTitle.Clear();
+            sbExchanges.Clear();
+            sbShips.Clear();
+            sbRequests.Clear();
+            sbFlightPlans.Clear();
             PrintBase();
             PrintExchanges();
             PrintShipStatus();
@@ -121,11 +129,6 @@ namespace IngameScript
 
             if (argument == "RESET") Reset();
 
-            else if (argument == "LIST_EXCHANGES") ListExchanges();
-            else if (argument == "LIST_SHIPS") ListShips();
-            else if (argument == "LIST_EXCHANGE_REQUESTS") ListExchangeRequests();
-            else if (argument == "LIST_PLANS") ListPlans();
-
             else if (argument == "ENABLE_LOGS") EnableLogs();
             else if (argument == "ENABLE_STATUS_REQUEST") EnableStatusRequest();
             else if (argument == "ENABLE_EXCHANGE_REQUEST") EnableExchangeRequest();
@@ -141,7 +144,11 @@ namespace IngameScript
         {
             Storage = "";
 
-            sbData.Clear();
+            sbTitle.Clear();
+            sbExchanges.Clear();
+            sbShips.Clear();
+            sbRequests.Clear();
+            sbFlightPlans.Clear();
             sbLog.Clear();
 
             exchanges.Clear();
@@ -149,34 +156,6 @@ namespace IngameScript
             exchangeRequests.Clear();
 
             InitializeExchanges();
-        }
-        /// <summary>
-        /// Changes the state of the variable that controls the display of exchanges
-        /// </summary>
-        void ListExchanges()
-        {
-            config.ShowExchanges = !config.ShowExchanges;
-        }
-        /// <summary>
-        /// Changes the state of the variable that controls the display of ships
-        /// </summary>
-        void ListShips()
-        {
-            config.ShowShips = !config.ShowShips;
-        }
-        /// <summary>
-        /// Changes the state of the variable that controls the display of exchange requests
-        /// </summary>
-        void ListExchangeRequests()
-        {
-            config.ShowExchangeRequests = !config.ShowExchangeRequests;
-        }
-        /// <summary>
-        /// Changes the state of the variable that controls the display of the flight plans
-        /// </summary>
-        void ListPlans()
-        {
-            config.ShowPlans = !config.ShowPlans;
         }
         /// <summary>
         /// Changes the state of the variable that controls the display of logs
@@ -586,14 +565,14 @@ namespace IngameScript
             dataLCDs.Clear();
             var data = GetBlocksOfType<IMyTextPanel>(config.DataLCDs);
             var dataCps = GetBlocksImplementType<IMyTextSurfaceProvider>(config.DataLCDs).Where(c => config.DataLCDs.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Success);
-            dataLCDs.AddRange(data);
-            dataLCDs.AddRange(dataCps.Select(c => c.GetSurface(int.Parse(config.DataLCDs.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Value))));
+            dataLCDs.AddRange(data.Select(l => new TextPanelDesc(l, l, true)));
+            dataLCDs.AddRange(dataCps.Select(c => new TextPanelDesc((IMyTerminalBlock)c, c.GetSurface(int.Parse(config.DataLCDs.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Value)), true)));
 
             logLCDs.Clear();
             var log = GetBlocksOfType<IMyTextPanel>(config.LogLCDs);
             var logCps = GetBlocksImplementType<IMyTextSurfaceProvider>(config.LogLCDs).Where(c => config.LogLCDs.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Success);
-            logLCDs.AddRange(log.Select(l => new TextPanelDesc(l, l)));
-            logLCDs.AddRange(logCps.Select(c => new TextPanelDesc((IMyTerminalBlock)c, c.GetSurface(int.Parse(config.LogLCDs.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Value)))));
+            logLCDs.AddRange(log.Select(l => new TextPanelDesc(l, l, false)));
+            logLCDs.AddRange(logCps.Select(c => new TextPanelDesc((IMyTerminalBlock)c, c.GetSurface(int.Parse(config.LogLCDs.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Value)), false)));
 
             lastRefreshLCDs = DateTime.Now;
         }
@@ -613,7 +592,7 @@ namespace IngameScript
             return blocks.Cast<T>().ToList();
         }
 
-        void WriteDataLCDs(string text, bool echo = false)
+        void WriteDataLCDs(StringBuilder sbData, string text, bool echo = false)
         {
             if (echo)
             {
@@ -633,11 +612,15 @@ namespace IngameScript
         }
         void FlushDataLCDs()
         {
-            string text = sbData.ToString();
+            var title = sbTitle.ToString();
+            var exchanges = sbExchanges.ToString();
+            var ships = sbShips.ToString();
+            var requests = sbRequests.ToString();
+            var flightPlans = sbFlightPlans.ToString();
+
             foreach (var lcd in dataLCDs)
             {
-                lcd.ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE;
-                lcd.WriteText(text, false);
+                lcd.WriteData(title, exchanges, ships, requests, flightPlans);
             }
         }
         void FlushLogLCDs()
@@ -647,7 +630,7 @@ namespace IngameScript
 
             foreach (var lcd in logLCDs)
             {
-                lcd.Write(log, logLines);
+                lcd.WriteLog(log, logLines);
             }
         }
         void BroadcastMessage(List<string> parts)
@@ -864,22 +847,20 @@ namespace IngameScript
 
         void PrintBase()
         {
-            WriteDataLCDs($"RogueBase v{Version}. {DateTime.Now:HH:mm:ss}", true);
-            WriteDataLCDs($"{baseId} in channel {config.Channel}", true);
-            if (config.EnableRequestStatus) WriteDataLCDs($"Next Status Request {GetNextStatusRequest():hh\\:mm\\:ss}", true);
-            if (config.EnableRequestExchange) WriteDataLCDs($"Next Exchange Request {GetNextExchangeRequest():hh\\:mm\\:ss}", true);
-            if (config.EnableRefreshLCDs) WriteDataLCDs($"Next LCDs Refresh {GetNextLCDsRefresh():hh\\:mm\\:ss}", true);
+            WriteDataLCDs(sbTitle, $"RogueBase v{Version}. {DateTime.Now:HH:mm:ss}", true);
+            WriteDataLCDs(sbTitle, $"{baseId} in channel {config.Channel}", true);
+            if (config.EnableRequestStatus) WriteDataLCDs(sbTitle, $"Next Status Request {GetNextStatusRequest():hh\\:mm\\:ss}", true);
+            if (config.EnableRequestExchange) WriteDataLCDs(sbTitle, $"Next Exchange Request {GetNextExchangeRequest():hh\\:mm\\:ss}", true);
+            if (config.EnableRefreshLCDs) WriteDataLCDs(sbTitle, $"Next LCDs Refresh {GetNextLCDsRefresh():hh\\:mm\\:ss}", true);
         }
         void PrintExchanges()
         {
-            if (!config.ShowExchanges) return;
-
-            WriteDataLCDs("");
-            WriteDataLCDs("EXCHANGE STATUS");
+            WriteDataLCDs(sbExchanges, "");
+            WriteDataLCDs(sbExchanges, "EXCHANGE STATUS");
 
             if (exchanges.Count == 0)
             {
-                WriteDataLCDs("No exchanges available.");
+                WriteDataLCDs(sbExchanges, "No exchanges available.");
                 return;
             }
 
@@ -887,29 +868,27 @@ namespace IngameScript
             {
                 foreach (var e in exchange)
                 {
-                    WriteDataLCDs($"{e.Name} {e.NumWaypoints}wps {Utils.DistanceToStr(e.PathDistance)} - {e.GetState()}");
+                    WriteDataLCDs(sbExchanges, $"{e.Name} {e.NumWaypoints}wps {Utils.DistanceToStr(e.PathDistance)} - {e.GetState()}");
                 }
             }
         }
         void PrintShipStatus()
         {
-            if (!config.ShowShips) return;
-
-            WriteDataLCDs("");
-            WriteDataLCDs("SHIPS STATUS");
+            WriteDataLCDs(sbShips, "");
+            WriteDataLCDs(sbShips, "SHIPS STATUS");
 
             if (ships.Count == 0)
             {
-                WriteDataLCDs("No ships available.");
+                WriteDataLCDs(sbShips, "No ships available.");
                 return;
             }
 
             var last = ships[ships.Count - 1];
             foreach (var ship in ships)
             {
-                WriteDataLCDs($"+{ship.Name} - {ship.Status}. Cargo at {ship.Cargo:P1}. Last update: {(DateTime.Now - ship.UpdateTime).TotalSeconds:F0}secs");
-                if (!string.IsNullOrWhiteSpace(ship.StatusMessage)) WriteDataLCDs(ship.StatusMessage);
-                if (ship != last) WriteDataLCDs(Separate);
+                WriteDataLCDs(sbShips, $"+{ship.Name} - {ship.Status}. Cargo at {ship.Cargo:P1}. Last update: {(DateTime.Now - ship.UpdateTime).TotalSeconds:F0}secs");
+                if (!string.IsNullOrWhiteSpace(ship.StatusMessage)) WriteDataLCDs(sbShips, ship.StatusMessage);
+                if (ship != last) WriteDataLCDs(sbShips, Separate);
             }
 
             //Remove ships that have not been updated in a while
@@ -917,42 +896,38 @@ namespace IngameScript
         }
         void PrintExchangeRequests()
         {
-            if (!config.ShowExchangeRequests) return;
-
-            WriteDataLCDs("");
-            WriteDataLCDs("EXCHANGE REQUESTS");
+            WriteDataLCDs(sbRequests, "");
+            WriteDataLCDs(sbRequests, "EXCHANGE REQUESTS");
 
             if (exchangeRequests.Count == 0)
             {
-                WriteDataLCDs("No requests available.");
+                WriteDataLCDs(sbRequests, "No requests available.");
                 return;
             }
 
             foreach (var req in exchangeRequests)
             {
                 string unloadStatus = req.Pending ? "Pending" : "On route";
-                WriteDataLCDs($"{req.ExchangeType}-{req.Ship} {req.Task}. {unloadStatus}");
+                WriteDataLCDs(sbRequests, $"{req.ExchangeType}-{req.Ship} {req.Task}. {unloadStatus}");
             }
         }
         void PrintShipPlans()
         {
-            if (!config.ShowPlans) return;
-
-            WriteDataLCDs("");
-            WriteDataLCDs("FLIGHT PLANS");
+            WriteDataLCDs(sbFlightPlans, "");
+            WriteDataLCDs(sbFlightPlans, "FLIGHT PLANS");
 
             if (plans.Count == 0)
             {
-                WriteDataLCDs("No plans available.");
+                WriteDataLCDs(sbFlightPlans, "No plans available.");
                 return;
             }
 
             var last = plans[plans.Count - 1];
             foreach (var plan in plans)
             {
-                WriteDataLCDs($"+{plan.Ship}");
-                WriteDataLCDs(plan.GetWaypoints());
-                if (plan != last) WriteDataLCDs(Separate);
+                WriteDataLCDs(sbFlightPlans, $"+{plan.Ship}");
+                WriteDataLCDs(sbFlightPlans, plan.GetWaypoints());
+                if (plan != last) WriteDataLCDs(sbFlightPlans, Separate);
             }
 
             //Remove ships that have not been updated in a while
