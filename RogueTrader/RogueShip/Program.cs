@@ -9,11 +9,11 @@ using VRageMath;
 namespace IngameScript
 {
     /// <summary>
-    /// Rogue ship
+    /// RogueShip
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "2.69";
+        const string Version = "2.71";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
@@ -55,7 +55,7 @@ namespace IngameScript
 
         bool paused = false;
         bool monitorizeLoadTime = false;
-        DateTime loadStart = DateTime.MinValue;
+        TimeSpan loadStart = TimeSpan.Zero;
         bool monitorizeCapacity = false;
         double lastCapacity = -1;
         bool monitorizePropulsion = false;
@@ -63,10 +63,10 @@ namespace IngameScript
         readonly Navigator navigator;
         readonly Route route;
 
-        DateTime lastDockRequest = DateTime.MinValue;
+        TimeSpan lastDockRequest = TimeSpan.Zero;
         bool dockUpdating = false;
-        DateTime lastDockUpdate = DateTime.MinValue;
-        DateTime lastRefreshLCDs = DateTime.MinValue;
+        TimeSpan lastDockUpdate = TimeSpan.Zero;
+        TimeSpan lastRefreshLCDs = TimeSpan.Zero;
 
         public Program()
         {
@@ -187,7 +187,7 @@ namespace IngameScript
 
             LoadFromStorage();
 
-            lastRefreshLCDs = DateTime.MinValue + TimeSpan.FromTicks(Me.EntityId);
+            lastRefreshLCDs = TimeSpan.FromTicks(Me.EntityId % 1000);
 
             Runtime.UpdateFrequency = UpdateFrequency.Update1;
         }
@@ -234,6 +234,7 @@ namespace IngameScript
             if (argument == "RESET") Reset();
             else if (argument == "PAUSE") Pause();
             else if (argument == "RESUME") Resume();
+            else if (argument == "CANCEL") Cancel();
 
             else if (argument == "ENABLE_LOGS") EnableLogs();
             else if (argument == "ENABLE_REFRESH_LCDS") EnableRefreshLCDs();
@@ -259,7 +260,7 @@ namespace IngameScript
 
             paused = false;
             monitorizeLoadTime = false;
-            loadStart = DateTime.MinValue;
+            loadStart = TimeSpan.Zero;
             monitorizeCapacity = false;
             lastCapacity = -1;
             monitorizePropulsion = false;
@@ -267,10 +268,10 @@ namespace IngameScript
             navigator.Clear();
             route.Clear();
 
-            lastDockRequest = DateTime.MinValue;
+            lastDockRequest = TimeSpan.Zero;
             dockUpdating = false;
-            lastDockUpdate = DateTime.MinValue;
-            lastRefreshLCDs = DateTime.MinValue;
+            lastDockUpdate = TimeSpan.Zero;
+            lastRefreshLCDs = TimeSpan.Zero;
 
             WriteInfoLCDs("Stopped.");
 
@@ -289,6 +290,13 @@ namespace IngameScript
         void Resume()
         {
             paused = false;
+        }
+        /// <summary>
+        /// Cancels the navigation
+        /// </summary>
+        void Cancel()
+        {
+            navigator.Clear();
         }
         /// <summary>
         /// Changes the state of the variable that controls the display of logs
@@ -395,7 +403,7 @@ namespace IngameScript
             {
                 navigator.ApproachToDock(source, isStatic, landing, exchange, fw, up, wpList, "ON_APPROACHING_COMPLETED", task);
                 shipStatus = ShipStatus.Docking;
-                lastDockRequest = DateTime.MinValue;
+                lastDockRequest = TimeSpan.Zero;
                 dockUpdating = false;
                 Plan();
             }
@@ -403,7 +411,7 @@ namespace IngameScript
             {
                 navigator.SeparateFromDock(source, landing, exchange, fw, up, wpList, "ON_SEPARATION_COMPLETED", task);
                 shipStatus = ShipStatus.Undocking;
-                lastDockRequest = DateTime.MinValue;
+                lastDockRequest = TimeSpan.Zero;
                 dockUpdating = false;
                 Plan();
             }
@@ -424,7 +432,7 @@ namespace IngameScript
             route.ToUnloadBaseWaypoints.AddRange(Utils.ReadVectorList(lines, "ToUnloadBaseWaypoints"));
 
             monitorizeLoadTime = Config.MonitorizeLoadTime();
-            loadStart = DateTime.Now;
+            loadStart = Config.MaxLoadTime;
             monitorizeCapacity = Config.MonitorizeCapacity();
             lastCapacity = -1;
             monitorizePropulsion = Config.MonitorizePropulsion();
@@ -468,6 +476,9 @@ namespace IngameScript
         #region MONITORS
         void Monitorize()
         {
+            loadStart -= Runtime.TimeSinceLastRun;
+            if (loadStart < TimeSpan.Zero) loadStart = TimeSpan.Zero;
+
             if (shipStatus == ShipStatus.Loading)
             {
                 MonitorizeLoading();
@@ -486,20 +497,25 @@ namespace IngameScript
 
             if (monitorizeLoadTime)
             {
-                if (capacity <= 0 || !capacityChanged || DateTime.Now - loadStart < Config.MaxLoadTime) return;
+                if (capacity / Config.MaxLoad >= 1 || (capacity > 0 && loadStart <= TimeSpan.Zero))
+                {
+                    monitorizeLoadTime = false;
+                    loadStart = TimeSpan.Zero;
+                    return;
+                }
 
-                monitorizeLoadTime = false;
-                loadStart = DateTime.MinValue;
-                Next();
                 return;
             }
 
             if (monitorizeCapacity)
             {
-                if (capacity < Config.MaxLoad) return;
+                if (!capacityChanged || capacity >= Config.MaxLoad)
+                {
+                    monitorizeCapacity = false;
+                    lastCapacity = -1;
+                    return;
+                }
 
-                monitorizeCapacity = false;
-                lastCapacity = -1;
                 return;
             }
 
@@ -570,8 +586,9 @@ namespace IngameScript
 
             if (dockUpdating) return;
 
-            if ((DateTime.Now - lastDockUpdate) <= Config.DockUpdateInterval) return;
-            lastDockUpdate = DateTime.Now;
+            lastDockUpdate -= Runtime.TimeSinceLastRun;
+            if (lastDockUpdate > TimeSpan.Zero) return;
+            lastDockUpdate = Config.DockUpdateInterval;
 
             WriteLogLCDs($"Dock Update requested to {navigator.Source}");
 
@@ -590,10 +607,11 @@ namespace IngameScript
 
             if (Config.DockRequestTimeout.TotalSeconds <= 0) return;
 
-            if ((DateTime.Now - lastDockRequest) <= Config.DockRequestTimeout) return;
+            lastDockRequest -= Runtime.TimeSinceLastRun;
+            if (lastDockRequest > TimeSpan.Zero) return;
+            lastDockRequest = Config.DockRequestTimeout;
 
             shipStatus = ShipStatus.Idle;
-            lastDockRequest = DateTime.MinValue;
         }
         void DoRefreshLCDs()
         {
@@ -603,8 +621,9 @@ namespace IngameScript
         }
         void RefreshLCDs()
         {
-            if (DateTime.Now - lastRefreshLCDs <= Config.RefreshLCDsInterval) return;
-            lastRefreshLCDs = DateTime.Now;
+            lastRefreshLCDs -= Runtime.TimeSinceLastRun;
+            if (lastRefreshLCDs > TimeSpan.Zero) return;
+            lastRefreshLCDs = Config.RefreshLCDsInterval;
 
             infoLCDs.Clear();
             var info = GetBlocksOfType<IMyTextPanel>(Config.WildcardShipInfo);
@@ -729,7 +748,8 @@ namespace IngameScript
 
         bool IsForMe(string[] lines)
         {
-            return Utils.ReadString(lines, "To") == shipId;
+            var to = Utils.ReadString(lines, "To");
+            return to.ToUpper() == shipId.ToUpper();
         }
 
         internal void WriteInfoLCDs(string text, bool append = true)
@@ -787,7 +807,7 @@ namespace IngameScript
 
         TimeSpan GetNextLCDsRefresh()
         {
-            return lastRefreshLCDs + Config.RefreshLCDsInterval - DateTime.Now;
+            return lastRefreshLCDs;
         }
 
         internal void Pilot()
@@ -811,7 +831,7 @@ namespace IngameScript
         internal void Load()
         {
             monitorizeLoadTime = Config.MonitorizeLoadTime();
-            loadStart = DateTime.Now;
+            loadStart = Config.MaxLoadTime;
             monitorizeCapacity = Config.MonitorizeCapacity();
             lastCapacity = -1;
             monitorizePropulsion = Config.MonitorizePropulsion();
@@ -821,7 +841,7 @@ namespace IngameScript
         internal void Unload()
         {
             monitorizeLoadTime = false;
-            loadStart = DateTime.Now;
+            loadStart = Config.MaxLoadTime;
             monitorizeCapacity = Config.MonitorizeCapacity();
             lastCapacity = -1;
             monitorizePropulsion = Config.MonitorizePropulsion();
@@ -1136,7 +1156,7 @@ namespace IngameScript
                 to = task == ExchangeTasks.StartLoad ? route.LoadBase : route.UnloadBase;
 
                 shipStatus = ShipStatus.WaitingDock;
-                lastDockRequest = DateTime.Now;
+                lastDockRequest = Config.DockRequestTimeout;
             }
             else if (task == ExchangeTasks.EndLoad || task == ExchangeTasks.EndUnload)
             {
@@ -1144,7 +1164,7 @@ namespace IngameScript
                 to = task == ExchangeTasks.EndLoad ? route.LoadBase : route.UnloadBase;
 
                 shipStatus = ShipStatus.WaitingUndock;
-                lastDockRequest = DateTime.Now;
+                lastDockRequest = Config.DockRequestTimeout;
             }
             else if (task == ExchangeTasks.Dock)
             {
@@ -1152,7 +1172,7 @@ namespace IngameScript
                 to = "";
 
                 shipStatus = ShipStatus.WaitingDock;
-                lastDockRequest = DateTime.Now;
+                lastDockRequest = Config.DockRequestTimeout;
             }
             else if (task == ExchangeTasks.Undock)
             {
@@ -1160,7 +1180,7 @@ namespace IngameScript
                 to = GetDockedGridName();
 
                 shipStatus = ShipStatus.WaitingUndock;
-                lastDockRequest = DateTime.Now;
+                lastDockRequest = Config.DockRequestTimeout;
             }
             else
             {
@@ -1252,12 +1272,11 @@ namespace IngameScript
             WriteInfoLCDs($"{shipStatus}");
             if (shipStatus == ShipStatus.Loading && monitorizeLoadTime)
             {
-                WriteInfoLCDs($"Until {Config.MaxLoadTime - (DateTime.Now - loadStart):hh\\:mm\\:ss}");
+                WriteInfoLCDs($"ETD {loadStart:hh\\:mm\\:ss}");
             }
             if (shipStatus == ShipStatus.WaitingDock)
             {
-                var waitTime = DateTime.Now - lastDockRequest;
-                WriteInfoLCDs($"Waiting dock response... {waitTime.TotalSeconds:F0}s up to {Config.DockRequestTimeout.TotalSeconds}s");
+                WriteInfoLCDs($"Waiting dock response... {lastDockRequest.TotalSeconds:F0}s up to {Config.DockRequestTimeout.TotalSeconds}s");
             }
             if (Config.EnableRefreshLCDs) WriteInfoLCDs($"Next LCDs Refresh {GetNextLCDsRefresh():hh\\:mm\\:ss}");
         }
@@ -1273,7 +1292,7 @@ namespace IngameScript
 
             paused = Utils.ReadInt(storageLines, "Paused", 0) == 1;
             monitorizeLoadTime = Utils.ReadInt(storageLines, "MonitorizeLoadTime", 0) == 1;
-            loadStart = new DateTime(Utils.ReadLong(storageLines, "LoadStart", 0));
+            loadStart = new TimeSpan(Utils.ReadLong(storageLines, "LoadStart", 0));
             monitorizeCapacity = Utils.ReadInt(storageLines, "MonitorizeCapacity", 0) == 1;
             lastCapacity = Utils.ReadDouble(storageLines, "LastCapacity");
             monitorizePropulsion = Utils.ReadInt(storageLines, "MonitorizePropulsion", 0) == 1;

@@ -8,7 +8,7 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        const string Version = "1.1";
+        const string Version = "1.2";
         const char AttributeSep = '=';
 
         readonly Config config;
@@ -18,6 +18,7 @@ namespace IngameScript
         readonly IMyTimerBlock timerOff;
 
         double lastCapacity = 0;
+        int lastExecutedTimer = 0;
 
         public Program()
         {
@@ -80,28 +81,26 @@ namespace IngameScript
 
             var capacity = CalculateCargoPercentage();
 
-            if (capacity >= config.CargoUpperLimit)
+            if (capacity >= config.CargoUpperLimit && lastExecutedTimer != 1)
             {
-                if (lastCapacity < config.CargoUpperLimit)
-                {
-                    Echo($"Capacity {capacity:P1} >= {config.CargoUpperLimit:P1}. Activating '{config.TimerOff}'");
-                    timerOff.StartCountdown();
-                }
+                Echo($"Capacity {capacity:P1} >= {config.CargoUpperLimit:P1}. Activating '{config.TimerOff}'");
+                timerOff.StartCountdown();
+                lastExecutedTimer = 1;
             }
 
-            if (capacity < config.CargoLowerLimit)
+            if (capacity < config.CargoLowerLimit && lastExecutedTimer != -1)
             {
-                if (lastCapacity >= config.CargoLowerLimit)
-                {
-                    Echo($"Capacity {capacity:P1} < {config.CargoLowerLimit:P1}. Activating '{config.TimerOn}'");
-                    timerOn.StartCountdown();
-                }
+                Echo($"Capacity {capacity:P1} < {config.CargoLowerLimit:P1}. Activating '{config.TimerOn}'");
+                timerOn.StartCountdown();
+                lastExecutedTimer = -1;
             }
 
             bool growing = capacity > lastCapacity;
             Echo($"Containers found: {cargoContainers.Count}");
             Echo($"Limits {config.CargoLowerLimit:P2} / {config.CargoUpperLimit:P2}");
             Echo($"Capacity from {lastCapacity:P2} to {capacity:P2}. {(growing ? "Increasing" : "Decreasing")}");
+            if (lastExecutedTimer == 1) Echo($"'{config.TimerOff}' triggered.");
+            else if (lastExecutedTimer == -1) Echo($"'{config.TimerOn}' triggered.");
 
             lastCapacity = capacity;
         }
@@ -158,12 +157,14 @@ namespace IngameScript
             }
 
             lastCapacity = ReadDouble(storageLines, "lastCapacity", 0);
+            lastExecutedTimer = ReadInt(storageLines, "lastExecutedTimer", 0);
         }
         void SaveToStorage()
         {
             List<string> parts = new List<string>
             {
                 $"lastCapacity={lastCapacity}",
+                $"lastExecutedTimer={lastExecutedTimer}"
             };
 
             Storage = string.Join(Environment.NewLine, parts);
@@ -188,6 +189,16 @@ namespace IngameScript
             }
 
             return double.Parse(value);
+        }
+        static int ReadInt(string[] lines, string name, int defaultValue = 0)
+        {
+            string value = ReadString(lines, name);
+            if (string.IsNullOrEmpty(value))
+            {
+                return defaultValue;
+            }
+
+            return int.Parse(value);
         }
     }
 }

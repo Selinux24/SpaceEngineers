@@ -158,6 +158,9 @@ namespace IngameScript
             Callback = null;
             ExchangeTask = ExchangeTasks.None;
 
+            lastHit = new MyDetectedEntityInfo();
+            evadingPoints.Clear();
+
             Task = NavigatorTasks.None;
             AtmStatus = NavigatorAtmStatus.None;
             CrsStatus = NavigatorCrsStatus.None;
@@ -673,19 +676,19 @@ namespace IngameScript
             ship.WriteInfoLCDs("Aligning...");
 
             bool corrected = false;
-            if (angleFW > thr)
-            {
-                var rotationAxisFW = Vector3D.Cross(shipForward, targetForward);
-                if (rotationAxisFW.Length() <= 0.001) rotationAxisFW = new Vector3D(0, 1, 0);
-                ship.ApplyGyroOverride(rotationAxisFW);
-                corrected = true;
-            }
-
             if (angleUP > thr)
             {
                 var rotationAxisUP = Vector3D.Cross(shipUp, targetUp);
                 if (rotationAxisUP.Length() <= 0.001) rotationAxisUP = new Vector3D(1, 0, 0);
                 ship.ApplyGyroOverride(rotationAxisUP);
+                corrected = true;
+            }
+
+            if (angleFW > thr)
+            {
+                var rotationAxisFW = Vector3D.Cross(shipForward, targetForward);
+                if (rotationAxisFW.Length() <= 0.001) rotationAxisFW = new Vector3D(0, 1, 0);
+                ship.ApplyGyroOverride(rotationAxisFW);
                 corrected = true;
             }
 

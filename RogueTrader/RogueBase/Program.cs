@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "2.37";
+        const string Version = "2.38";
         const string Separate = "------";
 
         #region Blocks
@@ -39,9 +39,9 @@ namespace IngameScript
         readonly List<Plan> plans = new List<Plan>();
         readonly List<ExchangeRequest> exchangeRequests = new List<ExchangeRequest>();
 
-        DateTime lastRequestStatus = DateTime.MinValue;
-        DateTime lastExchangeRequest = DateTime.MinValue;
-        DateTime lastRefreshLCDs = DateTime.MinValue;
+        TimeSpan lastRequestStatus = TimeSpan.Zero;
+        TimeSpan lastExchangeRequest = TimeSpan.Zero;
+        TimeSpan lastRefreshLCDs = TimeSpan.Zero;
 
         public Program()
         {
@@ -71,9 +71,9 @@ namespace IngameScript
 
             LoadFromStorage();
 
-            lastRequestStatus = DateTime.MinValue + TimeSpan.FromTicks(Me.EntityId);
-            lastExchangeRequest = DateTime.MinValue + TimeSpan.FromTicks(Me.EntityId);
-            lastRefreshLCDs = DateTime.MinValue + TimeSpan.FromTicks(Me.EntityId);
+            lastRequestStatus = TimeSpan.FromTicks(Me.EntityId % 1000);
+            lastExchangeRequest = TimeSpan.FromTicks(Me.EntityId % 1000);
+            lastRefreshLCDs = TimeSpan.FromTicks(Me.EntityId % 1000);
 
             Runtime.UpdateFrequency = UpdateFrequency.Update100;
         }
@@ -364,16 +364,11 @@ namespace IngameScript
         /// </remarks>
         void DoRequestStatus()
         {
-            if (!config.EnableRequestStatus)
-            {
-                return;
-            }
+            if (!config.EnableRequestStatus) return;
 
-            if (DateTime.Now - lastRequestStatus < config.RequestStatusInterval)
-            {
-                return;
-            }
-            lastRequestStatus = DateTime.Now;
+            lastRequestStatus -= Runtime.TimeSinceLastRun;
+            if (lastRequestStatus > TimeSpan.Zero) return;
+            lastRequestStatus = config.RequestStatusInterval;
 
             List<string> parts = new List<string>()
             {
@@ -395,8 +390,9 @@ namespace IngameScript
         {
             if (!config.EnableRequestExchange) return;
 
-            if (DateTime.Now - lastExchangeRequest < config.RequestReceptionInterval) return;
-            lastExchangeRequest = DateTime.Now;
+            lastExchangeRequest -= Runtime.TimeSinceLastRun;
+            if (lastExchangeRequest > TimeSpan.Zero) return;
+            lastExchangeRequest = config.RequestReceptionInterval;
 
             if (IsCurrentExchangeDockRequests()) return;
 
@@ -550,15 +546,13 @@ namespace IngameScript
         }
         void DoRefreshLCDs()
         {
-            if (!config.EnableRefreshLCDs)
-            {
-                return;
-            }
+            if (!config.EnableRefreshLCDs) return;
 
-            if (DateTime.Now - lastRefreshLCDs > config.RefreshLCDsInterval)
-            {
-                RefreshLCDs();
-            }
+            lastRefreshLCDs -= Runtime.TimeSinceLastRun;
+            if (lastRefreshLCDs > TimeSpan.Zero) return;
+            lastRefreshLCDs = config.RefreshLCDsInterval;
+
+            RefreshLCDs();
         }
         void RefreshLCDs()
         {
@@ -573,8 +567,6 @@ namespace IngameScript
             var logCps = GetBlocksImplementType<IMyTextSurfaceProvider>(config.LogLCDs).Where(c => config.LogLCDs.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Success);
             logLCDs.AddRange(log.Select(l => new TextPanelDesc(l, l, false)));
             logLCDs.AddRange(logCps.Select(c => new TextPanelDesc((IMyTerminalBlock)c, c.GetSurface(int.Parse(config.LogLCDs.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Value)), false)));
-
-            lastRefreshLCDs = DateTime.Now;
         }
         #endregion
 
@@ -652,7 +644,8 @@ namespace IngameScript
 
         bool IsForMe(string[] lines)
         {
-            return Utils.ReadString(lines, "To") == baseId;
+            var to = Utils.ReadString(lines, "To");
+            return to.ToUpper() == baseId.ToUpper();
         }
 
         Vector3D GetBasePosition()
@@ -662,7 +655,7 @@ namespace IngameScript
 
         TimeSpan GetNextStatusRequest()
         {
-            return lastRequestStatus + config.RequestStatusInterval - DateTime.Now;
+            return lastRequestStatus;
         }
 
         void InitializeExchanges()
@@ -742,7 +735,7 @@ namespace IngameScript
         }
         TimeSpan GetNextExchangeRequest()
         {
-            return lastExchangeRequest + config.RequestReceptionInterval - DateTime.Now;
+            return lastExchangeRequest;
         }
         bool IsCurrentExchangeDockRequests()
         {
@@ -842,7 +835,7 @@ namespace IngameScript
 
         TimeSpan GetNextLCDsRefresh()
         {
-            return lastRefreshLCDs + config.RefreshLCDsInterval - DateTime.Now;
+            return lastRefreshLCDs;
         }
 
         void PrintBase()

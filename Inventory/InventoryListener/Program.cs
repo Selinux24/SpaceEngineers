@@ -9,7 +9,7 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        const string Version = "1.6";
+        const string Version = "1.7";
         const string Separate = "------";
 
         readonly List<IMyCargoContainer> warehouseCargos;
@@ -153,7 +153,7 @@ namespace IngameScript
                             BroadcastMessage(msg);
                         }
                     }
-                    infoText.Append(listener.GetState());
+                    infoText.Append(listener.GetState(Runtime.TimeSinceLastRun));
                     infoText.AppendLine(Separate);
                 }
 

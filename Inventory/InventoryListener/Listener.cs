@@ -12,10 +12,14 @@ namespace IngameScript
     {
         const string ListenerSep = "¬";
 
+        readonly string name;
+        readonly Route route;
+        readonly List<IMyShipConnector> connectors;
         readonly List<IMyCargoContainer> outputCargos;
         readonly IMyTimerBlock timerOpen;
         readonly IMyTimerBlock timerClose;
-        DateTime lastQuery = DateTime.MinValue;
+
+        TimeSpan lastQuery = TimeSpan.Zero;
         bool preparing = false;
         string preparingData = null;
         bool closing = false;
@@ -23,17 +27,13 @@ namespace IngameScript
         readonly StringBuilder lastQueryState = new StringBuilder();
         readonly StringBuilder state = new StringBuilder();
 
-        public readonly string Name;
-        public readonly Route Route;
-        public readonly List<IMyShipConnector> Connectors;
-
         public long SenderId { get; private set; } = 0;
 
         public Listener(string name, Route route, List<IMyShipConnector> connectors, List<IMyCargoContainer> outputCargos, IMyTimerBlock timerOpen, IMyTimerBlock timerClose)
         {
-            Name = name;
-            Route = route;
-            Connectors = connectors;
+            this.name = name;
+            this.route = route;
+            this.connectors = connectors;
 
             this.outputCargos = outputCargos;
             this.timerOpen = timerOpen;
@@ -45,7 +45,7 @@ namespace IngameScript
             if (preparing) return;
 
             SenderId = senderId;
-            lastQuery = DateTime.Now;
+            lastQuery = TimeSpan.Zero;
             lastQueryState.Clear();
 
             if (!InventoryEmpty())
@@ -194,7 +194,7 @@ namespace IngameScript
         }
         public List<string> GetConnectedShips()
         {
-            var connected = Connectors.FindAll(c => c?.OtherConnector?.IsConnected == true);
+            var connected = connectors.FindAll(c => c?.OtherConnector?.IsConnected == true);
 
             return connected
                 .Select(c => c.OtherConnector.CubeGrid.CustomName)
@@ -203,7 +203,7 @@ namespace IngameScript
         }
         public bool HasShipsConnected()
         {
-            return Connectors.Any(c => c.OtherConnector != null && c.OtherConnector.IsConnected);
+            return connectors.Any(c => c.OtherConnector != null && c.OtherConnector.IsConnected);
         }
         public List<List<string>> FreeConnectors()
         {
@@ -212,20 +212,20 @@ namespace IngameScript
             var ships = GetConnectedShips();
             foreach (var ship in ships)
             {
-                lastQueryState.AppendLine($"  {Name}: {ship} route sent.");
+                lastQueryState.AppendLine($"  {name}: {ship} route sent.");
 
                 //Set the route on the ship
                 var parts = new List<string>()
                 {
                     $"Command=SET_ROUTE",
-                    $"From={Name}",
+                    $"From={name}",
                     $"To={ship}",
-                    $"LoadBase={Route.LoadBase}",
-                    $"LoadBaseOnPlanet={(Route.LoadBaseOnPlanet?1:0)}",
-                    $"ToLoadBaseWaypoints={Utils.VectorListToStr(Route.ToLoadBaseWaypoints)}",
-                    $"UnloadBase={Route.UnloadBase}",
-                    $"UnloadBaseOnPlanet={(Route.UnloadBaseOnPlanet?1:0)}",
-                    $"ToUnloadBaseWaypoints={Utils.VectorListToStr(Route.ToUnloadBaseWaypoints)}",
+                    $"LoadBase={route.LoadBase}",
+                    $"LoadBaseOnPlanet={(route.LoadBaseOnPlanet?1:0)}",
+                    $"ToLoadBaseWaypoints={Utils.VectorListToStr(route.ToLoadBaseWaypoints)}",
+                    $"UnloadBase={route.UnloadBase}",
+                    $"UnloadBaseOnPlanet={(route.UnloadBaseOnPlanet?1:0)}",
+                    $"ToUnloadBaseWaypoints={Utils.VectorListToStr(route.ToUnloadBaseWaypoints)}",
                 };
                 res.Add(parts);
             }
@@ -246,10 +246,12 @@ namespace IngameScript
             return true;
         }
 
-        public string GetState()
+        public string GetState(TimeSpan time)
         {
+            lastQuery += time;
+
             state.Clear();
-            state.AppendLine($"+ {Name} {Route?.GetState() ?? "No route defined. Using ship's default."}");
+            state.AppendLine($"+ {name} {route?.GetState() ?? "No route defined. Using ship's default."}");
 
             string error;
             if (!IsValid(out error))
@@ -260,7 +262,7 @@ namespace IngameScript
 
             if (lastQuery.Ticks > 0)
             {
-                state.AppendLine($"  Last message received {(int)(DateTime.Now - lastQuery).TotalMinutes} minutes ago.");
+                state.AppendLine($"  Last message received {(int)lastQuery.TotalMinutes} minutes ago.");
             }
             else if (!preparing)
             {
@@ -279,22 +281,22 @@ namespace IngameScript
             errorMsg = null;
             if (outputCargos.Count == 0)
             {
-                errorMsg = $"No output cargos found with name {Name}";
+                errorMsg = $"No output cargos found with name {name}";
                 return false;
             }
             if (timerOpen == null)
             {
-                errorMsg = $"No open timer found with name {Name}";
+                errorMsg = $"No open timer found with name {name}";
                 return false;
             }
             if (timerClose == null)
             {
-                errorMsg = $"No close timer found with name {Name}";
+                errorMsg = $"No close timer found with name {name}";
                 return false;
             }
-            if (Connectors.Count == 0)
+            if (connectors.Count == 0)
             {
-                errorMsg = $"No connectors found with name {Name}";
+                errorMsg = $"No connectors found with name {name}";
                 return false;
             }
             return true;
@@ -306,7 +308,7 @@ namespace IngameScript
             string[] storageLines = storageLine.Split(ListenerSep.ToCharArray());
 
             SenderId = Utils.ReadLong(storageLines, "senderId", 0);
-            lastQuery = new DateTime(Utils.ReadLong(storageLines, "lastQuery", 0));
+            lastQuery = new TimeSpan(Utils.ReadLong(storageLines, "lastQuery", 0));
             preparing = Utils.ReadInt(storageLines, "preparing", 0) == 1;
             preparingData = Utils.ReadString(storageLines, "preparingData", null);
             closing = Utils.ReadInt(storageLines, "closing", 0) == 1;

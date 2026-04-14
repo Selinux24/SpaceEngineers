@@ -9,7 +9,7 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        const string Version = "1.4";
+        const string Version = "1.5";
         const char AttributeSep = '=';
         const string WildcardLCDs = "[INV]";
         const int ItemsQueryTicks = 3;
@@ -22,13 +22,15 @@ namespace IngameScript
         readonly Dictionary<string, int> required;
         readonly TimeSpan queryInterval;
         readonly double threshold;
-        bool retained = false;
-        DateTime lastQuery = DateTime.MinValue;
-        bool lastQueryHastItems = false;
-        DateTime lastMessageDate = DateTime.MinValue;
+
         readonly StringBuilder lastMessage = new StringBuilder();
         readonly StringBuilder infoText = new StringBuilder();
         readonly StringBuilder message = new StringBuilder();
+
+        bool retained = false;
+        TimeSpan lastQuery = TimeSpan.Zero;
+        bool lastQueryHastItems = false;
+        TimeSpan lastMessageDate = TimeSpan.Zero;
         int currentTick = 0;
         bool itemsNeeded = false;
 
@@ -187,7 +189,7 @@ namespace IngameScript
                     {
                         //Free query
                         retained = false;
-                        lastQuery = DateTime.Now;
+                        lastQuery = queryInterval;
                     }
                 }
             }
@@ -197,18 +199,12 @@ namespace IngameScript
                 infoText.Clear();
                 infoText.AppendLine($"Inventory Monitor v{Version} - {channel}. {DateTime.Now:HH:mm:ss}");
 
-                PrintLastMessage();
                 Monitorize();
                 PrintCurrentMessage();
+                PrintLastMessage();
 
                 WriteInfo();
             }
-        }
-        void PrintLastMessage()
-        {
-            if (lastMessageDate.Ticks > 0) infoText.AppendLine($"Last message sent {DateTime.Now - lastMessageDate:hh\\:mm} minutes ago.");
-            infoText.AppendLine($"Last query has items? {lastQueryHastItems}");
-            infoText.Append(lastMessage.ToString().Replace(";", Environment.NewLine));
         }
         void PrintCurrentMessage()
         {
@@ -216,6 +212,12 @@ namespace IngameScript
                 infoText.AppendLine(message.ToString().Replace(";", Environment.NewLine));
             else
                 infoText.AppendLine("All items in required quantities.");
+        }
+        void PrintLastMessage()
+        {
+            if (lastMessageDate.Ticks > 0) infoText.AppendLine($"Last message sent {DateTime.Now - lastMessageDate:hh\\:mm} minutes ago.");
+            infoText.AppendLine($"Last query has items? {lastQueryHastItems}");
+            infoText.Append(lastMessage.ToString().Replace(";", Environment.NewLine));
         }
 
         void Monitorize()
@@ -226,14 +228,14 @@ namespace IngameScript
                 return;
             }
 
-            var time = DateTime.Now - lastQuery;
-            if (time >= queryInterval)
+            lastQuery -= Runtime.TimeSinceLastRun;
+            if (lastQuery <= TimeSpan.Zero)
             {
                 Send();
                 return;
             }
 
-            infoText.AppendLine($"Waiting for next query: {queryInterval - time:hh\\:mm\\:ss}");
+            infoText.AppendLine($"Waiting for next query: {lastQuery:hh\\:mm\\:ss}");
 
             if (currentTick++ > ItemsQueryTicks)
             {
@@ -243,14 +245,12 @@ namespace IngameScript
         }
         void Send()
         {
-            lastQuery = DateTime.Now;
+            lastQuery = queryInterval;
 
             lastQueryHastItems = WriteMessage();
 
             if (!lastQueryHastItems) return;
 
-            lastMessageDate = DateTime.Now;
-            lastMessage.Clear();
             lastMessage.AppendLine(message.ToString());
 
             IGC.SendBroadcastMessage(channel, message.ToString());
@@ -264,10 +264,14 @@ namespace IngameScript
 
             message.AppendLine(name);
 
+            lastMessageDate = queryInterval;
+            lastMessage.Clear();
+            lastMessage.AppendLine("Required:");
+
             foreach (var req in required)
             {
                 //Add line only if needed quantity is major then the required quantity times the threshold
-                var reqThr = (int)(req.Value * threshold);
+                var reqThr = req.Value - (int)(req.Value * threshold);
                 var curr = current.ContainsKey(req.Key) ? (int)current[req.Key] : 0;
 
                 int c = reqThr - curr;
@@ -275,6 +279,11 @@ namespace IngameScript
                 {
                     message.Append($"{req.Key}={req.Value - curr};");
                     anyNeeded = true;
+                    lastMessage.AppendLine($"{req.Key} {reqThr}>{curr}");
+                }
+                else
+                {
+                    lastMessage.AppendLine($"{req.Key} {req.Value} OK");
                 }
             }
 
@@ -329,9 +338,11 @@ namespace IngameScript
             }
 
             retained = ReadInt(storageLines, "retained", 0) == 1;
-            lastQuery = new DateTime(ReadLong(storageLines, "lastQuery", 0));
+            lastQuery = new TimeSpan(ReadLong(storageLines, "lastQuery", 0));
             lastQueryHastItems = ReadInt(storageLines, "lastQueryHastItems", 0) == 1;
-            lastMessageDate = new DateTime(ReadLong(storageLines, "lastMessageDate", 0));
+            lastMessageDate = new TimeSpan(ReadLong(storageLines, "lastMessageDate", 0));
+            currentTick = ReadInt(storageLines, "currentTick", 0);
+            itemsNeeded = ReadInt(storageLines, "itemsNeeded", 0) == 1;
         }
         void SaveToStorage()
         {
@@ -340,7 +351,9 @@ namespace IngameScript
                 $"retained={(retained ? 1 : 0)}",
                 $"lastQuery={lastQuery.Ticks}",
                 $"lastQueryHastItems={(lastQueryHastItems ? 1 : 0)}",
-                $"lastMessageDate={lastMessageDate.Ticks}"
+                $"lastMessageDate={lastMessageDate.Ticks}",
+                $"currentTick={currentTick}",
+                $"itemsNeeded={(itemsNeeded?1:0)}"
             };
 
             Storage = string.Join(Environment.NewLine, parts);
