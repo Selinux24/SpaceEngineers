@@ -44,11 +44,13 @@ namespace IngameScript
         public static Vector3D StrToVector(string input)
         {
             var trimmed = input.Split(VariablePartSep);
+            double x;
+            double y;
+            double z;
             return new Vector3D(
-                double.Parse(trimmed[0]),
-                double.Parse(trimmed[1]),
-                double.Parse(trimmed[2])
-            );
+                double.TryParse(trimmed[0], out x) ? x : 0,
+                double.TryParse(trimmed[1], out y) ? y : 0,
+                double.TryParse(trimmed[2], out z) ? z : 0);
         }
 
         public static string ReadString(string[] lines, string name, string defaultValue = "")
@@ -64,33 +66,18 @@ namespace IngameScript
         }
         public static int ReadInt(string[] lines, string name, int defaultValue = 0)
         {
-            string value = ReadString(lines, name);
-            if (string.IsNullOrEmpty(value))
-            {
-                return defaultValue;
-            }
-
-            return int.Parse(value);
+            int v;
+            return int.TryParse(ReadString(lines, name), out v) ? v : defaultValue;
         }
         public static long ReadLong(string[] lines, string name, long defaultValue = 0)
         {
-            string value = ReadString(lines, name);
-            if (string.IsNullOrEmpty(value))
-            {
-                return defaultValue;
-            }
-
-            return long.Parse(value);
+            long v;
+            return long.TryParse(ReadString(lines, name), out v) ? v : defaultValue;
         }
         public static double ReadDouble(string[] lines, string name, double defaultValue = 0)
         {
-            string value = ReadString(lines, name);
-            if (string.IsNullOrEmpty(value))
-            {
-                return defaultValue;
-            }
-
-            return double.Parse(value);
+            double v;
+            return double.TryParse(ReadString(lines, name), out v) ? v : defaultValue;
         }
         public static Vector3D ReadVector(string[] lines, string name)
         {

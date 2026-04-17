@@ -6,15 +6,15 @@ namespace IngameScript
     class ExchangeRequest
     {
         private readonly Config config;
-        private DateTime doneTime;
+        private TimeSpan doneTime;
 
         public string ExchangeType { get; private set; }
         public string Ship { get; private set; }
         public ExchangeTasks Task { get; private set; }
 
         public bool Pending { get; private set; } = true;
-        public bool Doing => !Pending && (DateTime.Now - doneTime) <= config.ExchangeRequestTimeOut;
-        public bool Expired => !Pending && (DateTime.Now - doneTime) > config.ExchangeRequestTimeOut;
+        public bool Doing => !Pending && doneTime > TimeSpan.Zero;
+        public bool Expired => !Pending && doneTime != TimeSpan.Zero;
 
         public ExchangeRequest(Config config, string exchangeType, string ship, ExchangeTasks task)
         {
@@ -24,14 +24,19 @@ namespace IngameScript
             Task = task;
         }
 
+        public void Update(TimeSpan timeElapsed)
+        {
+            doneTime -= timeElapsed;
+        }
+
         public void SetDoing()
         {
             Pending = false;
-            doneTime = DateTime.Now;
+            doneTime = config.ExchangeRequestTimeOut;
         }
         public void SetDone()
         {
-            doneTime = DateTime.MinValue;
+            doneTime = TimeSpan.Zero;
         }
 
         public static List<string> SaveListToStorage(List<ExchangeRequest> requests)
@@ -66,7 +71,7 @@ namespace IngameScript
                 var exchange = new ExchangeRequest(config, exchangeType, ship, task)
                 {
                     Pending = Utils.ReadInt(parts, "Pending") == 1,
-                    doneTime = new DateTime(Utils.ReadLong(parts, "doneTime")),
+                    doneTime = new TimeSpan(Utils.ReadLong(parts, "doneTime")),
                 };
 
                 requests.Add(exchange);

@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "2.71";
+        const string Version = "2.72";
 
         #region Blocks
         readonly IMyBroadcastListener bl;

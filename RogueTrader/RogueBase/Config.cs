@@ -12,10 +12,13 @@ namespace IngameScript
         public readonly string Channel;
         public readonly bool InGravity;
 
-        public bool EnableLogs = false;
         public bool EnableRequestStatus = true;
+        public readonly TimeSpan RequestStatusInterval; // seconds, how often to request status from ships
         public bool EnableRequestExchange = true;
+        public readonly TimeSpan RequestReceptionInterval; // seconds, how often to request receptions
         public bool EnableRefreshLCDs = false;
+        public readonly TimeSpan RefreshLCDsInterval; // seconds, how often to refresh LCDs
+        public bool EnableLogs = false;
 
         public readonly System.Text.RegularExpressions.Regex DataLCDs;
         public readonly System.Text.RegularExpressions.Regex LogLCDs;
@@ -33,10 +36,6 @@ namespace IngameScript
         public readonly string ExchangeTimerUndockStart;
         public readonly string ExchangeTimerFree;
 
-        public readonly TimeSpan RequestStatusInterval; // seconds, how often to request status from ships
-        public readonly TimeSpan RequestReceptionInterval; // seconds, how often to request receptions
-        public readonly TimeSpan RefreshLCDsInterval; // seconds, how often to refresh LCDs
-
         public readonly double DockRequestMaxDistance; // meters, max distance from the dock to request docking
 
         public Config(string customData)
@@ -44,10 +43,13 @@ namespace IngameScript
             Channel = ReadConfig(customData, "Channel");
             InGravity = ReadConfigBool(customData, "InGravity");
 
-            EnableLogs = ReadConfigBool(customData, "EnableLogs", false);
             EnableRequestStatus = ReadConfigBool(customData, "EnableRequestStatus", true);
+            RequestStatusInterval = TimeSpan.FromSeconds(ReadConfigInt(customData, "RequestStatusInterval"));
             EnableRequestExchange = ReadConfigBool(customData, "EnableRequestExchange", true);
+            RequestReceptionInterval = TimeSpan.FromSeconds(ReadConfigInt(customData, "RequestReceptionInterval"));
             EnableRefreshLCDs = ReadConfigBool(customData, "EnableRefreshLCDs", false);
+            RefreshLCDsInterval = TimeSpan.FromSeconds(ReadConfigInt(customData, "RefreshLCDsInterval", 10));
+            EnableLogs = ReadConfigBool(customData, "EnableLogs", false);
 
             DataLCDs = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "DataLCDs")}(?:\.(\d+))?\]");
             LogLCDs = new System.Text.RegularExpressions.Regex($@"\[{ReadConfig(customData, "LogLCDs")}(?:\.(\d+))?\]");
@@ -63,10 +65,6 @@ namespace IngameScript
             ExchangeTimerUndockPrepare = ReadConfig(customData, "ExchangeTimerUndockPrepare", "Timer Undock Prepare");
             ExchangeTimerUndockStart = ReadConfig(customData, "ExchangeTimerUndockStart", "Timer Undock Start");
             ExchangeTimerFree = ReadConfig(customData, "ExchangeTimerFree", "Timer Free");
-
-            RequestStatusInterval = TimeSpan.FromSeconds(ReadConfigInt(customData, "RequestStatusInterval"));
-            RequestReceptionInterval = TimeSpan.FromSeconds(ReadConfigInt(customData, "RequestReceptionInterval"));
-            RefreshLCDsInterval = TimeSpan.FromSeconds(ReadConfigInt(customData, "RefreshLCDsInterval", 10));
       
             DockRequestMaxDistance = ReadConfigDouble(customData, "DockRequestMaxDistance", 2000);
         }
@@ -171,25 +169,24 @@ namespace IngameScript
                 "Channel=name\n" +
                 "InGravity=false\n" +
                 "\n" +
-                "EnableLogs=false\n" +
                 "EnableRequestStatus=true\n" +
+                "RequestStatusInterval=30\n" +
                 "EnableRequestExchange=true\n" +
+                "RequestReceptionInterval=60\n" +
                 "EnableRefreshLCDs=false\n" +
+                "RefreshLCDsInterval=10\n" +
+                "EnableLogs=false\n" +
                 "\n" +
                 "DataLCDs=DELIVERY_DATA\n" +
                 "LogLCDs=DELIVERY_LOG\n" +
                 "\n" +
-                "Exchanges=type1:5:150,type2:5:150,type3:5:150\n" +
+                "Exchanges=type1:5:150:0,type2:5:150:0,type3:5:150:0\n" +
                 "ExchangeRequestTimeOut=300\n" +
                 "ExchangeMainConnector=Input\n" +
                 "ExchangeOtherConnector=Output\n" +
                 "ExchangeTimerLoad=Timer Load\n" +
                 "ExchangeTimerUnload=Timer Unload\n" +
                 "ExchangeTimerFree=Timer Free\n" +
-                "\n" +
-                "RequestStatusInterval=30\n" +
-                "RequestReceptionInterval=60\n" +
-                "RefreshLCDsInterval=10\n" +
                 "\n" +
                 "DockRequestMaxDistance=2000.0\n";
         }

@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "2.38";
+        const string Version = "2.39";
         const string Separate = "------";
 
         #region Blocks
@@ -347,7 +347,7 @@ namespace IngameScript
                 $"Exchange={exchange.Name}",
                 $"Forward={Utils.VectorToStr(exchange.Forward)}",
                 $"Up={Utils.VectorToStr(exchange.Up)}",
-                $"Waypoints={Utils.VectorListToStr(exchange.CalculateRouteToConnector())}",
+                $"Waypoints={Utils.VectorListToStr(exchange.CalculateDockingRoute())}",
             };
             UnicastMessage(source, parts);
 
@@ -453,7 +453,7 @@ namespace IngameScript
                         $"Exchange={exchange.Name}",
                         $"Forward={Utils.VectorToStr(exchange.Forward)}",
                         $"Up={Utils.VectorToStr(exchange.Up)}",
-                        $"Waypoints={Utils.VectorListToStr(exchange.CalculateRouteToConnector())}",
+                        $"Waypoints={Utils.VectorListToStr(exchange.CalculateDockingRoute())}",
                     };
                     BroadcastMessage(parts);
 
@@ -504,7 +504,7 @@ namespace IngameScript
                         $"Exchange={exchange.Name}",
                         $"Forward={Utils.VectorToStr(exchange.Forward)}",
                         $"Up={Utils.VectorToStr(exchange.Up)}",
-                        $"Waypoints={Utils.VectorListToStr(exchange.CalculateRouteFromConnector())}",
+                        $"Waypoints={Utils.VectorListToStr(exchange.CalculateUndockingRoute())}",
                     };
                     BroadcastMessage(parts);
 
@@ -519,7 +519,7 @@ namespace IngameScript
         #region UPDATE BASE STATE
         void UpdateBaseState()
         {
-            double time = Runtime.TimeSinceLastRun.TotalSeconds;
+            var time = Runtime.TimeSinceLastRun;
 
             foreach (var exchange in exchanges.Values)
             {
@@ -531,6 +531,8 @@ namespace IngameScript
 
             foreach (var r in exchangeRequests)
             {
+                r.Update(time);
+
                 if (r.Expired) continue;
 
                 if (string.IsNullOrWhiteSpace(r.Ship)) continue;
@@ -683,7 +685,7 @@ namespace IngameScript
             //For each group, initialize the blocks of the ExchangeGroup class
             foreach (var group in groups)
             {
-                var exchangeGroup = new ExchangeGroup(group.Key, exConfig.NumWaypoints, exConfig.PathDistance, exConfig.PathType);
+                var exchangeGroup = new ExchangeGroup(group.Key, exConfig);
 
                 foreach (var block in group)
                 {

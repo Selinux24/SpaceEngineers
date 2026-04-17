@@ -22,7 +22,7 @@ namespace IngameScript
         public string Exchange { get; private set; } = null;
         public Vector3D Forward { get; private set; } = new Vector3D(1, 0, 0);
         public Vector3D Up { get; private set; } = new Vector3D(0, 1, 0);
-        public List<Vector3D> Waypoints  { get; private set; } = new List<Vector3D>();
+        public List<Vector3D> Waypoints { get; private set; } = new List<Vector3D>();
         public int CurrentWpIdx { get; private set; } = 0;
         public string Callback { get; private set; } = null;
         public ExchangeTasks ExchangeTask { get; private set; } = ExchangeTasks.None;
@@ -209,7 +209,7 @@ namespace IngameScript
                 return;
             }
 
-            bool corrected = AlignToDock(Forward, Up, Config.GyrosThr);
+            bool corrected = AlignToDock(Forward, Up, Config.DockingAlignThr);
             if (corrected)
             {
                 //Wait until aligned
@@ -240,7 +240,7 @@ namespace IngameScript
                 return;
             }
 
-            bool corrected = AlignToDock(Forward, Up, Config.GyrosThr);
+            bool corrected = AlignToDock(Forward, Up, Config.DockingAlignThr);
             if (corrected)
             {
                 //Wait until aligned
@@ -639,23 +639,23 @@ namespace IngameScript
 
         bool AlignToDirection(bool landing, Vector3D toTarget, double thr)
         {
-            var direction = landing ? ship.GetLandingForwardDirection() : ship.GetPilotForwardDirection();
+            var rcDir = landing ? ship.GetLandingForwardDirection() : ship.GetPilotForwardDirection();
 
-            double angle = Utils.AngleBetweenVectors(direction, toTarget);
-            ship.WriteInfoLCDs($"TGT angle: {angle:F3}");
+            double tgtAngle = Utils.AngleBetweenVectors(rcDir, toTarget);
 
-            if (angle <= thr)
+            ship.WriteInfoLCDs($"TGT angle: {tgtAngle:F3}");
+
+            if (tgtAngle <= thr)
             {
                 ship.ResetGyros();
                 ship.WriteInfoLCDs("Aligned.");
                 return false;
             }
-            ship.WriteInfoLCDs("Aligning...");
 
-            var rotationAxis = Vector3D.Cross(direction, toTarget);
+            ship.WriteInfoLCDs("Aligning...");
+            var rotationAxis = Vector3D.Cross(rcDir, toTarget);
             if (rotationAxis.Length() <= 0.001) rotationAxis = new Vector3D(1, 0, 0);
             ship.ApplyGyroOverride(rotationAxis);
-
             return true;
         }
         bool AlignToDock(Vector3D targetForward, Vector3D targetUp, double thr)
@@ -795,11 +795,10 @@ namespace IngameScript
             {
                 return
                     $"Trip: {Utils.DistanceToStr(NavigationTotalDistance)}" + Environment.NewLine +
-                    $"To DST: {Utils.DistanceToStr(NavigationDistanceToDestination)}" + Environment.NewLine +
-                    $"To TGT: {Utils.DistanceToStr(NavigationDistanceToNextWaypoint)}" + Environment.NewLine +
+                    $"To DST: {Utils.DistanceToStr(NavigationDistanceToDestination)} | To TGT: {Utils.DistanceToStr(NavigationDistanceToNextWaypoint)}" + Environment.NewLine +
                     $"Speed: {NavigationSpeed:F2}" + Environment.NewLine +
                     $"ETA: {NavigationETA:dd\\:hh\\:mm\\:ss}" + Environment.NewLine +
-                    $"Progress {NavigationProgress:P1}.  {CurrentWpIdx}/{Waypoints.Count}" + Environment.NewLine;
+                    $"Progress {NavigationProgress:P1}.  {CurrentWpIdx}/{Waypoints.Count}";
             }
             else
             {
@@ -808,7 +807,7 @@ namespace IngameScript
                     $"To {Exchange}: {Utils.DistanceToStr(DockingDistanceToNextWaypoint)}" + Environment.NewLine +
                     $"Speed: {DockingSpeed:F2}" + Environment.NewLine +
                     $"ETA: {DockingETA:dd\\:hh\\:mm\\:ss}" + Environment.NewLine +
-                    $"Progress: {CurrentWpIdx}/{Waypoints.Count}." + Environment.NewLine;
+                    $"Progress: {CurrentWpIdx}/{Waypoints.Count}.";
             }
         }
         public string GetShortState()

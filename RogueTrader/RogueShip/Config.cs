@@ -37,17 +37,10 @@ namespace IngameScript
         public readonly string Connector;
         public readonly string Antenna;
 
-        public readonly double MaxLoad;
-        public readonly double MinLoad;
-        public readonly TimeSpan MaxLoadTime;
-        public readonly double MinPowerOnLoad;
-        public readonly double MinPowerOnUnload;
-        public readonly double MinHydrogenOnLoad;
-        public readonly double MinHydrogenOnUnload;
-
-        public readonly Route DefaultRoute;
-
+        public readonly double GyrosSpeed;
         public readonly int NavigationTicks;
+
+        public readonly double DockingAlignThr;
         public readonly double DockingSpeedWaypointFirst;
         public readonly double DockingSpeedWaypointLast;
         public readonly double DockingSpeedWaypoints;
@@ -55,8 +48,6 @@ namespace IngameScript
         public readonly double DockingDistanceThrWaypoints;
         public readonly TimeSpan DockUpdateInterval;
         public readonly TimeSpan DockRequestTimeout = TimeSpan.FromSeconds(300); //Seconds to wait for a docking request to be accepted
-
-        public readonly double TaxiSpeed;
 
         public readonly double AtmNavigationAlignThr;
         public readonly double AtmNavigationMaxSpeed;
@@ -66,20 +57,24 @@ namespace IngameScript
 
         public readonly double CrsNavigationAlignThr;
         public readonly double CrsNavigationAlignSeconds;
-
         public readonly double CrsNavigationMaxSpeedThr;
         public readonly double CrsNavigationMaxAccelerationSpeed;
         public readonly double CrsNavigationMaxCruiseSpeed;
         public readonly double CrsNavigationMaxEvadingSpeed;
-
         public readonly double CrsNavigationWaypointThr;
         public readonly double CrsNavigationDestinationThr;
-
         public readonly double CrsNavigationCollisionDetectRange;
         public readonly double CrsNavigationEvadingWaypointThr;
 
-        public readonly double GyrosThr;
-        public readonly double GyrosSpeed;
+        public readonly Route DefaultRoute;
+
+        public readonly double MaxLoad;
+        public readonly double MinLoad;
+        public readonly double MinPowerOnLoad;
+        public readonly double MinPowerOnUnload;
+        public readonly double MinHydrogenOnLoad;
+        public readonly double MinHydrogenOnUnload;
+        public readonly TimeSpan MaxLoadTime;
 
         public Config(string customData)
         {
@@ -112,24 +107,10 @@ namespace IngameScript
             Connector = ReadConfig(customData, "Connector");
             Antenna = ReadConfig(customData, "Antenna", "");
 
-            MaxLoad = ReadConfigDouble(customData, "MaxLoad", 1);
-            MinLoad = ReadConfigDouble(customData, "MinLoad", 0);
-            MinPowerOnLoad = ReadConfigDouble(customData, "MinPowerOnLoad", 0);
-            MinPowerOnUnload = ReadConfigDouble(customData, "MinPowerOnUnload", 0);
-            MinHydrogenOnLoad = ReadConfigDouble(customData, "MinHydrogenOnLoad", 0);
-            MinHydrogenOnUnload = ReadConfigDouble(customData, "MinHydrogenOnUnload", 0);
-            MaxLoadTime = TimeSpan.FromSeconds(ReadConfigInt(customData, "MaxLoadTime", 0));
-
-            DefaultRoute = new Route(
-                ReadConfig(customData, "RouteLoadBase", ""),
-                ReadConfigBool(customData, "RouteLoadBaseOnPlanet", false),
-                ReadConfigVectorList(customData, "RouteToLoadBaseWaypoints", new List<Vector3D>()),
-                ReadConfig(customData, "RouteUnloadBase", ""),
-                ReadConfigBool(customData, "RouteUnloadBaseOnPlanet", false),
-                ReadConfigVectorList(customData, "RouteToUnloadBaseWaypoints", new List<Vector3D>()));
-
+            GyrosSpeed = ReadConfigDouble(customData, "GyrosSpeed", 2.0);
             NavigationTicks = ReadConfigInt(customData, "NavigationTicks", 1);
 
+            DockingAlignThr = ReadConfigDouble(customData, "DockingAlignThr", 0.001);
             DockingSpeedWaypointFirst = ReadConfigDouble(customData, "DockingSpeedWaypointFirst", 10.0);
             DockingSpeedWaypointLast = ReadConfigDouble(customData, "DockingSpeedWaypointLast", 1.0);
             DockingSpeedWaypoints = ReadConfigDouble(customData, "DockingSpeedWaypoints", 5.0);
@@ -137,8 +118,6 @@ namespace IngameScript
             DockingDistanceThrWaypoints = ReadConfigDouble(customData, "DockingDistanceThrWaypoints", 0.5);
             DockUpdateInterval = TimeSpan.FromSeconds(ReadConfigDouble(customData, "DockUpdateInterval", 0.5));
             DockRequestTimeout = TimeSpan.FromSeconds(ReadConfigInt(customData, "DockRequestTimeout", 300));
-
-            TaxiSpeed = ReadConfigDouble(customData, "TaxiSpeed", 25);
 
             AtmNavigationAlignThr = ReadConfigDouble(customData, "AtmNavigationAlignThr", 0.01);
             AtmNavigationMaxSpeed = ReadConfigDouble(customData, "AtmNavigationMaxSpeed", 100.0);
@@ -157,8 +136,21 @@ namespace IngameScript
             CrsNavigationCollisionDetectRange = ReadConfigDouble(customData, "CrsNavigationCollisionDetectRange", 10000.0);
             CrsNavigationEvadingWaypointThr = ReadConfigDouble(customData, "CrsNavigationEvadingWaypointThr", 100.0);
 
-            GyrosThr = ReadConfigDouble(customData, "GyrosThr", 0.001);
-            GyrosSpeed = ReadConfigDouble(customData, "GyrosSpeed", 2.0);
+            DefaultRoute = new Route(
+                ReadConfig(customData, "RouteLoadBase", ""),
+                ReadConfigBool(customData, "RouteLoadBaseOnPlanet", false),
+                ReadConfigVectorList(customData, "RouteToLoadBaseWaypoints", new List<Vector3D>()),
+                ReadConfig(customData, "RouteUnloadBase", ""),
+                ReadConfigBool(customData, "RouteUnloadBaseOnPlanet", false),
+                ReadConfigVectorList(customData, "RouteToUnloadBaseWaypoints", new List<Vector3D>()));
+
+            MaxLoad = ReadConfigDouble(customData, "MaxLoad", 1);
+            MinLoad = ReadConfigDouble(customData, "MinLoad", 0);
+            MinPowerOnLoad = ReadConfigDouble(customData, "MinPowerOnLoad", 0);
+            MinPowerOnUnload = ReadConfigDouble(customData, "MinPowerOnUnload", 0);
+            MinHydrogenOnLoad = ReadConfigDouble(customData, "MinHydrogenOnLoad", 0);
+            MinHydrogenOnUnload = ReadConfigDouble(customData, "MinHydrogenOnUnload", 0);
+            MaxLoadTime = TimeSpan.FromSeconds(ReadConfigInt(customData, "MaxLoadTime", 0));
         }
         string ReadConfig(string customData, string name, string defaultValue = null)
         {
@@ -297,22 +289,10 @@ namespace IngameScript
                 "Connector=Main Connector\n" +
                 "Antenna=Main Antenna\n" +
                 "\n" +
-                "MaxLoad=1\n" +
-                "MinLoad=0\n" +
-                "MaxLoadTime=0\n" +
-                "MinPowerOnLoad=0.9\n" +
-                "MinPowerOnUnload=0.9\n" +
-                "MinHydrogenOnLoad=0.9\n" +
-                "MinHydrogenOnUnload=0.9\n" +
-                "\n" +
-                "RouteLoadBase=base1\n" +
-                "RouteLoadBaseOnPlanet=false\n" +
-                "RouteToLoadBaseWaypoints=x:y:z;x:y:z\n" +
-                "RouteUnloadBase=base2\n" +
-                "RouteUnloadBaseOnPlanet=false\n" +
-                "RouteToUnloadBaseWaypoints=x:y:z;x:y:z\n" +
-                "\n" +
+                "GyrosSpeed=2.0\n" +
                 "NavigationTicks=1\n" +
+                "\n" +
+                "DockingAlignThr=0.001\n" +
                 "DockingSpeedWaypointFirst=10.0\n" +
                 "DockingSpeedWaypointLast=1.0\n" +
                 "DockingSpeedWaypoints=5.0\n" +
@@ -320,8 +300,6 @@ namespace IngameScript
                 "DockingDistanceThrWaypoints=0.5\n" +
                 "DockUpdateInterval=0.5\n" +
                 "DockRequestTimeout=300\n" +
-                "\n" +
-                "TaxiSpeed=25\n" +
                 "\n" +
                 "AtmNavigationAlignThr=0.01\n" +
                 "AtmNavigationMaxSpeed=100.0\n" +
@@ -340,8 +318,20 @@ namespace IngameScript
                 "CrsNavigationCollisionDetectRange=10000.0\n" +
                 "CrsNavigationEvadingWaypointThr=100.0\n" +
                 "\n" +
-                "GyrosThr=0.001\n" +
-                "GyrosSpeed=2.0\n";
+                "RouteLoadBase=base1\n" +
+                "RouteLoadBaseOnPlanet=false\n" +
+                "RouteToLoadBaseWaypoints=x:y:z;x:y:z\n" +
+                "RouteUnloadBase=base2\n" +
+                "RouteUnloadBaseOnPlanet=false\n" +
+                "RouteToUnloadBaseWaypoints=x:y:z;x:y:z\n" +
+                "\n" +
+                "MaxLoad=1\n" +
+                "MinLoad=0\n" +
+                "MinPowerOnLoad=0.9\n" +
+                "MinPowerOnUnload=0.9\n" +
+                "MinHydrogenOnLoad=0.9\n" +
+                "MinHydrogenOnUnload=0.9\n" +
+                "MaxLoadTime=0\n";
         }
     }
 }

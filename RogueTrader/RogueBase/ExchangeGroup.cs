@@ -9,14 +9,17 @@ namespace IngameScript
 {
     class ExchangeGroup
     {
-        private double dockRequestTime = 0;
-        private bool waitingDock = false;
-        private bool waitingUndock = false;
+        const double DockDistanceOffset = 2.3;
+
+        TimeSpan dockRequestTime = TimeSpan.Zero;
+        bool waitingDock = false;
+        bool waitingUndock = false;
 
         public readonly string Name;
         public readonly int NumWaypoints;
         public readonly double PathDistance; //Meters, distance from the dock to the first waypoint
-        public readonly int PathType; //0 = Straight, 1 = Curve
+        public readonly PathTypes DockPathType;
+        public readonly PathTypes UndockPathType;
         public IMyShipConnector MainConnector;
         public readonly List<IMyShipConnector> Connectors = new List<IMyShipConnector>();
         public IMyCameraBlock Camera;
@@ -33,12 +36,13 @@ namespace IngameScript
         public string DockedShipName { get; private set; }
         public string ReservedShipName { get; private set; }
 
-        public ExchangeGroup(string name, int numWaypoints, double pathDistance, int pathType)
+        public ExchangeGroup(string name, ExchangeConfig config)
         {
             Name = name;
-            NumWaypoints = numWaypoints;
-            PathDistance = pathDistance;
-            PathType = pathType;
+            NumWaypoints = config.NumWaypoints;
+            PathDistance = config.PathDistance;
+            DockPathType = config.DockPathType;
+            UndockPathType = config.UndockPathType;
         }
 
         public bool IsValid(out string errorMessage)
@@ -95,7 +99,7 @@ namespace IngameScript
             return names;
         }
 
-        public void Update(double time)
+        public void Update(TimeSpan time)
         {
             dockRequestTime += time;
 
@@ -140,7 +144,7 @@ namespace IngameScript
             }
             else
             {
-                dockRequestTime = 0;
+                dockRequestTime = TimeSpan.Zero;
                 ReservedShipName = shipName;
                 TimerDockPrepare?.StartCountdown();
                 TimerDockStart?.StartCountdown();
@@ -167,28 +171,45 @@ namespace IngameScript
             }
         }
 
-        public List<Vector3D> CalculateRouteToConnector()
+        public List<Vector3D> CalculateDockingRoute()
+        {
+            return CalculatePath(DockPathType, false);
+        }
+        public List<Vector3D> CalculateUndockingRoute()
+        {
+            return CalculatePath(UndockPathType, true);
+        }
+        List<Vector3D> CalculatePath(PathTypes pathType, bool reverse)
         {
             var targetDock = MainConnector.GetPosition();
 
             var forward = Camera.WorldMatrix.Forward;
             var up = Camera.WorldMatrix.Up;
 
-            return PathType == 0 ?
-                CalculateStraightRoute(targetDock, forward, PathDistance, NumWaypoints) :
-                CalculateCurveRoute(targetDock, forward, up, PathDistance, NumWaypoints);
-        }
-        public List<Vector3D> CalculateRouteFromConnector()
-        {
-            var waypoints = CalculateRouteToConnector();
-            waypoints.Reverse();
+            List<Vector3D> waypoints;
+            switch (pathType)
+            {
+                case PathTypes.Curved:
+                    waypoints = CalculateCurveRoute(targetDock, forward, up, PathDistance, NumWaypoints);
+                    break;
+                case PathTypes.CurvedInverted:
+                    waypoints = CalculateCurveRoute(targetDock, forward, -up, PathDistance, NumWaypoints);
+                    break;
+                case PathTypes.Straight:
+                default:
+                    waypoints = CalculateStraightRoute(targetDock, forward, PathDistance, NumWaypoints);
+                    break;
+            }
+
+            if (reverse) waypoints.Reverse();
+
             return waypoints;
         }
         static List<Vector3D> CalculateStraightRoute(Vector3D targetDock, Vector3D forward, double distance, int numWaypoints)
         {
             var waypoints = new List<Vector3D>();
 
-            var offset = forward * 2.3;
+            var offset = forward * DockDistanceOffset;
             var approachStart = targetDock + forward * distance; //Initial approach point
 
             for (int i = 0; i <= numWaypoints; i++)
@@ -205,7 +226,7 @@ namespace IngameScript
         {
             var waypoints = new List<Vector3D>();
 
-            var offset = forward * 2.3;
+            var offset = forward * DockDistanceOffset;
 
             // Calculate the center of the curve, wich is located along the down direction of the target dock, taking account the forward direction to determine the correct side
             var center = targetDock + (-up * distance);
@@ -274,7 +295,7 @@ namespace IngameScript
                 string name = Utils.ReadString(parts, "Name");
                 string reservedShipName = Utils.ReadString(parts, "ReservedShipName");
                 string dockedShipName = Utils.ReadString(parts, "DockedShipName");
-                double dockRequestTime = Utils.ReadDouble(parts, "DockRequestTime");
+                var dockRequestTime = new TimeSpan(Utils.ReadLong(parts, "DockRequestTime"));
 
                 var exchange = exchanges.Find(e => e.Name == name);
                 if (exchange != null)
