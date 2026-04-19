@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using VRage;
 
 namespace IngameScript
 {
@@ -14,7 +15,7 @@ namespace IngameScript
 
         public bool Pending { get; private set; } = true;
         public bool Doing => !Pending && doneTime > TimeSpan.Zero;
-        public bool Expired => !Pending && doneTime != TimeSpan.Zero;
+        public bool Expired => !Pending && doneTime <= TimeSpan.Zero;
 
         public ExchangeRequest(Config config, string exchangeType, string ship, ExchangeTasks task)
         {
@@ -37,6 +38,12 @@ namespace IngameScript
         public void SetDone()
         {
             doneTime = TimeSpan.Zero;
+        }
+
+        public string GetStatus()
+        {
+            string unloadStatus = Pending ? "Pending" : $"On route {doneTime:hh\\:mm\\:ss}";
+            return $"{ExchangeType}-{Ship} {Task}. {unloadStatus}";
         }
 
         public static List<string> SaveListToStorage(List<ExchangeRequest> requests)

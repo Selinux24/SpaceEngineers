@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "2.39";
+        const string Version = "2.40";
         const string Separate = "------";
 
         #region Blocks
@@ -902,8 +902,7 @@ namespace IngameScript
 
             foreach (var req in exchangeRequests)
             {
-                string unloadStatus = req.Pending ? "Pending" : "On route";
-                WriteDataLCDs(sbRequests, $"{req.ExchangeType}-{req.Ship} {req.Task}. {unloadStatus}");
+                WriteDataLCDs(sbRequests, req.GetStatus());
             }
         }
         void PrintShipPlans()

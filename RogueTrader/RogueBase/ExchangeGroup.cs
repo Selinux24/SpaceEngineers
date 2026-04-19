@@ -127,9 +127,9 @@ namespace IngameScript
             //Update ship name
             DockedShipName = moreThanOneShip ? "Several ships" : newShip;
 
-            if (!string.IsNullOrWhiteSpace(ReservedShipName) && DockedShipName == ReservedShipName)
+            if (!string.IsNullOrWhiteSpace(ReservedShipName) && !string.IsNullOrWhiteSpace(DockedShipName))
             {
-                //Clears reservation if the reserved ship has docked
+                //Clears reservation if any ship has docked
                 ReservedShipName = null;
             }
         }
