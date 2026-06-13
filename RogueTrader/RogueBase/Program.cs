@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "2.40";
+        const string Version = "2.41";
         const string Separate = "------";
 
         #region Blocks
@@ -39,6 +39,9 @@ namespace IngameScript
         readonly List<Plan> plans = new List<Plan>();
         readonly List<ExchangeRequest> exchangeRequests = new List<ExchangeRequest>();
 
+        bool initializedDataLCDs = false;
+        bool initializedLogLCDs = false;
+        bool initializedExchanges = false;
         TimeSpan lastRequestStatus = TimeSpan.Zero;
         TimeSpan lastExchangeRequest = TimeSpan.Zero;
         TimeSpan lastRefreshLCDs = TimeSpan.Zero;
@@ -62,10 +65,6 @@ namespace IngameScript
             }
             isStatic = Me.CubeGrid.IsStatic;
 
-            RefreshLCDs();
-
-            InitializeExchanges();
-
             bl = IGC.RegisterBroadcastListener(config.Channel);
             ul = IGC.UnicastListener;
 
@@ -85,8 +84,7 @@ namespace IngameScript
 
         public void Main(string argument)
         {
-            DoRequestStatus();
-            DoExchangeRequest();
+            InitializeExchanges();
 
             if (!string.IsNullOrEmpty(argument))
             {
@@ -105,18 +103,10 @@ namespace IngameScript
                 ParseMessage(message, false);
             }
 
+            DoRequestStatus();
+            DoExchangeRequest();
             UpdateBaseState();
-
-            sbTitle.Clear();
-            sbExchanges.Clear();
-            sbShips.Clear();
-            sbRequests.Clear();
-            sbFlightPlans.Clear();
-            PrintBase();
-            PrintExchanges();
-            PrintShipStatus();
-            PrintExchangeRequests();
-            PrintShipPlans();
+            PrintBaseState();
 
             FlushDataLCDs();
             FlushLogLCDs();
@@ -224,6 +214,11 @@ namespace IngameScript
             else if (command == "WAITING_UNDOCK_UNLOAD") ProcessWaiting(lines, ExchangeTasks.EndUnload);
 
             else if (command == "REQUEST_DOCK_UPDATE") ProcessDockUpdate(source, lines);
+        }
+        bool IsForMe(string[] lines)
+        {
+            var to = Utils.ReadString(lines, "To");
+            return to.ToUpper() == baseId.ToUpper();
         }
 
         /// <summary>
@@ -353,6 +348,21 @@ namespace IngameScript
 
             WriteLogLCDs($"Dock update sent to {source} on exchange {exchangeName}");
         }
+        ExchangeGroup FindExchange(string name)
+        {
+            foreach (var exchange in exchanges.Values)
+            {
+                foreach (var ex in exchange)
+                {
+                    if (ex.Name == name)
+                    {
+                        return ex;
+                    }
+                }
+            }
+
+            return null;
+        }
         #endregion
 
         #region STATUS
@@ -396,14 +406,95 @@ namespace IngameScript
 
             if (IsCurrentExchangeDockRequests()) return;
 
-            if (DoExchangeUndockRequest()) return;
+            DoExchangeUndockRequest();
 
             DoExchangeDockRequest();
         }
-        bool DoExchangeDockRequest()
+        bool IsCurrentExchangeDockRequests()
+        {
+            return exchangeRequests.Any(r => r.Doing);
+        }
+        void DoExchangeUndockRequest()
         {
             foreach (var ex in exchanges.Keys)
             {
+                if (MaxInstructionCountReached()) return;
+
+                var exRequest = GetPendingExchangeUndockRequests(ex);
+                if (exRequest.Count == 0) continue;
+
+                foreach (var request in exRequest)
+                {
+                    if (MaxInstructionCountReached()) return;
+
+                    var exchange = FindShipExchange(request.Ship);
+                    if (exchange == null) continue;
+
+                    if (!exchange.UndockRequest()) return;
+                    request.SetDoing();
+
+                    string command = null;
+                    switch (request.Task)
+                    {
+                        case ExchangeTasks.EndLoad:
+                            command = "UNDOCK_TO_LOAD";
+                            break;
+                        case ExchangeTasks.EndUnload:
+                            command = "UNDOCK_TO_UNLOAD";
+                            break;
+                        case ExchangeTasks.Undock:
+                            command = "UNDOCK_FROM_BASE";
+                            break;
+                    }
+
+                    var parts = new List<string>()
+                    {
+                        $"Command={command}",
+                        $"To={request.Ship}",
+                        $"From={baseId}",
+
+                        $"IsStatic={(isStatic?1:0)}",
+                        $"Landing={(config.InGravity?1:0)}",
+
+                        $"Exchange={exchange.Name}",
+                        $"Forward={Utils.VectorToStr(exchange.Forward)}",
+                        $"Up={Utils.VectorToStr(exchange.Up)}",
+                        $"Waypoints={Utils.VectorListToStr(exchange.CalculateUndockingRoute())}",
+                    };
+                    BroadcastMessage(parts);
+
+                    return;
+                }
+            }
+        }
+        List<ExchangeRequest> GetPendingExchangeUndockRequests(string exchangeType)
+        {
+            return exchangeRequests.FindAll(r =>
+                r.ExchangeType == exchangeType &&
+                r.Pending &&
+                (r.Task == ExchangeTasks.EndLoad || r.Task == ExchangeTasks.EndUnload || r.Task == ExchangeTasks.Undock));
+        }
+        ExchangeGroup FindShipExchange(string ship)
+        {
+            foreach (var exchange in exchanges.Values)
+            {
+                foreach (var ex in exchange)
+                {
+                    if (ex.DockedShips().Any(d => d == ship))
+                    {
+                        return ex;
+                    }
+                }
+            }
+
+            return null;
+        }
+        void DoExchangeDockRequest()
+        {
+            foreach (var ex in exchanges.Keys)
+            {
+                if (MaxInstructionCountReached()) return;
+
                 var exRequest = GetPendingExchangeDockRequests(ex);
                 if (exRequest.Count == 0) continue;
                 var freeExchanges = GetFreeExchanges(ex);
@@ -417,6 +508,8 @@ namespace IngameScript
 
                 foreach (var request in exRequest)
                 {
+                    if (MaxInstructionCountReached()) return;
+
                     var pair = shipExchangePairs.FirstOrDefault(s => s.Ship.Name == request.Ship);
                     if (pair == null) continue;
 
@@ -457,62 +550,26 @@ namespace IngameScript
                     };
                     BroadcastMessage(parts);
 
-                    return true;
+                    return;
                 }
             }
-
-            return false;
         }
-        bool DoExchangeUndockRequest()
+        List<ExchangeRequest> GetPendingExchangeDockRequests(string exchangeType)
         {
-            foreach (var ex in exchanges.Keys)
-            {
-                var exRequest = GetPendingExchangeUndockRequests(ex);
-                if (exRequest.Count == 0) continue;
-
-                foreach (var request in exRequest)
-                {
-                    var exchange = FindShipExchange(request.Ship);
-                    if (exchange == null) continue;
-
-                    if (!exchange.UndockRequest()) return true;
-                    request.SetDoing();
-
-                    string command = null;
-                    switch (request.Task)
-                    {
-                        case ExchangeTasks.EndLoad:
-                            command = "UNDOCK_TO_LOAD";
-                            break;
-                        case ExchangeTasks.EndUnload:
-                            command = "UNDOCK_TO_UNLOAD";
-                            break;
-                        case ExchangeTasks.Undock:
-                            command = "UNDOCK_FROM_BASE";
-                            break;
-                    }
-
-                    var parts = new List<string>()
-                    {
-                        $"Command={command}",
-                        $"To={request.Ship}",
-                        $"From={baseId}",
-
-                        $"IsStatic={(isStatic?1:0)}",
-                        $"Landing={(config.InGravity?1:0)}",
-
-                        $"Exchange={exchange.Name}",
-                        $"Forward={Utils.VectorToStr(exchange.Forward)}",
-                        $"Up={Utils.VectorToStr(exchange.Up)}",
-                        $"Waypoints={Utils.VectorListToStr(exchange.CalculateUndockingRoute())}",
-                    };
-                    BroadcastMessage(parts);
-
-                    return true;
-                }
-            }
-
-            return false;
+            return exchangeRequests.FindAll(r =>
+                r.ExchangeType == exchangeType &&
+                r.Pending &&
+                (r.Task == ExchangeTasks.StartLoad || r.Task == ExchangeTasks.StartUnload || r.Task == ExchangeTasks.Dock || r.Task == ExchangeTasks.Undock));
+        }
+        List<ExchangeGroup> GetFreeExchanges(string exchangeType)
+        {
+            return exchanges[exchangeType].FindAll(e => e.IsFree());
+        }
+        List<Ship> GetWaitingShips(string exchangeType)
+        {
+            return ships.FindAll(s =>
+                s.ExchangeType == exchangeType &&
+                (s.Status == ShipStatus.WaitingDock || s.Status == ShipStatus.Idle));
         }
         #endregion
 
@@ -545,227 +602,8 @@ namespace IngameScript
             FreeExchanges();
 
             DoRefreshLCDs();
-        }
-        void DoRefreshLCDs()
-        {
-            if (!config.EnableRefreshLCDs) return;
-
-            lastRefreshLCDs -= Runtime.TimeSinceLastRun;
-            if (lastRefreshLCDs > TimeSpan.Zero) return;
-            lastRefreshLCDs = config.RefreshLCDsInterval;
 
             RefreshLCDs();
-        }
-        void RefreshLCDs()
-        {
-            dataLCDs.Clear();
-            var data = GetBlocksOfType<IMyTextPanel>(config.DataLCDs);
-            var dataCps = GetBlocksImplementType<IMyTextSurfaceProvider>(config.DataLCDs).Where(c => config.DataLCDs.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Success);
-            dataLCDs.AddRange(data.Select(l => new TextPanelDesc(l, l, true)));
-            dataLCDs.AddRange(dataCps.Select(c => new TextPanelDesc((IMyTerminalBlock)c, c.GetSurface(int.Parse(config.DataLCDs.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Value)), true)));
-
-            logLCDs.Clear();
-            var log = GetBlocksOfType<IMyTextPanel>(config.LogLCDs);
-            var logCps = GetBlocksImplementType<IMyTextSurfaceProvider>(config.LogLCDs).Where(c => config.LogLCDs.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Success);
-            logLCDs.AddRange(log.Select(l => new TextPanelDesc(l, l, false)));
-            logLCDs.AddRange(logCps.Select(c => new TextPanelDesc((IMyTerminalBlock)c, c.GetSurface(int.Parse(config.LogLCDs.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Value)), false)));
-        }
-        #endregion
-
-        #region UTILITY
-        List<T> GetBlocksOfType<T>(System.Text.RegularExpressions.Regex regEx) where T : class, IMyTerminalBlock
-        {
-            var blocks = new List<T>();
-            GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && regEx.IsMatch(b.CustomName));
-            return blocks;
-        }
-        List<T> GetBlocksImplementType<T>(System.Text.RegularExpressions.Regex regEx) where T : class
-        {
-            var blocks = new List<IMyTerminalBlock>();
-            GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && regEx.IsMatch(b.CustomName) && b is T);
-            return blocks.Cast<T>().ToList();
-        }
-
-        void WriteDataLCDs(StringBuilder sbData, string text, bool echo = false)
-        {
-            if (echo)
-            {
-                Echo(text);
-            }
-
-            sbData.AppendLine(text);
-        }
-        void WriteLogLCDs(string text)
-        {
-            if (!config.EnableLogs)
-            {
-                return;
-            }
-
-            sbLog.Insert(0, text + Environment.NewLine);
-        }
-        void FlushDataLCDs()
-        {
-            var title = sbTitle.ToString();
-            var exchanges = sbExchanges.ToString();
-            var ships = sbShips.ToString();
-            var requests = sbRequests.ToString();
-            var flightPlans = sbFlightPlans.ToString();
-
-            foreach (var lcd in dataLCDs)
-            {
-                lcd.WriteData(title, exchanges, ships, requests, flightPlans);
-            }
-        }
-        void FlushLogLCDs()
-        {
-            var log = sbLog.ToString();
-            var logLines = log.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
-
-            foreach (var lcd in logLCDs)
-            {
-                lcd.WriteLog(log, logLines);
-            }
-        }
-        void BroadcastMessage(List<string> parts)
-        {
-            string message = string.Join("|", parts);
-
-            WriteLogLCDs($"SendIGCMessage: {message}");
-
-            IGC.SendBroadcastMessage(config.Channel, message);
-        }
-        void UnicastMessage(long source, List<string> parts)
-        {
-            string message = string.Join("|", parts);
-
-            WriteLogLCDs($"SendIGCMessage: {message}");
-
-            IGC.SendUnicastMessage(source, config.Channel, message);
-        }
-
-        bool IsForMe(string[] lines)
-        {
-            var to = Utils.ReadString(lines, "To");
-            return to.ToUpper() == baseId.ToUpper();
-        }
-
-        Vector3D GetBasePosition()
-        {
-            return Me.CubeGrid.GetPosition();
-        }
-
-        TimeSpan GetNextStatusRequest()
-        {
-            return lastRequestStatus;
-        }
-
-        void InitializeExchanges()
-        {
-            exchanges.Clear();
-
-            foreach (var exConfig in config.Exchanges)
-            {
-                var exchangeGroups = InitializeExchangeGroups(exConfig);
-
-                exchanges.Add(exConfig.Name, exchangeGroups);
-            }
-        }
-        List<ExchangeGroup> InitializeExchangeGroups(ExchangeConfig exConfig)
-        {
-            var exchangeGroups = new List<ExchangeGroup>();
-
-            //Find all blocks that have the exchange regex in their name
-            var blocks = new List<IMyTerminalBlock>();
-            GridTerminalSystem.GetBlocksOfType(blocks, i => i.CubeGrid == Me.CubeGrid && Utils.IsFromGroup(i.CustomName, exConfig.RegEx));
-
-            //Group them by the group name
-            var groups = blocks.GroupBy(b => Utils.ExtractGroupName(b.CustomName, exConfig.RegEx)).ToList();
-
-            //For each group, initialize the blocks of the ExchangeGroup class
-            foreach (var group in groups)
-            {
-                var exchangeGroup = new ExchangeGroup(group.Key, exConfig);
-
-                foreach (var block in group)
-                {
-                    var connector = block as IMyShipConnector;
-                    if (connector != null)
-                    {
-                        if (connector.CustomName.Contains(config.ExchangeMainConnector)) exchangeGroup.MainConnector = connector;
-                        else if (connector.CustomName.Contains(config.ExchangeOtherConnector)) exchangeGroup.Connectors.Add(connector);
-                    }
-
-                    var camera = block as IMyCameraBlock;
-                    if (camera != null)
-                    {
-                        exchangeGroup.Camera = camera;
-                    }
-
-                    var timer = block as IMyTimerBlock;
-                    if (timer != null)
-                    {
-                        if (timer.CustomName.Contains(config.ExchangeTimerLoad)) exchangeGroup.TimerLoad = timer;
-                        else if (timer.CustomName.Contains(config.ExchangeTimerUnload)) exchangeGroup.TimerUnload = timer;
-                        else if (timer.CustomName.Contains(config.ExchangeTimerDockPrepare)) exchangeGroup.TimerDockPrepare = timer;
-                        else if (timer.CustomName.Contains(config.ExchangeTimerDockStart)) exchangeGroup.TimerDockStart = timer;
-                        else if (timer.CustomName.Contains(config.ExchangeTimerUndockPrepare)) exchangeGroup.TimerUndockPrepare = timer;
-                        else if (timer.CustomName.Contains(config.ExchangeTimerUndockStart)) exchangeGroup.TimerUndockStart = timer;
-                        else if (timer.CustomName.Contains(config.ExchangeTimerFree)) exchangeGroup.TimerFree = timer;
-                    }
-                }
-
-                string errMsg;
-                if (exchangeGroup.IsValid(out errMsg))
-                {
-                    WriteLogLCDs($"ExchangeGroup {exchangeGroup.Name} initialized.");
-                    exchangeGroups.Add(exchangeGroup);
-                }
-                else
-                {
-                    WriteLogLCDs($"ExchangeGroup {exchangeGroup.Name} is invalid. {errMsg}");
-                }
-            }
-
-            return exchangeGroups;
-        }
-        void EnqueueExchangeRequest(string exchangeType, string ship, ExchangeTasks task)
-        {
-            exchangeRequests.RemoveAll(r => r.Ship == ship);
-
-            exchangeRequests.Add(new ExchangeRequest(config, exchangeType, ship, task));
-        }
-        TimeSpan GetNextExchangeRequest()
-        {
-            return lastExchangeRequest;
-        }
-        bool IsCurrentExchangeDockRequests()
-        {
-            return exchangeRequests.Any(r => r.Doing);
-        }
-        List<ExchangeRequest> GetPendingExchangeDockRequests(string exchangeType)
-        {
-            return exchangeRequests.FindAll(r =>
-                r.ExchangeType == exchangeType &&
-                r.Pending &&
-                (r.Task == ExchangeTasks.StartLoad || r.Task == ExchangeTasks.StartUnload || r.Task == ExchangeTasks.Dock || r.Task == ExchangeTasks.Undock));
-        }
-        List<ExchangeRequest> GetPendingExchangeUndockRequests(string exchangeType)
-        {
-            return exchangeRequests.FindAll(r =>
-                r.ExchangeType == exchangeType &&
-                r.Pending &&
-                (r.Task == ExchangeTasks.EndLoad || r.Task == ExchangeTasks.EndUnload || r.Task == ExchangeTasks.Undock));
-        }
-        List<ExchangeGroup> GetFreeExchanges(string exchangeType)
-        {
-            return exchanges[exchangeType].FindAll(e => e.IsFree());
-        }
-        List<Ship> GetWaitingShips(string exchangeType)
-        {
-            return ships.FindAll(s =>
-                s.ExchangeType == exchangeType &&
-                (s.Status == ShipStatus.WaitingDock || s.Status == ShipStatus.Idle));
         }
         bool ShipIsDocked(string ship)
         {
@@ -780,12 +618,6 @@ namespace IngameScript
             }
 
             return false;
-        }
-        List<ExchangeGroup> GetShipExchanges(string exchangeType, string ship)
-        {
-            if (string.IsNullOrWhiteSpace(ship)) return new List<ExchangeGroup>();
-
-            return exchanges[exchangeType].Where(e => e.DockedShips().Any(d => d == ship)).Distinct().ToList();
         }
         void FreeExchanges()
         {
@@ -804,49 +636,74 @@ namespace IngameScript
 
             exchangeRequests.RemoveAll(r => r.Expired);
         }
-        ExchangeGroup FindShipExchange(string ship)
+        List<ExchangeGroup> GetShipExchanges(string exchangeType, string ship)
         {
-            foreach (var exchange in exchanges.Values)
+            if (string.IsNullOrWhiteSpace(ship)) return new List<ExchangeGroup>();
+
+            return exchanges[exchangeType].Where(e => e.DockedShips().Any(d => d == ship)).Distinct().ToList();
+        }
+        void DoRefreshLCDs()
+        {
+            if (!config.EnableRefreshLCDs) return;
+
+            lastRefreshLCDs -= Runtime.TimeSinceLastRun;
+            if (lastRefreshLCDs > TimeSpan.Zero) return;
+            lastRefreshLCDs = config.RefreshLCDsInterval;
+
+            initializedDataLCDs = false;
+            initializedLogLCDs = false;
+        }
+        void RefreshLCDs()
+        {
+            if (MaxInstructionCountReached()) return;
+
+            if (!initializedDataLCDs)
             {
-                foreach (var ex in exchange)
-                {
-                    if (ex.DockedShips().Any(d => d == ship))
-                    {
-                        return ex;
-                    }
-                }
+                dataLCDs.Clear();
+                var data = GetBlocksOfType<IMyTextPanel>(config.DataLCDs);
+                var dataCps = GetBlocksImplementType<IMyTextSurfaceProvider>(config.DataLCDs).Where(c => config.DataLCDs.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Success);
+                dataLCDs.AddRange(data.Select(l => new TextPanelDesc(l, l, true)));
+                dataLCDs.AddRange(dataCps.Select(c => new TextPanelDesc((IMyTerminalBlock)c, c.GetSurface(int.Parse(config.DataLCDs.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Value)), true)));
+
+                initializedDataLCDs = true;
             }
 
-            return null;
-        }
-        ExchangeGroup FindExchange(string name)
-        {
-            foreach (var exchange in exchanges.Values)
+            if (MaxInstructionCountReached()) return;
+
+            if (!initializedLogLCDs)
             {
-                foreach (var ex in exchange)
-                {
-                    if (ex.Name == name)
-                    {
-                        return ex;
-                    }
-                }
+                logLCDs.Clear();
+                var log = GetBlocksOfType<IMyTextPanel>(config.LogLCDs);
+                var logCps = GetBlocksImplementType<IMyTextSurfaceProvider>(config.LogLCDs).Where(c => config.LogLCDs.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Success);
+                logLCDs.AddRange(log.Select(l => new TextPanelDesc(l, l, false)));
+                logLCDs.AddRange(logCps.Select(c => new TextPanelDesc((IMyTerminalBlock)c, c.GetSurface(int.Parse(config.LogLCDs.Match(((IMyTerminalBlock)c).CustomName).Groups[1].Value)), false)));
+
+                initializedLogLCDs = true;
             }
-
-            return null;
         }
+        #endregion
 
-        TimeSpan GetNextLCDsRefresh()
+        #region PRINT BASE STATE
+        void PrintBaseState()
         {
-            return lastRefreshLCDs;
+            sbTitle.Clear();
+            sbExchanges.Clear();
+            sbShips.Clear();
+            sbRequests.Clear();
+            sbFlightPlans.Clear();
+            PrintBase();
+            PrintExchanges();
+            PrintShipStatus();
+            PrintExchangeRequests();
+            PrintShipPlans();
         }
-
         void PrintBase()
         {
             WriteDataLCDs(sbTitle, $"RogueBase v{Version}. {DateTime.Now:HH:mm:ss}", true);
             WriteDataLCDs(sbTitle, $"{baseId} in channel {config.Channel}", true);
-            if (config.EnableRequestStatus) WriteDataLCDs(sbTitle, $"Next Status Request {GetNextStatusRequest():hh\\:mm\\:ss}", true);
-            if (config.EnableRequestExchange) WriteDataLCDs(sbTitle, $"Next Exchange Request {GetNextExchangeRequest():hh\\:mm\\:ss}", true);
-            if (config.EnableRefreshLCDs) WriteDataLCDs(sbTitle, $"Next LCDs Refresh {GetNextLCDsRefresh():hh\\:mm\\:ss}", true);
+            if (config.EnableRequestStatus) WriteDataLCDs(sbTitle, $"Next Status Request {lastRequestStatus:hh\\:mm\\:ss}", true);
+            if (config.EnableRequestExchange) WriteDataLCDs(sbTitle, $"Next Exchange Request {lastExchangeRequest:hh\\:mm\\:ss}", true);
+            if (config.EnableRefreshLCDs) WriteDataLCDs(sbTitle, $"Next LCDs Refresh {lastRefreshLCDs:hh\\:mm\\:ss}", true);
         }
         void PrintExchanges()
         {
@@ -926,6 +783,172 @@ namespace IngameScript
 
             //Remove ships that have not been updated in a while
             ships.RemoveAll(s => (DateTime.Now - s.UpdateTime).TotalMinutes > 5);
+        }
+        void FlushDataLCDs()
+        {
+            var title = sbTitle.ToString();
+            var exchanges = sbExchanges.ToString();
+            var ships = sbShips.ToString();
+            var requests = sbRequests.ToString();
+            var flightPlans = sbFlightPlans.ToString();
+
+            foreach (var lcd in dataLCDs)
+            {
+                lcd.WriteData(title, exchanges, ships, requests, flightPlans);
+            }
+        }
+        void FlushLogLCDs()
+        {
+            var log = sbLog.ToString();
+            var logLines = log.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (var lcd in logLCDs)
+            {
+                lcd.WriteLog(log, logLines);
+            }
+        }
+        #endregion
+
+        #region UTILITY
+        List<T> GetBlocksOfType<T>(System.Text.RegularExpressions.Regex regEx) where T : class, IMyTerminalBlock
+        {
+            var blocks = new List<T>();
+            GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && regEx.IsMatch(b.CustomName));
+            return blocks;
+        }
+        List<T> GetBlocksImplementType<T>(System.Text.RegularExpressions.Regex regEx) where T : class
+        {
+            var blocks = new List<IMyTerminalBlock>();
+            GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && regEx.IsMatch(b.CustomName) && b is T);
+            return blocks.Cast<T>().ToList();
+        }
+
+        bool MaxInstructionCountReached()
+        {
+            return Runtime.CurrentInstructionCount > Runtime.MaxInstructionCount / 2;
+        }
+
+        void WriteDataLCDs(StringBuilder sbData, string text, bool echo = false)
+        {
+            if (echo)
+            {
+                Echo(text);
+            }
+
+            sbData.AppendLine(text);
+        }
+        void WriteLogLCDs(string text)
+        {
+            if (!config.EnableLogs)
+            {
+                return;
+            }
+
+            sbLog.Insert(0, text + Environment.NewLine);
+        }
+        void BroadcastMessage(List<string> parts)
+        {
+            string message = string.Join("|", parts);
+
+            WriteLogLCDs($"SendIGCMessage: {message}");
+
+            IGC.SendBroadcastMessage(config.Channel, message);
+        }
+        void UnicastMessage(long source, List<string> parts)
+        {
+            string message = string.Join("|", parts);
+
+            WriteLogLCDs($"SendIGCMessage: {message}");
+
+            IGC.SendUnicastMessage(source, config.Channel, message);
+        }
+
+        Vector3D GetBasePosition()
+        {
+            return Me.CubeGrid.GetPosition();
+        }
+
+        void InitializeExchanges()
+        {
+            if (initializedExchanges) return;
+
+            foreach (var exConfig in config.Exchanges)
+            {
+                if (MaxInstructionCountReached()) return;
+
+                if (exchanges.ContainsKey(exConfig.Name)) continue;
+
+                var exchangeGroups = InitializeExchangeGroups(exConfig);
+
+                exchanges.Add(exConfig.Name, exchangeGroups);
+            }
+
+            initializedExchanges = true;
+        }
+        List<ExchangeGroup> InitializeExchangeGroups(ExchangeConfig exConfig)
+        {
+            var exchangeGroups = new List<ExchangeGroup>();
+
+            //Find all blocks that have the exchange regex in their name
+            var blocks = new List<IMyTerminalBlock>();
+            GridTerminalSystem.GetBlocksOfType(blocks, i => i.CubeGrid == Me.CubeGrid && Utils.IsFromGroup(i.CustomName, exConfig.RegEx));
+
+            //Group them by the group name
+            var groups = blocks.GroupBy(b => Utils.ExtractGroupName(b.CustomName, exConfig.RegEx)).ToList();
+
+            //For each group, initialize the blocks of the ExchangeGroup class
+            foreach (var group in groups)
+            {
+                var exchangeGroup = new ExchangeGroup(group.Key, exConfig);
+
+                foreach (var block in group)
+                {
+                    var connector = block as IMyShipConnector;
+                    if (connector != null)
+                    {
+                        if (connector.CustomName.Contains(config.ExchangeMainConnector)) exchangeGroup.MainConnector = connector;
+                        else if (connector.CustomName.Contains(config.ExchangeOtherConnector)) exchangeGroup.Connectors.Add(connector);
+                    }
+
+                    var camera = block as IMyCameraBlock;
+                    if (camera != null)
+                    {
+                        exchangeGroup.Camera = camera;
+                    }
+
+                    var timer = block as IMyTimerBlock;
+                    if (timer != null)
+                    {
+                        if (timer.CustomName.Contains(config.ExchangeTimerLoad)) exchangeGroup.TimerLoad = timer;
+                        else if (timer.CustomName.Contains(config.ExchangeTimerUnload)) exchangeGroup.TimerUnload = timer;
+                        else if (timer.CustomName.Contains(config.ExchangeTimerDockPrepare)) exchangeGroup.TimerDockPrepare = timer;
+                        else if (timer.CustomName.Contains(config.ExchangeTimerDockStart)) exchangeGroup.TimerDockStart = timer;
+                        else if (timer.CustomName.Contains(config.ExchangeTimerUndockPrepare)) exchangeGroup.TimerUndockPrepare = timer;
+                        else if (timer.CustomName.Contains(config.ExchangeTimerUndockStart)) exchangeGroup.TimerUndockStart = timer;
+                        else if (timer.CustomName.Contains(config.ExchangeTimerFree)) exchangeGroup.TimerFree = timer;
+                    }
+                }
+
+                string errMsg;
+                if (exchangeGroup.IsValid(out errMsg))
+                {
+                    WriteLogLCDs($"ExchangeGroup {exchangeGroup.Name} initialized.");
+                    exchangeGroups.Add(exchangeGroup);
+                }
+                else
+                {
+                    WriteLogLCDs($"ExchangeGroup {exchangeGroup.Name} is invalid. {errMsg}");
+                }
+            }
+
+            return exchangeGroups;
+        }
+
+        void EnqueueExchangeRequest(string exchangeType, string ship, ExchangeTasks task)
+        {
+            exchangeRequests.RemoveAll(r => r.Ship == ship);
+
+            exchangeRequests.Add(new ExchangeRequest(config, exchangeType, ship, task));
         }
         #endregion
 

@@ -26,8 +26,9 @@ namespace IngameScript
         int panel = 0;
         bool enable = false;
         float scale = 1f;
-        float padding = 0f;
         float margin = 0f;
+        float gaugePadding = 0f;
+        float gaugeMargin = 0f;
         string producersFilter = "*";
         string consummersFilter = "*";
         bool showDetails = true;
@@ -58,7 +59,8 @@ namespace IngameScript
             panel = ini.Get(SECTION, "panel").ToInt32(0);
             enable = ini.Get(SECTION, "on").ToBoolean(false);
             scale = ini.Get(SECTION, "scale").ToSingle(1f);
-            padding = ini.Get(SECTION, "padding").ToSingle(0f);
+            gaugePadding = ini.Get(SECTION, "gauge_padding").ToSingle(0f);
+            gaugeMargin = ini.Get(SECTION, "gauge_margin").ToSingle(0f);
             margin = ini.Get(SECTION, "margin").ToSingle(0f);
 
             producersFilter = ini.Get(SECTION, "producers_filter").ToString("*");
@@ -85,8 +87,8 @@ namespace IngameScript
                 RotationOrScale = scale,
                 Thresholds = powerThresholds,
                 Percent = showPercent,
-                Padding = new StylePadding(padding),
-                Margin = new StyleMargin(margin),
+                Padding = new StylePadding(gaugePadding),
+                Margin = new StyleMargin(gaugeMargin),
             };
 
             Search();
@@ -177,7 +179,7 @@ namespace IngameScript
         void Draw(SurfaceDrawing surface)
         {
             surface.DrawGauge(style, surface.Position, outputs["all"].Current, outputs["all"].Max);
-            surface.Position += new Vector2(0, height) + deltaPadding;
+            surface.Position += new Vector2(margin, height + margin) + deltaPadding;
 
             foreach (var v in outputs)
             {
