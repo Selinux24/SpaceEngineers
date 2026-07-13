@@ -9,7 +9,7 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        const string Version = "1.5";
+        const string Version = "1.6";
         const char AttributeSep = '=';
         const string WildcardLCDs = "[INV]";
         const int ItemsQueryTicks = 3;
@@ -20,6 +20,7 @@ namespace IngameScript
         readonly string channel;
         readonly string name;
         readonly Dictionary<string, int> required;
+        readonly CompareTypes compareType = CompareTypes.GreaterThan;
         readonly TimeSpan queryInterval;
         readonly double threshold;
 
@@ -44,6 +45,7 @@ namespace IngameScript
                     "CargoContainerName=name\n" +
                     "QueryInterval=int\n" +
                     "Threshold=int\n" +
+                    "CompareType=int [1,-1]\n" +
                     "Inventory=item1:quantity1;itemN:quantityN;\n" +
                     "WildcardLCDs=name(optional)";
 
@@ -260,7 +262,8 @@ namespace IngameScript
             message.Clear();
             bool anyNeeded = false;
 
-            var current = GetCurrentItemsInStores();
+            float currentCapacity;
+            var current = GetCurrentItemsInStores(out currentCapacity);
 
             message.AppendLine(name);
 
@@ -270,32 +273,100 @@ namespace IngameScript
 
             foreach (var req in required)
             {
-                //Add line only if needed quantity is major then the required quantity times the threshold
-                var reqThr = req.Value - (int)(req.Value * threshold);
-                var curr = current.ContainsKey(req.Key) ? (int)current[req.Key] : 0;
+                string reqItem = req.Key;
 
-                int c = reqThr - curr;
-                if (c > 0)
+                if (reqItem.ToUpper() == "ANY")
                 {
-                    message.Append($"{req.Key}={req.Value - curr};");
-                    anyNeeded = true;
-                    lastMessage.AppendLine($"{req.Key} {reqThr}>{curr}");
+                    double curr = currentCapacity;
+                    double reqValue = req.Value / 100.0;
+
+                    string compareSymbol;
+                    bool conditionMet;
+                    switch (compareType)
+                    {
+                        case CompareTypes.LessThan:
+                            compareSymbol = "<";
+                            conditionMet = curr < reqValue;
+                            break;
+                        case CompareTypes.GreaterThan:
+                            compareSymbol = ">";
+                            conditionMet = curr > reqValue;
+                            break;
+                        default:
+                            compareSymbol = "";
+                            conditionMet = false;
+                            break;
+                    }
+
+                    if (conditionMet)
+                    {
+                        message.Append($"{reqItem}={reqValue - curr};");
+                        anyNeeded = true;
+                        lastMessage.AppendLine($"{reqItem} {reqValue:P1} {compareSymbol} {curr:P1}");
+                    }
+                    else
+                    {
+                        lastMessage.AppendLine($"{reqItem} {reqValue:P1} {compareSymbol} {curr:P1} OK");
+                    }
                 }
                 else
                 {
-                    lastMessage.AppendLine($"{req.Key} {req.Value} OK");
+                    //For Less/LessOrEqual: margin below required (safety buffer for replenishment)
+                    //For Greater/GreaterOrEqual: margin above required (safety buffer for excess)
+                    int curr = current.ContainsKey(reqItem) ? (int)current[reqItem] : 0;
+                    int reqValue = req.Value;
+
+                    string compareSymbol;
+                    double reqThr;
+                    bool conditionMet;
+                    switch (compareType)
+                    {
+                        case CompareTypes.LessThan:
+                            compareSymbol = "<";
+                            reqThr = reqValue - (int)(reqValue * threshold);
+                            conditionMet = curr < reqThr;
+                            break;
+                        case CompareTypes.GreaterThan:
+                            compareSymbol = ">";
+                            reqThr = reqValue + (int)(reqValue * threshold);
+                            conditionMet = curr > reqThr;
+                            break;
+                        default:
+                            compareSymbol = "";
+                            reqThr = 0;
+                            conditionMet = false;
+                            break;
+                    }
+
+                    if (conditionMet)
+                    {
+                        message.Append($"{reqItem}={reqValue - curr};");
+                        anyNeeded = true;
+                        lastMessage.AppendLine($"{reqItem} {reqThr}{compareSymbol}{curr}");
+                    }
+                    else
+                    {
+                        lastMessage.AppendLine($"{reqItem} {reqThr}{compareSymbol}{curr} OK");
+                    }
                 }
             }
 
             return anyNeeded;
         }
-        Dictionary<string, MyFixedPoint> GetCurrentItemsInStores()
+        Dictionary<string, MyFixedPoint> GetCurrentItemsInStores(out float capacity)
         {
             var list = new Dictionary<string, MyFixedPoint>();
+            capacity = 0;
+
+            if (cargoContainers.Count == 0)
+            {
+                return list;
+            }
 
             foreach (var cargo in cargoContainers)
             {
                 var inv = cargo.GetInventory();
+                capacity += inv.VolumeFillFactor;
 
                 for (int i = 0; i < inv.ItemCount; i++)
                 {
@@ -308,6 +379,8 @@ namespace IngameScript
                     list[t] += item.Amount;
                 }
             }
+
+            capacity /= cargoContainers.Count;
 
             return list;
         }

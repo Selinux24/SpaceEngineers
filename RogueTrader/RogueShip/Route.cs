@@ -51,6 +51,22 @@ namespace IngameScript
             ToUnloadBaseWaypoints.Clear();
         }
 
+        public List<Vector3D> GetWaypointsToLoadBaseFromPosition(Vector3D position)
+        {
+            int nearestIndex = -1;
+            double nearestDistance = double.MaxValue;
+            for (int i = 0; i < ToLoadBaseWaypoints.Count; i++)
+            {
+                double distance = Vector3D.Distance(position, ToLoadBaseWaypoints[i]);
+                if (distance < nearestDistance)
+                {
+                    nearestDistance = distance;
+                    nearestIndex = i;
+                }
+            }
+            return ToLoadBaseWaypoints.GetRange(nearestIndex, ToLoadBaseWaypoints.Count - nearestIndex);
+        }
+
         public void LoadFromStorage(string storageLine)
         {
             var parts = storageLine.Split('¬');

@@ -13,7 +13,10 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "2.72";
+        const string Version = "2.73 Lander";
+        const string ON_NAVIGATION_COMPLETED = "ON_NAVIGATION_COMPLETED";
+        const string ON_APPROACHING_COMPLETED = "ON_APPROACHING_COMPLETED";
+        const string ON_SEPARATION_COMPLETED = "ON_SEPARATION_COMPLETED";
 
         #region Blocks
         readonly IMyBroadcastListener bl;
@@ -246,6 +249,7 @@ namespace IngameScript
             else if (argument == "START_UNDOCK") SendWaitingMessage(ExchangeTasks.Undock);
 
             else if (argument == "NEXT") Next();
+            else if (argument == "CONTINUE") Continue();
 
             else if (argument == "PLAN") Plan();
         }
@@ -361,7 +365,7 @@ namespace IngameScript
                 $"ExchangeType={Config.ExchangeType}",
                 $"Status={(int)shipStatus}",
                 $"StatusMessage={GetShipState()}",
-                $"Cargo={CalculateCargoPercentage()}",
+                $"Cargo={CalculateCapacity()}",
                 $"Position={Utils.VectorToStr(Me.CubeGrid.GetPosition())}",
             };
             UnicastMessage(source, parts);
@@ -401,7 +405,7 @@ namespace IngameScript
 
             if (task == ExchangeTasks.StartLoad || task == ExchangeTasks.StartUnload || task == ExchangeTasks.Dock)
             {
-                navigator.ApproachToDock(source, isStatic, landing, exchange, fw, up, wpList, "ON_APPROACHING_COMPLETED", task);
+                navigator.ApproachToDock(source, isStatic, landing, exchange, fw, up, wpList, ON_APPROACHING_COMPLETED, task);
                 shipStatus = ShipStatus.Docking;
                 lastDockRequest = TimeSpan.Zero;
                 dockUpdating = false;
@@ -409,7 +413,7 @@ namespace IngameScript
             }
             else if (task == ExchangeTasks.EndLoad || task == ExchangeTasks.EndUnload || task == ExchangeTasks.Undock)
             {
-                navigator.SeparateFromDock(source, landing, exchange, fw, up, wpList, "ON_SEPARATION_COMPLETED", task);
+                navigator.SeparateFromDock(source, landing, exchange, fw, up, wpList, ON_SEPARATION_COMPLETED, task);
                 shipStatus = ShipStatus.Undocking;
                 lastDockRequest = TimeSpan.Zero;
                 dockUpdating = false;
@@ -431,11 +435,7 @@ namespace IngameScript
             route.ToUnloadBaseWaypoints.Clear();
             route.ToUnloadBaseWaypoints.AddRange(Utils.ReadVectorList(lines, "ToUnloadBaseWaypoints"));
 
-            monitorizeLoadTime = Config.MonitorizeLoadTime();
-            loadStart = Config.MaxLoadTime;
-            monitorizeCapacity = Config.MonitorizeCapacity();
-            lastCapacity = -1;
-            monitorizePropulsion = Config.MonitorizePropulsion();
+            Continue();
         }
 
         /// <summary>
@@ -476,28 +476,27 @@ namespace IngameScript
         #region MONITORS
         void Monitorize()
         {
+            if (shipStatus != ShipStatus.Loading && shipStatus != ShipStatus.Unloading) return;
+
             loadStart -= Runtime.TimeSinceLastRun;
             if (loadStart < TimeSpan.Zero) loadStart = TimeSpan.Zero;
 
-            if (shipStatus == ShipStatus.Loading)
-            {
-                MonitorizeLoading();
-            }
-            else if (shipStatus == ShipStatus.Unloading)
-            {
-                MonitorizeUnloading();
-            }
+            double cap = CalculateCapacity();
+            bool capChanged = lastCapacity != cap;
+            lastCapacity = cap;
+
+            if (shipStatus == ShipStatus.Loading) MonitorizeLoading(cap, capChanged);
+            else if (shipStatus == ShipStatus.Unloading) MonitorizeUnloading(cap, capChanged);
         }
-        void MonitorizeLoading()
+        void MonitorizeLoading(double cap, bool capChanged)
         {
-            double capacity = CalculateCargoPercentage();
-            bool capacityChanged = lastCapacity != capacity;
-            lastCapacity = capacity;
-            WriteInfoLCDs($"Progress {capacity / Config.MaxLoad:P1}...");
+            double capPct = CalculateLoadProgressPct(cap);
+
+            WriteInfoLCDs($"Progress {capPct:P1}...");
 
             if (monitorizeLoadTime)
             {
-                if (capacity / Config.MaxLoad >= 1 || (capacity > 0 && loadStart <= TimeSpan.Zero))
+                if (capPct >= 0.999 || loadStart <= TimeSpan.Zero)
                 {
                     monitorizeLoadTime = false;
                     loadStart = TimeSpan.Zero;
@@ -509,7 +508,9 @@ namespace IngameScript
 
             if (monitorizeCapacity)
             {
-                if (!capacityChanged || capacity >= Config.MaxLoad)
+                bool loadTimeMonitored = Config.MonitorizeLoadTime();
+
+                if ((!capChanged && loadTimeMonitored) || cap >= Config.MaxLoad)
                 {
                     monitorizeCapacity = false;
                     lastCapacity = -1;
@@ -535,17 +536,35 @@ namespace IngameScript
 
             timerFinalize?.StartCountdown();
         }
-        void MonitorizeUnloading()
+        void MonitorizeUnloading(double cap, bool capChanged)
         {
-            double capacity = CalculateCargoPercentage();
-            WriteInfoLCDs($"Progress {1.0 - (capacity / Config.MaxLoad):P1}...");
+            double capPct = CalculateUnloadProgressPct(cap);
+
+            WriteInfoLCDs($"Progress {capPct:P1}...");
+
+            if (monitorizeLoadTime)
+            {
+                if (capPct <= 0.001 || loadStart <= TimeSpan.Zero)
+                {
+                    monitorizeLoadTime = false;
+                    loadStart = TimeSpan.Zero;
+                    return;
+                }
+
+                return;
+            }
 
             if (monitorizeCapacity)
             {
-                if (capacity > Config.MinLoad) return;
+                bool unloadTimeMonitored = Config.MonitorizeUnloadTime();
 
-                monitorizeCapacity = false;
-                lastCapacity = -1;
+                if ((!capChanged && unloadTimeMonitored) || cap < Config.MinLoad)
+                {
+                    monitorizeCapacity = false;
+                    lastCapacity = -1;
+                    return;
+                }
+
                 return;
             }
 
@@ -648,9 +667,9 @@ namespace IngameScript
         #region CALLBACKS
         internal void ExecuteCallback(string name, ExchangeTasks task)
         {
-            if (name == "ON_APPROACHING_COMPLETED") OnApproachingCompleted(task);
-            else if (name == "ON_SEPARATION_COMPLETED") OnSeparationCompleted(task);
-            else if (name == "ON_NAVIGATION_COMPLETED") OnNavigationCompleted(task);
+            if (name == ON_APPROACHING_COMPLETED) OnApproachingCompleted(task);
+            else if (name == ON_SEPARATION_COMPLETED) OnSeparationCompleted(task);
+            else if (name == ON_NAVIGATION_COMPLETED) OnNavigationCompleted(task);
         }
         void OnApproachingCompleted(ExchangeTasks task)
         {
@@ -659,12 +678,10 @@ namespace IngameScript
             if (task == ExchangeTasks.StartLoad)
             {
                 Load();
-                shipStatus = ShipStatus.Loading;
             }
             else if (task == ExchangeTasks.StartUnload)
             {
                 Unload();
-                shipStatus = ShipStatus.Unloading;
             }
             else if (task == ExchangeTasks.Dock)
             {
@@ -680,13 +697,13 @@ namespace IngameScript
             {
                 onPlanet = route.UnloadBaseOnPlanet;
                 waypoints = route.ToUnloadBaseWaypoints;
-                callBack = "ON_NAVIGATION_COMPLETED";
+                callBack = ON_NAVIGATION_COMPLETED;
             }
             else if (task == ExchangeTasks.EndUnload)
             {
                 onPlanet = route.LoadBaseOnPlanet;
                 waypoints = route.ToLoadBaseWaypoints;
-                callBack = "ON_NAVIGATION_COMPLETED";
+                callBack = ON_NAVIGATION_COMPLETED;
             }
             else if (task == ExchangeTasks.Undock)
             {
@@ -837,16 +854,20 @@ namespace IngameScript
             monitorizePropulsion = Config.MonitorizePropulsion();
 
             timerLoad?.StartCountdown();
+
+            shipStatus = ShipStatus.Loading;
         }
         internal void Unload()
         {
-            monitorizeLoadTime = false;
-            loadStart = Config.MaxLoadTime;
+            monitorizeLoadTime = Config.MonitorizeUnloadTime();
+            loadStart = Config.MaxUnloadTime;
             monitorizeCapacity = Config.MonitorizeCapacity();
             lastCapacity = -1;
             monitorizePropulsion = Config.MonitorizePropulsion();
 
             timerUnload?.StartCountdown();
+
+            shipStatus = ShipStatus.Unloading;
         }
 
         internal bool IsObstacleAhead(double collisionDetectRange, Vector3D velocity, out MyDetectedEntityInfo hit)
@@ -959,6 +980,10 @@ namespace IngameScript
             return remotePilot.WorldMatrix.Forward;
         }
 
+        internal Vector3D GetLandingGravity()
+        {
+            return remoteLanding?.GetNaturalGravity() ?? GetPilotGravity();
+        }
         internal Vector3D GetLandingLinearVelocity()
         {
             return remoteLanding?.GetShipVelocities().LinearVelocity ?? GetPilotLinearVelocity();
@@ -1087,6 +1112,12 @@ namespace IngameScript
             msg = $"Hydrogen at {hydrogen:P1}, minimum required {minStoredHydrogen:P1}.";
             return false;
         }
+        double CalculateCapacity()
+        {
+            if (Config.CargoType == CargoTypes.Cargo) return CalculateCargoPercentage();
+            if (Config.CargoType == CargoTypes.Hydrogen) return CalculateHydrogenPercentage();
+            return 0;
+        }
         double CalculateCargoPercentage()
         {
             if (shipCargos.Count == 0)
@@ -1143,6 +1174,16 @@ namespace IngameScript
             }
 
             return curr / max;
+        }
+        double CalculateLoadProgressPct(double cap)
+        {
+            double capPct = Config.MaxLoad > 0 ? cap / Config.MaxLoad : 1.0;
+            return Math.Max(0.0, Math.Min(1.0, capPct));
+        }
+        double CalculateUnloadProgressPct(double cap)
+        {
+            double capPct = Config.MaxLoad > 0 ? 1.0 - (cap / Config.MaxLoad) : 1.0;
+            return Math.Max(0.0, Math.Min(1.0, capPct));
         }
 
         void SendWaitingMessage(ExchangeTasks task)
@@ -1225,6 +1266,48 @@ namespace IngameScript
 
             WriteLogLCDs($"No changes: {shipStatus}");
         }
+        void Continue()
+        {
+            if (!route.IsValid())
+            {
+                WriteLogLCDs($"Route is not valid");
+                return;
+            }
+
+            //Where I'm I?
+            string dockedGridName = GetDockedGridName();
+            if (string.IsNullOrEmpty(dockedGridName))
+            {
+                WriteLogLCDs($"Continue navigation.");
+
+                //Not docked. Find the nearest waypoint of the load base route
+                var waypoints = route.GetWaypointsToLoadBaseFromPosition(GetPilotPosition());
+
+                //Configure the navigator to start the load route from the nearest waypoint
+                navigator.NavigateTo(route.LoadBaseOnPlanet, waypoints, ON_NAVIGATION_COMPLETED, ExchangeTasks.EndLoad);
+            }
+            else if (dockedGridName == route.LoadBase)
+            {
+                WriteLogLCDs($"Docked in load base. {dockedGridName}");
+
+                //Docked in the load base. Start loading
+                Load();
+            }
+            else if (dockedGridName == route.UnloadBase)
+            {
+                WriteLogLCDs($"Docked in unload base. {dockedGridName}");
+
+                //Docked in the unload base. Start unloading
+                Unload();
+            }
+            else
+            {
+                WriteLogLCDs($"Docked in another base. {dockedGridName}");
+
+                //Docked in another base. Request undocking and start route to the load base
+                SendWaitingMessage(ExchangeTasks.EndUnload);
+            }
+        }
 
         void Plan()
         {
@@ -1241,16 +1324,16 @@ namespace IngameScript
             }
             else if (shipStatus == ShipStatus.Loading)
             {
-                double capacity = CalculateCargoPercentage();
-                double pct = capacity / Config.MaxLoad;
+                double cap = CalculateCapacity();
+                double pct = CalculateLoadProgressPct(cap);
                 string msg = null;
                 if (pct >= 1.0) IsPropulsionFilled(shipStatus, out msg);
                 return $"Loading from {GetDockedGridName()} {pct:P1}. {msg}";
             }
             else if (shipStatus == ShipStatus.Unloading)
             {
-                double capacity = CalculateCargoPercentage();
-                double pct = 1.0 - (capacity / Config.MaxLoad);
+                double cap = CalculateCapacity();
+                double pct = CalculateUnloadProgressPct(cap);
                 string msg = null;
                 if (pct >= 1.0) IsPropulsionFilled(shipStatus, out msg);
                 return $"Unloading to {GetDockedGridName()} {pct:P1}. {msg}";
@@ -1265,12 +1348,12 @@ namespace IngameScript
             WriteInfoLCDs($"RogueShip v{Version}. {DateTime.Now:HH:mm:ss}", false);
             WriteInfoLCDs($"{shipId} in channel {Config.Channel}");
             WriteInfoLCDs($"{route.GetState()}");
-            WriteInfoLCDs($"{(IsNavigationEnabled() ? "NAV" : "NO-NAV")}/{(IsDetectionEnabled() ? "DTC" : "NO-DTC")}. {CalculateCargoPercentage():P1} cargo.");
+            WriteInfoLCDs($"{(IsNavigationEnabled() ? "NAV" : "NO-NAV")}/{(IsDetectionEnabled() ? "DTC" : "NO-DTC")}. SWR {CalculateCapacity():P1}.");
             bool showBattery = Config.MinPowerOnLoad > 0 || Config.MinPowerOnUnload > 0;
             bool showHydrogen = Config.MinHydrogenOnLoad > 0 || Config.MinHydrogenOnUnload > 0;
             WriteInfoLCDs($"BAT {(showBattery ? $"{CalculateBatteryPercentage():P1}" : "--")} | H2 {(showHydrogen ? $"{CalculateHydrogenPercentage():P1}" : "--")}");
             WriteInfoLCDs($"{shipStatus}");
-            if (shipStatus == ShipStatus.Loading && monitorizeLoadTime)
+            if (monitorizeLoadTime && loadStart > TimeSpan.Zero)
             {
                 WriteInfoLCDs($"ETD {loadStart:hh\\:mm\\:ss}");
             }

@@ -9,7 +9,7 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        const string Version = "1.7";
+        const string Version = "1.8";
         const string Separate = "------";
 
         readonly List<IMyCargoContainer> warehouseCargos;
@@ -43,7 +43,6 @@ namespace IngameScript
             if (warehouseCargos.Count == 0)
             {
                 Echo($"No warehouse cargo containers found with name {config.InventoryCargo}");
-                return;
             }
 
             foreach (var listener in config.Listeners)
@@ -53,21 +52,18 @@ namespace IngameScript
                 if (outputCargos.Count == 0)
                 {
                     Echo($"No output cargos found with name {listener} {config.OutputCargo}");
-                    continue;
                 }
 
                 var timerOpen = GetBlockWithNames<IMyTimerBlock>(listener, config.TimerOpen);
                 if (timerOpen == null)
                 {
                     Echo($"No timer found with name {listener} {config.TimerOpen}");
-                    continue;
                 }
 
                 var timerClose = GetBlockWithNames<IMyTimerBlock>(listener, config.TimerClose);
                 if (timerClose == null)
                 {
                     Echo($"No timer found with name {listener} {config.TimerClose}");
-                    continue;
                 }
 
                 var connectors = GetBlocksWithNames<IMyShipConnector>(listener, config.Connector);
@@ -166,7 +162,7 @@ namespace IngameScript
             name = dataBits.Length > 0 ? dataBits[0] : "";
             items = dataBits.Length > 1 ? dataBits[1] : "";
 
-            return !string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(items);
+            return !string.IsNullOrWhiteSpace(name);
         }
 
         T GetBlockWithNames<T>(string name1, string name2) where T : class, IMyTerminalBlock
@@ -175,18 +171,24 @@ namespace IngameScript
         }
         List<T> GetBlocksWithNames<T>(string name1, string name2) where T : class, IMyTerminalBlock
         {
+            if (string.IsNullOrWhiteSpace(name1) || string.IsNullOrWhiteSpace(name2)) return new List<T>();
+
             var blocks = new List<T>();
             GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && b.CustomName.Contains(name1) && b.CustomName.Contains(name2));
             return blocks;
         }
         List<T> GetBlocksWithName<T>(string name) where T : class, IMyTerminalBlock
         {
+            if (string.IsNullOrWhiteSpace(name)) return new List<T>();
+
             var blocks = new List<T>();
             GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && b.CustomName.Contains(name));
             return blocks;
         }
         List<T> GetBlocksOfType<T>(string filter) where T : class, IMyTerminalBlock
         {
+            if (string.IsNullOrWhiteSpace(filter)) return new List<T>();
+
             var blocks = new List<T>();
             GridTerminalSystem.GetBlocksOfType(blocks, b => b.CubeGrid == Me.CubeGrid && b.CustomName.Contains(filter));
             return blocks;

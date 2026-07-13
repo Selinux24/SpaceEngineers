@@ -70,11 +70,13 @@ namespace IngameScript
 
         public readonly double MaxLoad;
         public readonly double MinLoad;
+        public readonly CargoTypes CargoType;
         public readonly double MinPowerOnLoad;
         public readonly double MinPowerOnUnload;
         public readonly double MinHydrogenOnLoad;
         public readonly double MinHydrogenOnUnload;
         public readonly TimeSpan MaxLoadTime;
+        public readonly TimeSpan MaxUnloadTime;
 
         public Config(string customData)
         {
@@ -146,11 +148,13 @@ namespace IngameScript
 
             MaxLoad = ReadConfigDouble(customData, "MaxLoad", 1);
             MinLoad = ReadConfigDouble(customData, "MinLoad", 0);
+            CargoType = (CargoTypes)ReadConfigInt(customData, "CargoType", 0);
             MinPowerOnLoad = ReadConfigDouble(customData, "MinPowerOnLoad", 0);
             MinPowerOnUnload = ReadConfigDouble(customData, "MinPowerOnUnload", 0);
             MinHydrogenOnLoad = ReadConfigDouble(customData, "MinHydrogenOnLoad", 0);
             MinHydrogenOnUnload = ReadConfigDouble(customData, "MinHydrogenOnUnload", 0);
             MaxLoadTime = TimeSpan.FromSeconds(ReadConfigInt(customData, "MaxLoadTime", 0));
+            MaxUnloadTime = TimeSpan.FromSeconds(ReadConfigInt(customData, "MaxUnloadTime", 0));
         }
         string ReadConfig(string customData, string name, string defaultValue = null)
         {
@@ -238,6 +242,10 @@ namespace IngameScript
         public bool MonitorizeLoadTime()
         {
             return MaxLoadTime.TotalSeconds > 0;
+        }
+        public bool MonitorizeUnloadTime()
+        {
+            return MaxUnloadTime.TotalSeconds > 0;
         }
         public bool MonitorizeCapacity()
         {
@@ -327,11 +335,13 @@ namespace IngameScript
                 "\n" +
                 "MaxLoad=1\n" +
                 "MinLoad=0\n" +
+                "CargoType=1\n" +
                 "MinPowerOnLoad=0.9\n" +
                 "MinPowerOnUnload=0.9\n" +
                 "MinHydrogenOnLoad=0.9\n" +
                 "MinHydrogenOnUnload=0.9\n" +
-                "MaxLoadTime=0\n";
+                "MaxLoadTime=0\n" +
+                "MaxUnloadTime=0\n";
         }
     }
 }

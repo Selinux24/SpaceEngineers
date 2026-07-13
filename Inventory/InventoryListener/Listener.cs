@@ -61,21 +61,20 @@ namespace IngameScript
             }
 
             Open();
-            preparingData = items;
 
+            preparingData = items;
             preparing = true;
         }
         public bool Preparing(List<IMyCargoContainer> warehouseCargos)
         {
-            if (timerOpen.IsCountingDown) return false;
+            if (IsOpening()) return false;
 
             if (closing)
             {
-                if (timerClose.IsCountingDown) return false;
+                if (IsClosing()) return false;
+
                 closing = false;
-
-                lastQueryState.AppendLine($"  {timerClose.CustomName} finished.");
-
+                lastQueryState.AppendLine($"  {timerClose?.CustomName ?? ""} finished.");
                 preparing = false;
                 preparingData = null;
 
@@ -84,7 +83,21 @@ namespace IngameScript
 
             if (!preparing) return false;
 
+            PrepareItems(warehouseCargos);
+
+            if (Close()) return false;
+
+            preparing = false;
+            preparingData = null;
+
+            return true;
+        }
+        void PrepareItems(List<IMyCargoContainer> warehouseCargos)
+        {
+            if (string.IsNullOrEmpty(preparingData)) return;
+
             var requestedItems = ReadItems(preparingData);
+            if (requestedItems.Count == 0) return;
 
             bool anyMoved = false;
             foreach (var reqItem in requestedItems)
@@ -140,13 +153,6 @@ namespace IngameScript
             {
                 lastQueryState.AppendLine("- No items moved");
             }
-
-            if (Close()) return false;
-
-            preparing = false;
-            preparingData = null;
-
-            return true;
         }
         static Dictionary<string, int> ReadItems(string data)
         {
@@ -156,12 +162,11 @@ namespace IngameScript
             foreach (var part in parts)
             {
                 string[] items = part.Split('=');
-                if (items.Length != 2)
-                {
-                    continue;
-                }
+                if (items.Length != 2) continue;
 
                 string item = items[0].Trim();
+                if (item.ToUpper() == "ANY") continue;
+
                 int amount = (int)decimal.Parse(items[1].Trim());
                 requestedItems.Add(item, amount);
             }
@@ -182,6 +187,10 @@ namespace IngameScript
             timerOpen.StartCountdown();
             lastQueryState.AppendLine($"  {timerOpen.CustomName} started.");
         }
+        bool IsOpening()
+        {
+            return timerOpen?.IsCountingDown ?? false;
+        }
         bool Close()
         {
             if (timerClose == null) return false;
@@ -191,6 +200,10 @@ namespace IngameScript
             closing = true;
 
             return true;
+        }
+        bool IsClosing()
+        {
+            return timerClose?.IsCountingDown ?? false;
         }
         public List<string> GetConnectedShips()
         {
@@ -282,17 +295,14 @@ namespace IngameScript
             if (outputCargos.Count == 0)
             {
                 errorMsg = $"No output cargos found with name {name}";
-                return false;
             }
             if (timerOpen == null)
             {
                 errorMsg = $"No open timer found with name {name}";
-                return false;
             }
             if (timerClose == null)
             {
                 errorMsg = $"No close timer found with name {name}";
-                return false;
             }
             if (connectors.Count == 0)
             {

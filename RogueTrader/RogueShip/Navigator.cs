@@ -641,7 +641,18 @@ namespace IngameScript
         {
             var rcDir = landing ? ship.GetLandingForwardDirection() : ship.GetPilotForwardDirection();
 
-            double tgtAngle = Utils.AngleBetweenVectors(rcDir, toTarget);
+            // Si está aterrizando, alinear con la gravedad en lugar del waypoint
+            Vector3D alignTarget = toTarget;
+            if (landing)
+            {
+                var gravityVector = ship.GetLandingGravity();
+                if (gravityVector.LengthSquared() > 0.001)
+                {
+                    alignTarget = Vector3D.Normalize(gravityVector);
+                }
+            }
+
+            double tgtAngle = Utils.AngleBetweenVectors(rcDir, alignTarget);
 
             ship.WriteInfoLCDs($"TGT angle: {tgtAngle:F3}");
 
@@ -653,7 +664,7 @@ namespace IngameScript
             }
 
             ship.WriteInfoLCDs("Aligning...");
-            var rotationAxis = Vector3D.Cross(rcDir, toTarget);
+            var rotationAxis = Vector3D.Cross(rcDir, alignTarget);
             if (rotationAxis.Length() <= 0.001) rotationAxis = new Vector3D(1, 0, 0);
             ship.ApplyGyroOverride(rotationAxis);
             return true;
