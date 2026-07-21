@@ -11,6 +11,7 @@ namespace IngameScript
         public bool UnloadBaseOnPlanet;
         public readonly List<Vector3D> ToLoadBaseWaypoints;
         public readonly List<Vector3D> ToUnloadBaseWaypoints;
+        public bool OneTourRoute = false;
 
         public Route(string loadBase, bool loadBaseOnPlanet, List<Vector3D> toLoadBase, string unloadBase, bool unloadBaseOnPlanet, List<Vector3D> toUnloadBase)
         {
@@ -88,6 +89,8 @@ namespace IngameScript
             UnloadBaseOnPlanet = Utils.ReadInt(parts, "UnloadBaseOnPlanet") == 1;
             ToUnloadBaseWaypoints.Clear();
             ToUnloadBaseWaypoints.AddRange(Utils.ReadVectorList(parts, "ToUnloadBaseWaypoints"));
+
+            OneTourRoute = Utils.ReadInt(parts, "OneTourRoute") == 1;
         }
         public string SaveToStorage()
         {
@@ -104,7 +107,9 @@ namespace IngameScript
 
                 $"UnloadBase={UnloadBase}",
                 $"UnloadBaseOnPlanet={(UnloadBaseOnPlanet ? 1 : 0)}",
-                $"ToUnloadBaseWaypoints={Utils.VectorListToStr(ToUnloadBaseWaypoints)}"
+                $"ToUnloadBaseWaypoints={Utils.VectorListToStr(ToUnloadBaseWaypoints)}",
+         
+                $"OneTourRoute={(OneTourRoute ? 1 : 0)}",
             };
 
             return string.Join("¬", parts);

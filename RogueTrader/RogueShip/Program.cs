@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "2.73 Lander";
+        const string Version = "2.74 Supplier";
         const string ON_NAVIGATION_COMPLETED = "ON_NAVIGATION_COMPLETED";
         const string ON_APPROACHING_COMPLETED = "ON_APPROACHING_COMPLETED";
         const string ON_SEPARATION_COMPLETED = "ON_SEPARATION_COMPLETED";
@@ -435,6 +435,8 @@ namespace IngameScript
             route.ToUnloadBaseWaypoints.Clear();
             route.ToUnloadBaseWaypoints.AddRange(Utils.ReadVectorList(lines, "ToUnloadBaseWaypoints"));
 
+            route.OneTourRoute = true;
+
             Continue();
         }
 
@@ -523,17 +525,17 @@ namespace IngameScript
             if (monitorizePropulsion)
             {
                 string msg;
-                if (!IsPropulsionFilled(shipStatus, out msg))
+                if (IsPropulsionFilled(shipStatus, out msg))
                 {
-                    WriteInfoLCDs(msg);
+                    monitorizePropulsion = false;
                     return;
                 }
 
-                monitorizePropulsion = false;
-                SendWaitingMessage(ExchangeTasks.EndLoad);
+                WriteInfoLCDs(msg);
                 return;
             }
 
+            SendWaitingMessage(ExchangeTasks.EndLoad);
             timerFinalize?.StartCountdown();
         }
         void MonitorizeUnloading(double cap, bool capChanged)
@@ -571,15 +573,23 @@ namespace IngameScript
             if (monitorizePropulsion)
             {
                 string msg;
-                if (!IsPropulsionFilled(shipStatus, out msg))
+                if (IsPropulsionFilled(shipStatus, out msg))
                 {
-                    WriteInfoLCDs(msg);
+                    monitorizePropulsion = false;
                     return;
                 }
 
-                SendWaitingMessage(ExchangeTasks.EndUnload);
-                monitorizePropulsion = false;
+                WriteInfoLCDs(msg);
                 return;
+            }
+
+            if (route.OneTourRoute)
+            {
+                shipStatus = ShipStatus.Idle;
+            }
+            else
+            {
+                SendWaitingMessage(ExchangeTasks.EndUnload);
             }
 
             timerFinalize?.StartCountdown();
