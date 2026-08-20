@@ -9,7 +9,7 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        const string Version = "1.9";
+        const string Version = "1.10";
         const string Separate = "------";
 
         readonly List<IMyCargoContainer> warehouseCargos;
@@ -112,6 +112,15 @@ namespace IngameScript
 
         public void Main(string argument, UpdateType updateSource)
         {
+            if (!string.IsNullOrEmpty(argument))
+            {
+                string name;
+                string items;
+                if (!ParseMessage(argument, "|".ToCharArray(), out name, out items)) return;
+
+                ProcessListenerMessage(name, items, -1);
+            }
+
             if ((updateSource & UpdateType.IGC) != 0)
             {
                 while (bl.HasPendingMessage)
@@ -122,13 +131,9 @@ namespace IngameScript
 
                     string name;
                     string items;
-                    if (!ParseMessage(msg.Data.ToString(), out name, out items)) continue;
+                    if (!ParseMessage(msg.Data.ToString(), Environment.NewLine.ToCharArray(), out name, out items)) continue;
 
-                    if (!listeners.ContainsKey(name)) continue;
-
-                    listeners[name].Prepare(msg.Source, items);
-
-                    IGC.SendUnicastMessage(msg.Source, config.Channel, "1");
+                    ProcessListenerMessage(name, items, msg.Source);
                 }
             }
 
@@ -156,13 +161,21 @@ namespace IngameScript
                 WriteInfo();
             }
         }
-        bool ParseMessage(string data, out string name, out string items)
+        bool ParseMessage(string msg, char[] separator, out string name, out string items)
         {
-            string[] dataBits = data.Split(Environment.NewLine.ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+            string[] dataBits = msg.Split(separator, StringSplitOptions.RemoveEmptyEntries);
             name = dataBits.Length > 0 ? dataBits[0] : "";
             items = dataBits.Length > 1 ? dataBits[1] : "";
 
             return !string.IsNullOrWhiteSpace(name);
+        }
+        void ProcessListenerMessage(string name, string items, long source)
+        {
+            if (!listeners.ContainsKey(name)) return;
+            listeners[name].Prepare(source, items);
+
+            if (source < 0) return;
+            IGC.SendUnicastMessage(source, config.Channel, "1");
         }
 
         T GetBlockWithNames<T>(string name1, string name2) where T : class, IMyTerminalBlock

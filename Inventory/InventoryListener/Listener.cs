@@ -162,11 +162,12 @@ namespace IngameScript
             foreach (var part in parts)
             {
                 string[] items = part.Split('=');
-                if (items.Length != 2) continue;
-
+                
+                if (items.Length < 1) continue;
                 string item = items[0].Trim();
                 if (item.ToUpper() == "ANY") continue;
 
+                if (items.Length != 2) continue;
                 int amount = (int)decimal.Parse(items[1].Trim());
                 requestedItems.Add(item, amount);
             }
