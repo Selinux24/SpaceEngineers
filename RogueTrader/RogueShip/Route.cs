@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using VRageMath;
 
 namespace IngameScript
@@ -13,7 +14,7 @@ namespace IngameScript
         public readonly List<Vector3D> ToUnloadBaseWaypoints;
         public bool OneTourRoute = false;
 
-        public Route(string loadBase, bool loadBaseOnPlanet, List<Vector3D> toLoadBase, string unloadBase, bool unloadBaseOnPlanet, List<Vector3D> toUnloadBase)
+        public Route(string loadBase, bool loadBaseOnPlanet, List<Vector3D> toLoadBase, string unloadBase, bool unloadBaseOnPlanet, List<Vector3D> toUnloadBase, bool oneTourRoute)
         {
             LoadBase = loadBase;
             LoadBaseOnPlanet = loadBaseOnPlanet;
@@ -24,6 +25,8 @@ namespace IngameScript
             UnloadBaseOnPlanet = unloadBaseOnPlanet;
             ToUnloadBaseWaypoints = new List<Vector3D>();
             if (toUnloadBase != null) ToUnloadBaseWaypoints.AddRange(toUnloadBase);
+
+            OneTourRoute = oneTourRoute;
         }
 
         public bool IsValid()
@@ -37,9 +40,15 @@ namespace IngameScript
 
         public string GetState()
         {
-            return IsValid() ?
-                $"From {LoadBase}({ToLoadBaseWaypoints.Count}wp) To {UnloadBase}({ToUnloadBaseWaypoints.Count}wp)" :
-                "No route defined.";
+            if (!IsValid())
+            {
+                return "No route defined.";
+            }
+
+            string state = "";
+            if (OneTourRoute) state = $"One-Tour.{Environment.NewLine}";
+
+            return $"{state}From {LoadBase}({ToLoadBaseWaypoints.Count}wp) To {UnloadBase}({ToUnloadBaseWaypoints.Count}wp)";
         }
 
         public void Clear()
@@ -50,6 +59,7 @@ namespace IngameScript
             UnloadBase = "";
             UnloadBaseOnPlanet = false;
             ToUnloadBaseWaypoints.Clear();
+            OneTourRoute = false;
         }
 
         public List<Vector3D> GetWaypointsToLoadBaseFromPosition(Vector3D position)
@@ -65,7 +75,23 @@ namespace IngameScript
                     nearestIndex = i;
                 }
             }
-            return ToLoadBaseWaypoints.GetRange(nearestIndex, ToLoadBaseWaypoints.Count - nearestIndex);
+
+            if (nearestIndex == ToLoadBaseWaypoints.Count - 1)
+            {
+                //It's the last waypoint
+                return new List<Vector3D>() { ToLoadBaseWaypoints[nearestIndex] };
+            }
+
+            //Get the distance to the next waypoint from position
+            double nDistance = Vector3D.Distance(position, ToLoadBaseWaypoints[nearestIndex + 1]);
+
+            //Get the distance between the nearest waypoint and the next waypoint
+            double sDistante = Vector3D.Distance(ToLoadBaseWaypoints[nearestIndex], ToLoadBaseWaypoints[nearestIndex + 1]);
+
+            //If the distance from the current position to the next waypoint is less than the segment distance, use the next waypoint. Otherwise, use the nearest waypoint.
+            int wpIndex = nDistance < sDistante ? nearestIndex + 1 : nearestIndex;
+
+            return ToLoadBaseWaypoints.GetRange(wpIndex, ToLoadBaseWaypoints.Count - wpIndex);
         }
 
         public void LoadFromStorage(string storageLine)
@@ -108,7 +134,7 @@ namespace IngameScript
                 $"UnloadBase={UnloadBase}",
                 $"UnloadBaseOnPlanet={(UnloadBaseOnPlanet ? 1 : 0)}",
                 $"ToUnloadBaseWaypoints={Utils.VectorListToStr(ToUnloadBaseWaypoints)}",
-         
+
                 $"OneTourRoute={(OneTourRoute ? 1 : 0)}",
             };
 

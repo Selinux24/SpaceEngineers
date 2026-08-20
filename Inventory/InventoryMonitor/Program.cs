@@ -9,7 +9,7 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        const string Version = "1.6";
+        const string Version = "1.8";
         const char AttributeSep = '=';
         const string WildcardLCDs = "[INV]";
         const int ItemsQueryTicks = 3;
@@ -23,6 +23,7 @@ namespace IngameScript
         readonly CompareTypes compareType = CompareTypes.GreaterThan;
         readonly TimeSpan queryInterval;
         readonly double threshold;
+        readonly bool verbose;
 
         readonly StringBuilder lastMessage = new StringBuilder();
         readonly StringBuilder infoText = new StringBuilder();
@@ -47,6 +48,7 @@ namespace IngameScript
                     "Threshold=int\n" +
                     "CompareType=int [1,-1]\n" +
                     "Inventory=item1:quantity1;itemN:quantityN;\n" +
+                    "Verbose=true\n" +
                     "WildcardLCDs=name(optional)";
 
                 Echo("CustomData not set.");
@@ -91,6 +93,9 @@ namespace IngameScript
             }
             threshold = thr.Value;
 
+            var vbs = ReadConfigBoolean(Me.CustomData, "Verbose");
+            verbose = vbs ?? false;
+
             string cargoContainerName = ReadConfig(Me.CustomData, "CargoContainerName");
             if (string.IsNullOrWhiteSpace(cargoContainerName))
             {
@@ -120,6 +125,16 @@ namespace IngameScript
 
             string cmdToken = $"{name}=";
             return config.FirstOrDefault(l => l.StartsWith(cmdToken))?.Replace(cmdToken, "");
+        }
+        static bool? ReadConfigBoolean(string customData, string name)
+        {
+            string value = ReadConfig(customData, name);
+            if (string.IsNullOrEmpty(value))
+            {
+                return null;
+            }
+
+            return bool.Parse(value);
         }
         static int? ReadConfigInt(string customData, string name)
         {
@@ -269,7 +284,7 @@ namespace IngameScript
 
             lastMessageDate = queryInterval;
             lastMessage.Clear();
-            lastMessage.AppendLine("Required:");
+            lastMessage.AppendLine($"Required {compareType}:");
 
             foreach (var req in required)
             {
@@ -319,34 +334,42 @@ namespace IngameScript
                     string compareSymbol;
                     double reqThr;
                     bool conditionMet;
+                    double qty;
+                    string w;
                     switch (compareType)
                     {
                         case CompareTypes.LessThan:
-                            compareSymbol = "<";
-                            reqThr = reqValue - (int)(reqValue * threshold);
-                            conditionMet = curr < reqThr;
+                            compareSymbol = ">";
+                            reqThr = curr - (reqValue + (int)(reqValue * threshold));
+                            conditionMet = reqThr > 0;
+                            qty = curr - reqValue;
+                            w = "excess";
                             break;
                         case CompareTypes.GreaterThan:
-                            compareSymbol = ">";
-                            reqThr = reqValue + (int)(reqValue * threshold);
-                            conditionMet = curr > reqThr;
+                            compareSymbol = "<";
+                            reqThr = curr - (reqValue - (int)(reqValue * threshold));
+                            conditionMet = reqThr < 0;
+                            qty = reqValue - curr;
+                            w = "shortage";
                             break;
                         default:
                             compareSymbol = "";
                             reqThr = 0;
                             conditionMet = false;
+                            qty = 0;
+                            w = "";
                             break;
                     }
 
                     if (conditionMet)
                     {
-                        message.Append($"{reqItem}={reqValue - curr};");
+                        message.Append($"{reqItem}={qty};");
                         anyNeeded = true;
-                        lastMessage.AppendLine($"{reqItem} {reqThr}{compareSymbol}{curr}");
+                        lastMessage.AppendLine($"{reqItem} {reqValue}{compareSymbol}{curr} {w}");
                     }
-                    else
+                    else if (verbose)
                     {
-                        lastMessage.AppendLine($"{reqItem} {reqThr}{compareSymbol}{curr} OK");
+                        lastMessage.AppendLine($"{reqItem} {reqValue}{compareSymbol}{curr} OK");
                     }
                 }
             }

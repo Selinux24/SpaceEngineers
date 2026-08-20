@@ -8,7 +8,7 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        const string Version = "1.2";
+        const string Version = "1.3";
         const char AttributeSep = '=';
 
         readonly Config config;
@@ -17,6 +17,10 @@ namespace IngameScript
         readonly IMyTimerBlock timerOn;
         readonly IMyTimerBlock timerOff;
 
+        readonly TimeSpan capacityQuery = TimeSpan.FromSeconds(5);
+        TimeSpan lastCapacityUpdate = TimeSpan.Zero;
+
+        double capacity = 0;
         double lastCapacity = 0;
         int lastExecutedTimer = 0;
 
@@ -79,7 +83,16 @@ namespace IngameScript
 
             ParseTerminalMessage(argument);
 
-            var capacity = CalculateCargoPercentage();
+            MonitorizeCargo();
+        }
+        void ParseTerminalMessage(string argument)
+        {
+            if (argument == "START_BELOW") lastCapacity = 0;
+            if (argument == "START_ABOVE") lastCapacity = 1;
+        }
+        void MonitorizeCargo()
+        {
+            capacity = CalculateCargoPercentage();
 
             if (capacity >= config.CargoUpperLimit && lastExecutedTimer != 1)
             {
@@ -95,19 +108,21 @@ namespace IngameScript
                 lastExecutedTimer = -1;
             }
 
+            bool changed = capacity != lastCapacity;
             bool growing = capacity > lastCapacity;
+            string change = changed ? (growing ? "Increasing" : "Decreasing") : "Stable";
+
             Echo($"Containers found: {cargoContainers.Count}");
             Echo($"Limits {config.CargoLowerLimit:P2} / {config.CargoUpperLimit:P2}");
-            Echo($"Capacity from {lastCapacity:P2} to {capacity:P2}. {(growing ? "Increasing" : "Decreasing")}");
+            Echo($"Capacity from {lastCapacity:P2} to {capacity:P2}. {change}");
             if (lastExecutedTimer == 1) Echo($"'{config.TimerOff}' triggered.");
             else if (lastExecutedTimer == -1) Echo($"'{config.TimerOn}' triggered.");
 
+            lastCapacityUpdate -= Runtime.TimeSinceLastRun;
+            if (lastCapacityUpdate > TimeSpan.Zero) return;
+            lastCapacityUpdate = capacityQuery;
+
             lastCapacity = capacity;
-        }
-        void ParseTerminalMessage(string argument)
-        {
-            if (argument == "START_BELOW") lastCapacity = 0;
-            if (argument == "START_ABOVE") lastCapacity = 1;
         }
 
         List<T> GetBlocksOfType<T>(string name, bool useAllGrids) where T : class, IMyTerminalBlock
@@ -156,6 +171,7 @@ namespace IngameScript
                 return;
             }
 
+            capacity = ReadDouble(storageLines, "capacity", 0);
             lastCapacity = ReadDouble(storageLines, "lastCapacity", 0);
             lastExecutedTimer = ReadInt(storageLines, "lastExecutedTimer", 0);
         }
@@ -163,6 +179,7 @@ namespace IngameScript
         {
             List<string> parts = new List<string>
             {
+                $"capacity={capacity}",
                 $"lastCapacity={lastCapacity}",
                 $"lastExecutedTimer={lastExecutedTimer}"
             };

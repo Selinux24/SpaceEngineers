@@ -13,7 +13,7 @@ namespace IngameScript
     /// </summary>
     partial class Program : MyGridProgram
     {
-        const string Version = "2.74 Supplier";
+        const string Version = "2.77 Supplier";
         const string ON_NAVIGATION_COMPLETED = "ON_NAVIGATION_COMPLETED";
         const string ON_APPROACHING_COMPLETED = "ON_APPROACHING_COMPLETED";
         const string ON_SEPARATION_COMPLETED = "ON_SEPARATION_COMPLETED";
@@ -61,6 +61,7 @@ namespace IngameScript
         TimeSpan loadStart = TimeSpan.Zero;
         bool monitorizeCapacity = false;
         double lastCapacity = -1;
+        bool capChanged = false;
         bool monitorizePropulsion = false;
         ShipStatus shipStatus = ShipStatus.Idle;
         readonly Navigator navigator;
@@ -70,6 +71,9 @@ namespace IngameScript
         bool dockUpdating = false;
         TimeSpan lastDockUpdate = TimeSpan.Zero;
         TimeSpan lastRefreshLCDs = TimeSpan.Zero;
+
+        readonly TimeSpan capacityQuery = TimeSpan.FromSeconds(5);
+        TimeSpan lastCapacityUpdate = TimeSpan.Zero;
 
         public Program()
         {
@@ -249,7 +253,8 @@ namespace IngameScript
             else if (argument == "START_UNDOCK") SendWaitingMessage(ExchangeTasks.Undock);
 
             else if (argument == "NEXT") Next();
-            else if (argument == "CONTINUE") Continue();
+            else if (argument == "STEP") Continue(true);
+            else if (argument == "CONTINUE") Continue(false);
 
             else if (argument == "PLAN") Plan();
         }
@@ -435,9 +440,7 @@ namespace IngameScript
             route.ToUnloadBaseWaypoints.Clear();
             route.ToUnloadBaseWaypoints.AddRange(Utils.ReadVectorList(lines, "ToUnloadBaseWaypoints"));
 
-            route.OneTourRoute = true;
-
-            Continue();
+            Continue(true);
         }
 
         /// <summary>
@@ -480,17 +483,24 @@ namespace IngameScript
         {
             if (shipStatus != ShipStatus.Loading && shipStatus != ShipStatus.Unloading) return;
 
-            loadStart -= Runtime.TimeSinceLastRun;
-            if (loadStart < TimeSpan.Zero) loadStart = TimeSpan.Zero;
+            if (!capChanged)
+            {
+                loadStart -= Runtime.TimeSinceLastRun;
+                if (loadStart < TimeSpan.Zero) loadStart = TimeSpan.Zero;
+            }
 
             double cap = CalculateCapacity();
-            bool capChanged = lastCapacity != cap;
-            lastCapacity = cap;
+            if (shipStatus == ShipStatus.Loading) MonitorizeLoading(cap);
+            else if (shipStatus == ShipStatus.Unloading) MonitorizeUnloading(cap);
 
-            if (shipStatus == ShipStatus.Loading) MonitorizeLoading(cap, capChanged);
-            else if (shipStatus == ShipStatus.Unloading) MonitorizeUnloading(cap, capChanged);
+            lastCapacityUpdate -= Runtime.TimeSinceLastRun;
+            if (lastCapacityUpdate > TimeSpan.Zero) return;
+            lastCapacityUpdate = capacityQuery;
+
+            capChanged = lastCapacity != cap;
+            lastCapacity = cap;
         }
-        void MonitorizeLoading(double cap, bool capChanged)
+        void MonitorizeLoading(double cap)
         {
             double capPct = CalculateLoadProgressPct(cap);
 
@@ -538,7 +548,7 @@ namespace IngameScript
             SendWaitingMessage(ExchangeTasks.EndLoad);
             timerFinalize?.StartCountdown();
         }
-        void MonitorizeUnloading(double cap, bool capChanged)
+        void MonitorizeUnloading(double cap)
         {
             double capPct = CalculateUnloadProgressPct(cap);
 
@@ -583,15 +593,7 @@ namespace IngameScript
                 return;
             }
 
-            if (route.OneTourRoute)
-            {
-                shipStatus = ShipStatus.Idle;
-            }
-            else
-            {
-                SendWaitingMessage(ExchangeTasks.EndUnload);
-            }
-
+            SendWaitingMessage(ExchangeTasks.EndUnload);
             timerFinalize?.StartCountdown();
         }
         #endregion
@@ -741,7 +743,15 @@ namespace IngameScript
             }
             else if (task == ExchangeTasks.EndUnload)
             {
-                SendWaitingMessage(ExchangeTasks.StartLoad);
+                if (route.OneTourRoute)
+                {
+                    SendWaitingMessage(ExchangeTasks.Dock);
+                    route.Clear();
+                }
+                else
+                {
+                    SendWaitingMessage(ExchangeTasks.StartLoad);
+                }
             }
         }
         #endregion
@@ -1276,13 +1286,15 @@ namespace IngameScript
 
             WriteLogLCDs($"No changes: {shipStatus}");
         }
-        void Continue()
+        void Continue(bool oneTourRoute)
         {
             if (!route.IsValid())
             {
                 WriteLogLCDs($"Route is not valid");
                 return;
             }
+
+            route.OneTourRoute = oneTourRoute;
 
             //Where I'm I?
             string dockedGridName = GetDockedGridName();
@@ -1294,7 +1306,7 @@ namespace IngameScript
                 var waypoints = route.GetWaypointsToLoadBaseFromPosition(GetPilotPosition());
 
                 //Configure the navigator to start the load route from the nearest waypoint
-                navigator.NavigateTo(route.LoadBaseOnPlanet, waypoints, ON_NAVIGATION_COMPLETED, ExchangeTasks.EndLoad);
+                navigator.NavigateTo(route.LoadBaseOnPlanet, waypoints, ON_NAVIGATION_COMPLETED, ExchangeTasks.EndUnload);
             }
             else if (dockedGridName == route.LoadBase)
             {
@@ -1367,7 +1379,7 @@ namespace IngameScript
             {
                 WriteInfoLCDs($"ETD {loadStart:hh\\:mm\\:ss}");
             }
-            if (shipStatus == ShipStatus.WaitingDock)
+            if (shipStatus == ShipStatus.WaitingDock && lastDockRequest.TotalSeconds > 0)
             {
                 WriteInfoLCDs($"Waiting dock response... {lastDockRequest.TotalSeconds:F0}s up to {Config.DockRequestTimeout.TotalSeconds}s");
             }

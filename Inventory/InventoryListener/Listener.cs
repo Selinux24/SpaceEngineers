@@ -109,7 +109,7 @@ namespace IngameScript
                 {
                     var outputInv = outputCargo.GetInventory();
                     var orderItems = GetItemsFromCargo(outputInv);
-
+                    
                     int index = orderItems.FindIndex(i => i.Type.ToString().Contains(itemType));
                     if (index >= 0)
                     {
@@ -275,7 +275,7 @@ namespace IngameScript
 
             if (lastQuery.Ticks > 0)
             {
-                state.AppendLine($"  Last message received {(int)lastQuery.TotalMinutes} minutes ago.");
+                state.AppendLine($"  Last message received {lastQuery:d\\.hh\\:mm\\:ss} days ago.");
             }
             else if (!preparing)
             {

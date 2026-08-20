@@ -144,7 +144,8 @@ namespace IngameScript
                 ReadConfigVectorList(customData, "RouteToLoadBaseWaypoints", new List<Vector3D>()),
                 ReadConfig(customData, "RouteUnloadBase", ""),
                 ReadConfigBool(customData, "RouteUnloadBaseOnPlanet", false),
-                ReadConfigVectorList(customData, "RouteToUnloadBaseWaypoints", new List<Vector3D>()));
+                ReadConfigVectorList(customData, "RouteToUnloadBaseWaypoints", new List<Vector3D>()),
+                true);
 
             MaxLoad = ReadConfigDouble(customData, "MaxLoad", 1);
             MinLoad = ReadConfigDouble(customData, "MinLoad", 0);

@@ -437,6 +437,11 @@ namespace IngameScript
                 return;
             }
 
+            if (AlignToDirection(false, NavigationDirectionToWaypoint, Config.CrsNavigationAlignThr))
+            {
+                return;
+            }
+
             bool inGravity = ship.PilotIsInAtmosphere();
             var speed = ship.GetPilotSpeed();
             if (!inGravity && speed >= Config.CrsNavigationMaxCruiseSpeed * Config.CrsNavigationMaxSpeedThr)
