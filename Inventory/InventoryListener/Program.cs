@@ -9,7 +9,7 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        const string Version = "1.10";
+        const string Version = "1.11";
         const string Separate = "------";
 
         readonly List<IMyCargoContainer> warehouseCargos;
@@ -18,8 +18,12 @@ namespace IngameScript
         readonly IMyBroadcastListener bl;
         readonly Config config;
         readonly Dictionary<string, Listener> listeners = new Dictionary<string, Listener>();
+        readonly Dictionary<string, Order> orders = new Dictionary<string, Order>();
 
         readonly StringBuilder infoText = new StringBuilder();
+
+        readonly TimeSpan orderQuery = TimeSpan.FromSeconds(10);
+        TimeSpan lastOrderUpdate = TimeSpan.Zero;
 
         public Program()
         {
@@ -112,14 +116,7 @@ namespace IngameScript
 
         public void Main(string argument, UpdateType updateSource)
         {
-            if (!string.IsNullOrEmpty(argument))
-            {
-                string name;
-                string items;
-                if (!ParseMessage(argument, "|".ToCharArray(), out name, out items)) return;
-
-                ProcessListenerMessage(name, items, -1);
-            }
+            ProcessCommand(argument);
 
             if ((updateSource & UpdateType.IGC) != 0)
             {
@@ -129,37 +126,48 @@ namespace IngameScript
 
                     if (msg.Tag != config.Channel) continue;
 
-                    string name;
-                    string items;
-                    if (!ParseMessage(msg.Data.ToString(), Environment.NewLine.ToCharArray(), out name, out items)) continue;
-
-                    ProcessListenerMessage(name, items, msg.Source);
+                    ReadOrder(msg.Data.ToString(), Environment.NewLine, msg.Source);
                 }
             }
 
             if ((updateSource & UpdateType.Update100) != 0)
             {
-                infoText.Clear();
+                lastOrderUpdate -= Runtime.TimeSinceLastRun;
+                if (lastOrderUpdate > TimeSpan.Zero) return;
+                lastOrderUpdate = orderQuery;
 
-                infoText.AppendLine($"Inventory Listener v{Version} - {config.Channel}. {DateTime.Now:HH:mm:ss}");
-                foreach (var listener in listeners.Values)
-                {
-                    if (listener.Preparing(warehouseCargos))
-                    {
-                        IGC.SendUnicastMessage(listener.SenderId, config.Channel, "2");
-
-                        var msgList = listener.FreeConnectors();
-                        foreach (var msg in msgList)
-                        {
-                            BroadcastMessage(msg);
-                        }
-                    }
-                    infoText.Append(listener.GetState(Runtime.TimeSinceLastRun));
-                    infoText.AppendLine(Separate);
-                }
+                UpdateListeners();
 
                 WriteInfo();
             }
+        }
+
+        void ProcessCommand(string argument)
+        {
+            if (string.IsNullOrEmpty(argument)) return;
+
+            if (argument == "RESET") Reset();
+
+            ReadOrder(argument, "|", -1);
+        }
+
+        void Reset()
+        {
+            foreach (var listener in listeners.Values)
+            {
+                listener.Reset();
+            }
+
+            orders.Clear();
+        }
+
+        void ReadOrder(string msg, string separator, long source)
+        {
+            string name;
+            string items;
+            if (!ParseMessage(msg, separator.ToCharArray(), out name, out items)) return;
+
+            QueueListenerMessage(name, items, source);
         }
         bool ParseMessage(string msg, char[] separator, out string name, out string items)
         {
@@ -169,13 +177,123 @@ namespace IngameScript
 
             return !string.IsNullOrWhiteSpace(name);
         }
-        void ProcessListenerMessage(string name, string items, long source)
+        void QueueListenerMessage(string name, string items, long source)
         {
-            if (!listeners.ContainsKey(name)) return;
-            listeners[name].Prepare(source, items);
+            if (string.IsNullOrWhiteSpace(name)) return;
 
-            if (source < 0) return;
-            IGC.SendUnicastMessage(source, config.Channel, "1");
+            if (!listeners.ContainsKey(name)) return;
+
+            if (orders.ContainsKey(name))
+            {
+                orders[name].Items = items;
+                orders[name].SourceId = source;
+            }
+            else
+            {
+                orders.Add(name, new Order { Items = items, SourceId = source });
+            }
+        }
+
+        void UpdateListeners()
+        {
+            infoText.Clear();
+
+            infoText.AppendLine($"Inventory Listener v{Version} - {config.Channel}. {DateTime.Now:HH:mm:ss}");
+
+            infoText.AppendLine(Separate);
+            foreach (var lst in listeners)
+            {
+                bool hasOrder = orders.ContainsKey(lst.Key);
+
+                infoText.AppendLine($"{lst.Key} {(hasOrder ? "order pending." : "")}");
+            }
+            infoText.AppendLine(Separate);
+
+            bool working = ProcessListeners();
+            if (working)
+            {
+                infoText.AppendLine("Processing order...");
+            }
+            else
+            {
+                ProcessOrders();
+            }
+        }
+        bool ProcessListeners()
+        {
+            bool working = false;
+
+            foreach (var listener in listeners.Values)
+            {
+                if (listener.Prepared()) continue;
+
+                bool prepared = listener.Preparing(warehouseCargos);
+                if (prepared)
+                {
+                    IGC.SendUnicastMessage(listener.SenderId, config.Channel, "2");
+
+                    var msgList = listener.FreeConnectors();
+                    foreach (var msg in msgList)
+                    {
+                        BroadcastMessage(msg);
+                    }
+                }
+                else
+                {
+                    working = true;
+                }
+
+                break;
+            }
+
+            foreach (var listener in listeners.Values)
+            {
+                infoText.Append(listener.GetState(Runtime.TimeSinceLastRun));
+                infoText.AppendLine(Separate);
+            }
+
+            return working;
+        }
+        void ProcessOrders()
+        {
+            if (orders.Count == 0) return;
+
+            infoText.AppendLine("Dequeuing order...");
+
+            string erase = null;
+            foreach (var order in orders)
+            {
+                string name = order.Key;
+
+                if (!listeners.ContainsKey(name))
+                {
+                    erase = name;
+                    break;
+                }
+
+                string items = order.Value.Items;
+                long source = order.Value.SourceId;
+
+                string reason;
+                if (listeners[name].Start(source, items, warehouseCargos, out reason))
+                {
+                    erase = name;
+
+                    if (source < 0) break;
+                    IGC.SendUnicastMessage(source, config.Channel, "1");
+
+                    break;
+                }
+                else
+                {
+                    infoText.AppendLine($"Order {name} not ready for processing. {reason}");
+                }
+            }
+
+            if (erase != null)
+            {
+                orders.Remove(erase);
+            }
         }
 
         T GetBlockWithNames<T>(string name1, string name2) where T : class, IMyTerminalBlock
@@ -231,10 +349,17 @@ namespace IngameScript
                 return;
             }
 
+            orders.Clear();
             foreach (var listener in listeners)
             {
-                string listenerData = Utils.ReadString(storageLines, listener.Key, null);
+                string listenerData = Utils.ReadString(storageLines, $"listener.{listener.Key}", null);
                 listener.Value.LoadFromStorage(listenerData);
+
+                string orderData = Utils.ReadString(storageLines, $"order.{listener.Key}", null);
+                if (string.IsNullOrEmpty(orderData)) continue;
+                Order order = new Order();
+                order.LoadFromStorage(orderData);
+                orders[listener.Key] = order;
             }
         }
         void SaveToStorage()
@@ -243,7 +368,12 @@ namespace IngameScript
 
             foreach (var listener in listeners)
             {
-                parts.Add($"{listener.Key}{Utils.AttributeSep}{listener.Value.SaveToStorage()}");
+                parts.Add($"listener.{listener.Key}{Utils.AttributeSep}{listener.Value.SaveToStorage()}");
+            }
+
+            foreach (var order in orders)
+            {
+                parts.Add($"order.{order.Key}{Utils.AttributeSep}{order.Value.SaveToStorage()}");
             }
 
             Storage = string.Join(Environment.NewLine, parts);
